@@ -1,0 +1,46 @@
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=text/csv as script because text/csv is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=audio/aiff as script because audio/aiff is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=audio/whatever as script because audio/whatever is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=audio/midi as script because audio/midi is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=video/avi as script because video/avi is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=video/fli as script because video/fli is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=image/jpeg as script because image/jpeg is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=video/whatever as script because video/whatever is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=image/gif as script because image/gif is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=text/csv as script because text/csv is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=audio/aiff as script because audio/aiff is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=non-empty&mime=image/whatever as script because image/whatever is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=audio/midi as script because audio/midi is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=audio/whatever as script because audio/whatever is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=video/avi as script because video/avi is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=video/fli as script because video/fli is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=image/jpeg as script because image/jpeg is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=video/whatever as script because video/whatever is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=image/gif as script because image/gif is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/api/resources/script-with-header.py?content=empty&mime=image/whatever as script because image/whatever is not a script MIME type.
+CONSOLE MESSAGE: Script loaded
+CONSOLE MESSAGE: Script loaded
+
+PASS Should fail loading non-empty script with text/csv MIME type
+PASS Should fail loading non-empty script with audio/aiff MIME type
+PASS Should fail loading non-empty script with audio/midi MIME type
+PASS Should fail loading non-empty script with audio/whatever MIME type
+PASS Should fail loading non-empty script with video/avi MIME type
+PASS Should fail loading non-empty script with video/fli MIME type
+PASS Should fail loading non-empty script with video/whatever MIME type
+PASS Should fail loading non-empty script with image/jpeg MIME type
+PASS Should fail loading non-empty script with image/gif MIME type
+PASS Should fail loading non-empty script with image/whatever MIME type
+PASS Should fail loading empty script with text/csv MIME type
+PASS Should fail loading empty script with audio/aiff MIME type
+PASS Should fail loading empty script with audio/midi MIME type
+PASS Should fail loading empty script with audio/whatever MIME type
+PASS Should fail loading empty script with video/avi MIME type
+PASS Should fail loading empty script with video/fli MIME type
+PASS Should fail loading empty script with video/whatever MIME type
+PASS Should fail loading empty script with image/jpeg MIME type
+PASS Should fail loading empty script with image/gif MIME type
+PASS Should fail loading empty script with image/whatever MIME type
+PASS Should load script with text/html MIME type
+PASS Should load script with text/plain MIME type
+

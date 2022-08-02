@@ -1,3 +1,15 @@
+CONSOLE MESSAGE: Unsafe attempt to load URL http://www1.web-platform.test:8800/fetch/api/request/resources/cache.py?token=4d531b11-c259-4e05-8240-97a47881a297&content=0.2380639012147674&tag=0.06850715054769041&expires=Tue,%2001%20Aug%202023%2007:00:00%20GMT from origin http://web-platform.test:8800. Domains, protocols and ports must match.
+
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/request/resources/cache.py?token=4d531b11-c259-4e05-8240-97a47881a297&content=0.2380639012147674&tag=0.06850715054769041&expires=Tue,%2001%20Aug%202023%2007:00:00%20GMT due to access control checks.
+CONSOLE MESSAGE: Unsafe attempt to load URL http://www1.web-platform.test:8800/fetch/api/request/resources/cache.py?token=4f59a1ec-1883-4628-b30d-21241fca7aeb&content=0.8336242606647633&date=Mon,%2001%20Aug%202022%2023:29:11%20GMT&expires=Tue,%2001%20Aug%202023%2007:00:00%20GMT from origin http://web-platform.test:8800. Domains, protocols and ports must match.
+
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/request/resources/cache.py?token=4f59a1ec-1883-4628-b30d-21241fca7aeb&content=0.8336242606647633&date=Mon,%2001%20Aug%202022%2023:29:11%20GMT&expires=Tue,%2001%20Aug%202023%2007:00:00%20GMT due to access control checks.
+CONSOLE MESSAGE: Unsafe attempt to load URL http://www1.web-platform.test:8800/fetch/api/request/resources/cache.py?token=7417dfbb-78d5-4d4d-95f8-f0fe77afeb0e&content=0.039049179155767444&tag=0.1450651532842253&expires=Sun,%2001%20Aug%202021%2007:00:00%20GMT from origin http://web-platform.test:8800. Domains, protocols and ports must match.
+
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/request/resources/cache.py?token=7417dfbb-78d5-4d4d-95f8-f0fe77afeb0e&content=0.039049179155767444&tag=0.1450651532842253&expires=Sun,%2001%20Aug%202021%2007:00:00%20GMT due to access control checks.
+CONSOLE MESSAGE: Unsafe attempt to load URL http://www1.web-platform.test:8800/fetch/api/request/resources/cache.py?token=1667714a-df7f-4980-8049-4fbb2adbe643&content=0.7845072609185261&date=Mon,%2001%20Aug%202022%2023:29:11%20GMT&expires=Sun,%2001%20Aug%202021%2007:00:00%20GMT from origin http://web-platform.test:8800. Domains, protocols and ports must match.
+
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/request/resources/cache.py?token=1667714a-df7f-4980-8049-4fbb2adbe643&content=0.7845072609185261&date=Mon,%2001%20Aug%202022%2023:29:11%20GMT&expires=Sun,%2001%20Aug%202021%2007:00:00%20GMT due to access control checks.
 
 PASS RequestCache "only-if-cached" mode checks the cache for previously cached content and avoids revalidation for stale responses with Etag and stale response
 PASS RequestCache "only-if-cached" mode checks the cache for previously cached content and avoids revalidation for stale responses with Last-Modified and stale response

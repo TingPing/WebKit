@@ -1,0 +1,15 @@
+CONSOLE MESSAGE: Preflight response is not successful. Status code: 404
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/range/resources/long-wav.py?accept-encoding-key=ec913322-c9be-4c67-b20e-df07f7066f8d due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 500
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/range/resources/long-wav.py?accept-encoding-key=b36762fa-bd7d-4630-abdf-9700c8cf1a9f due to access control checks.
+CONSOLE MESSAGE: Preflight response is not successful. Status code: 404
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/range/resources/long-wav.py?accept-encoding-key=19c07436-1805-41f8-81b5-9890565259df due to access control checks.
+
+PASS Range header setting allowed for guard type: none
+PASS Range header setting allowed for guard type: response
+PASS Range header setting allowed for guard type: request
+PASS Privileged header not allowed for guard type: request-no-cors
+PASS Fetch with range header will be sent with Accept-Encoding: identity
+PASS Cross Origin Fetch with non safe range header
+PASS Cross Origin Fetch with safe range header
+

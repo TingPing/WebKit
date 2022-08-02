@@ -1,0 +1,37 @@
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/resources/preflight.py?token=696c1984-b004-427a-842e-214657c698a1&max_age=0&origin=http%3A%2F%2Fwww1.web-platform.test%3A8800&allow_methods=GET due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load http://web-platform.test:8801/fetch/api/resources/preflight.py?token=a90cc48d-6898-42bb-b7d1-6dfab3e3a06c&max_age=0&origin=http%3A%2F%2Fweb-platform.test%3A8801&allow_methods=GET due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8801/fetch/api/resources/preflight.py?token=4404bfc7-343a-4719-b95c-40d1fc1f7844&max_age=0&origin=http%3A%2F%2Fwww1.web-platform.test%3A8801&allow_methods=GET due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load https://www1.web-platform.test:9443/fetch/api/resources/preflight.py?token=987aad7d-eff0-489f-811f-7b1afcdbecc5&max_age=0&origin=https%3A%2F%2Fwww1.web-platform.test%3A9443&allow_methods=GET due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load https://web-platform.test:9443/fetch/api/resources/preflight.py?token=50ce7ee5-45bc-4cb3-8dab-606a9b15375f&max_age=0&origin=https%3A%2F%2Fweb-platform.test%3A9443&allow_methods=GET due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/resources/preflight.py?token=9a43fc2e-28d4-441c-9a5f-6fcd17942223&max_age=0&origin=http%3A%2F%2Fwww1.web-platform.test%3A8800&allow_methods=POST due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/resources/preflight.py?token=ebc9721e-bcda-4d14-b3b9-055eeb53cf55&max_age=0&origin=http%3A%2F%2Fwww1.web-platform.test%3A8800&allow_methods=HEAD due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/resources/preflight.py?token=28e45bf8-7392-4484-8276-47d7b7897fef&max_age=0&origin=http%3A%2F%2Fwww1.web-platform.test%3A8800&allow_methods=PUT due to access control checks.
+CONSOLE MESSAGE: Origin http://web-platform.test:8800 is not allowed by Access-Control-Allow-Origin. Status code: 200
+CONSOLE MESSAGE: Fetch API cannot load http://www1.web-platform.test:8800/fetch/api/resources/preflight.py?token=aa46ed66-caf2-4bb2-94ed-e4cdb95caad5&max_age=0&origin=http%3A%2F%2Fwww1.web-platform.test%3A8800&allow_methods=GET due to access control checks.
+
+PASS Cross domain different subdomain [origin OK]
+PASS Cross domain different subdomain [origin KO]
+PASS Same domain different port [origin OK]
+PASS Same domain different port [origin KO]
+PASS Cross domain different port [origin OK]
+PASS Cross domain different port [origin KO]
+PASS Cross domain different protocol [origin OK]
+PASS Cross domain different protocol [origin KO]
+PASS Same domain different protocol different port [origin OK]
+PASS Same domain different protocol different port [origin KO]
+PASS Cross domain [POST] [origin OK]
+PASS Cross domain [POST] [origin KO]
+PASS Cross domain [HEAD] [origin OK]
+PASS Cross domain [HEAD] [origin KO]
+PASS CORS preflight [PUT] [origin OK]
+PASS CORS preflight [PUT] [origin KO]
+PASS Allowed origin: "" [origin KO]
+

@@ -1,0 +1,6 @@
+FAIL: Timed out waiting for notifyDone to be called
+
+PASS Scroll downwards by 25 pixels
+PASS Scroll downwards by another 25 pixels
+PASS End scroll snaps back to top
+

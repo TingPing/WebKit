@@ -1,0 +1,18 @@
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/nosniff/resources/js.py as script because "X-Content-Type-Options: nosniff" was given and its Content-Type is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/nosniff/resources/js.py?type= as script because "X-Content-Type-Options: nosniff" was given and its Content-Type is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/nosniff/resources/js.py?type=x%2Fx as script because "X-Content-Type-Options: nosniff" was given and its Content-Type is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/nosniff/resources/js.py?type=x as script because "X-Content-Type-Options: nosniff" was given and its Content-Type is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/nosniff/resources/js.py?type=text%2Fhtml as script because "X-Content-Type-Options: nosniff" was given and its Content-Type is not a script MIME type.
+CONSOLE MESSAGE: Refused to execute http://web-platform.test:8800/fetch/nosniff/resources/js.py?type=text%2Fjson as script because "X-Content-Type-Options: nosniff" was given and its Content-Type is not a script MIME type.
+
+PASS URL query: null
+PASS URL query:
+PASS URL query: x
+PASS URL query: x/x
+PASS URL query: text/html
+PASS URL query: text/json
+PASS URL query: text/javascript
+PASS URL query: text/ecmascript
+PASS URL query: text/ecmascript;blah
+PASS URL query: text/javascript1.0
+
