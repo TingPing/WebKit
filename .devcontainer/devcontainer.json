@@ -1,0 +1,4 @@
+{
+    "name": "WPE",
+    "image": "ghcr.io/tingping/wkdev-sdk:latest"
+}
