@@ -26,7 +26,7 @@
 #pragma once
 
 #include "EventTarget.h"
-#include "JSDOMPromise.h"
+#include "JSDOMPromiseDeferred.h"
 #include "LocalDOMWindowProperty.h"
 #include "NavigationHistoryEntry.h"
 #include "NavigationTransition.h"
@@ -70,8 +70,8 @@ public:
     };
 
     struct Result {
-        RefPtr<DOMPromise> committed;
-        RefPtr<DOMPromise> finished;
+        RefPtr<DeferredPromise> committed;
+        RefPtr<DeferredPromise> finished;
     };
 
     const Vector<Ref<NavigationHistoryEntry>>& entries() const;
@@ -83,13 +83,13 @@ public:
 
     void initializeEntries(const Ref<HistoryItem>& currentItem, Vector<Ref<HistoryItem>> &items);
 
-    Result navigate(ScriptExecutionContext&, const String& url, NavigateOptions&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
+    void navigate(ScriptExecutionContext&, const String& url, NavigateOptions&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
 
-    Result reload(ReloadOptions&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
+    void reload(ReloadOptions&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
 
-    Result traverseTo(const String& key, Options&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
-    Result back(Options&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
-    Result forward(Options&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
+    void traverseTo(const String& key, Options&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
+    void back(Options&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
+    void forward(Options&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
 
     ExceptionOr<void> updateCurrentEntry(JSDOMGlobalObject&, UpdateCurrentEntryOptions&&);
 
@@ -102,7 +102,7 @@ private:
     void derefEventTarget() final { deref(); }
 
     bool hasEntriesAndEventsDisabled() const;
-    Result performTraversal(NavigationHistoryEntry&, Ref<DeferredPromise> committed, Ref<DeferredPromise> finished);
+    void performTraversal(NavigationHistoryEntry&, Ref<DeferredPromise> committed, Ref<DeferredPromise> finished);
     std::optional<Ref<NavigationHistoryEntry>> findEntryByKey(const String& key);
 
     std::optional<size_t> m_currentEntryIndex;

@@ -85,49 +85,39 @@ EventTargetInterface Navigation::eventTargetInterface() const
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-api-early-error-result
-static Navigation::Result createErrorResult(Ref<DeferredPromise> committed, Ref<DeferredPromise> finished, Exception&& exception)
+static void rejectWithError(Ref<DeferredPromise> committed, Ref<DeferredPromise> finished, Exception&& exception)
 {
-    ASSERT(committed->globalObject() == finished->globalObject());
-    auto globalObject = committed->globalObject();
-    Navigation::Result result = {
-        DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(committed->promise())),
-        DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(finished->promise()))
-    };
-
     committed->reject(exception);
     finished->reject(exception);
-
-    return result;
 }
 
-static Navigation::Result createEarlyErrorResult(Ref<DeferredPromise> committed, Ref<DeferredPromise> finished, ExceptionCode exceptionCode, const String& errorMessage)
+static void rejectWithError(Ref<DeferredPromise> committed, Ref<DeferredPromise> finished, ExceptionCode exceptionCode, const String& errorMessage)
 {
-    return createErrorResult(committed, finished, Exception { exceptionCode, errorMessage });
+    rejectWithError(committed, finished, Exception { exceptionCode, errorMessage });
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigation-reload
-Navigation::Result Navigation::reload(ReloadOptions&&, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
+void Navigation::reload(ReloadOptions&&, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
 {
     // FIXME: Only a stub to reload for testing.
     window()->frame()->loader().reload();
 
     // FIXME: keep track of promises to resolve later.
     Ref entry = NavigationHistoryEntry::create(scriptExecutionContext(), { });
-    auto globalObject = committed->globalObject();
-    Navigation::Result result = { DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(committed->promise())), DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(finished->promise())) };
     committed->resolve<IDLInterface<NavigationHistoryEntry>>(entry.get());
     finished->resolve<IDLInterface<NavigationHistoryEntry>>(entry.get());
-    return result;
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigation-navigate
-Navigation::Result Navigation::navigate(ScriptExecutionContext& scriptExecutionContext, const String& url, NavigateOptions&& options, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
+void Navigation::navigate(ScriptExecutionContext& scriptExecutionContext, const String& url, NavigateOptions&& options, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
 {
     auto currentURL = scriptExecutionContext.url();
     auto newURL = URL { currentURL, url };
 
-    if (!newURL.isValid())
-        return createEarlyErrorResult(committed, finished, ExceptionCode::SyntaxError, "Invalid URL"_s);
+    if (!newURL.isValid()) {
+        rejectWithError(committed, finished, ExceptionCode::SyntaxError, "Invalid URL"_s);
+        return;
+    }
 
     if (options.history == HistoryBehavior::Auto) {
         if (newURL.protocolIsJavaScript() || currentURL.isAboutBlank())
@@ -136,43 +126,43 @@ Navigation::Result Navigation::navigate(ScriptExecutionContext& scriptExecutionC
             options.history = HistoryBehavior::Push;
     }
 
-    if (options.history == HistoryBehavior::Push && newURL.protocolIsJavaScript())
-        return createEarlyErrorResult(committed, finished, ExceptionCode::NotSupportedError, "A \"push\" navigation was explicitly requested, but only a \"replace\" navigation is possible when navigating to a javascript: URL."_s);
+    if (options.history == HistoryBehavior::Push && newURL.protocolIsJavaScript()) {
+        rejectWithError(committed, finished, ExceptionCode::NotSupportedError, "A \"push\" navigation was explicitly requested, but only a \"replace\" navigation is possible when navigating to a javascript: URL."_s);
+        return;
+    }
 
     if (options.state) {
         Vector<RefPtr<MessagePort>> dummyPorts;
         auto serializeResult = SerializedScriptValue::create(*scriptExecutionContext.globalObject(), options.state, { }, dummyPorts, SerializationForStorage::Yes);
-        if (serializeResult.hasException())
-            return createErrorResult(committed, finished, serializeResult.releaseException());
+        if (serializeResult.hasException()) {
+            rejectWithError(committed, finished, serializeResult.releaseException());
+            return;
+        }
     }
 
-    if (!window()->frame() || !window()->frame()->document())
-        return createEarlyErrorResult(committed, finished, ExceptionCode::InvalidStateError, "Invalid state"_s);
+    if (!window()->frame() || !window()->frame()->document()) {
+        rejectWithError(committed, finished, ExceptionCode::InvalidStateError, "Invalid state"_s);
+        return;
+    }
 
     // FIXME: This is not a proper Navigation API initiated traversal, just a simple load for now.
     window()->frame()->loader().load(FrameLoadRequest(*window()->frame(), newURL));
 
     // FIXME: keep track of promises to resolve later.
     Ref entry = NavigationHistoryEntry::create(&scriptExecutionContext, newURL);
-    auto globalObject = committed->globalObject();
-    Navigation::Result result = { DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(committed->promise())), DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(finished->promise())) };
     committed->resolve<IDLInterface<NavigationHistoryEntry>>(entry.get());
     finished->resolve<IDLInterface<NavigationHistoryEntry>>(entry.get());
-    return result;
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#performing-a-navigation-api-traversal
-Navigation::Result Navigation::performTraversal(NavigationHistoryEntry& entry, Ref<DeferredPromise> committed, Ref<DeferredPromise> finished)
+void Navigation::performTraversal(NavigationHistoryEntry& entry, Ref<DeferredPromise> committed, Ref<DeferredPromise> finished)
 {
     // FIXME: This is just a stub that loads a URL for now.
     window()->frame()->loader().load(FrameLoadRequest(*window()->frame(), URL(entry.url())));
 
     // FIXME: keep track of promises to resolve later.
-    auto globalObject = committed->globalObject();
-    Navigation::Result result = { DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(committed->promise())), DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(finished->promise())) };
     committed->resolve<IDLInterface<NavigationHistoryEntry>>(entry);
     finished->resolve<IDLInterface<NavigationHistoryEntry>>(entry);
-    return result;
 }
 
 std::optional<Ref<NavigationHistoryEntry>> Navigation::findEntryByKey(const String& key)
@@ -188,40 +178,49 @@ std::optional<Ref<NavigationHistoryEntry>> Navigation::findEntryByKey(const Stri
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigation-traverseto
-Navigation::Result Navigation::traverseTo(const String& key, Options&&, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
+void Navigation::traverseTo(const String& key, Options&&, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
 {
+    if (!window()->frame()) {
+        rejectWithError(committed, finished, ExceptionCode::InvalidStateError, "Frame is detached"_s);
+        return;
+    }
+
     auto current = currentEntry();
     if (current && current->key() == key) {
-        auto globalObject = committed->globalObject();
-        Navigation::Result result = { DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(committed->promise())), DOMPromise::create(*globalObject, *JSC::jsCast<JSC::JSPromise*>(finished->promise())) };
         committed->resolve<IDLInterface<NavigationHistoryEntry>>(*current);
         finished->resolve<IDLInterface<NavigationHistoryEntry>>(*current);
-        return result;
+        return;
     }
 
     auto entry = findEntryByKey(key);
-    if (!entry)
-        return createEarlyErrorResult(committed, finished, ExceptionCode::InvalidStateError, "Invalid key"_s);
+    if (!entry) {
+        rejectWithError(committed, finished, ExceptionCode::InvalidStateError, "Invalid key"_s);
+        return;
+    }
 
-    return performTraversal(*entry, committed, finished);
+    performTraversal(*entry, committed, finished);
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigation-back
-Navigation::Result Navigation::back(Options&&, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
+void Navigation::back(Options&&, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
 {
-    if (!m_currentEntryIndex.value_or(0))
-        return createEarlyErrorResult(committed, finished, ExceptionCode::InvalidStateError, "Cannot go back"_s);
+    if (!m_currentEntryIndex.value_or(0)) {
+        rejectWithError(committed, finished, ExceptionCode::InvalidStateError, "Cannot go back"_s);
+        return;
+    }
 
-    return performTraversal(m_entries[m_currentEntryIndex.value() - 1], committed, finished);
+    performTraversal(m_entries[m_currentEntryIndex.value() - 1], committed, finished);
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigation-forward
-Navigation::Result Navigation::forward(Options&&, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
+void Navigation::forward(Options&&, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished)
 {
-    if (!m_currentEntryIndex || m_currentEntryIndex.value() == m_entries.size())
-        return createEarlyErrorResult(committed, finished, ExceptionCode::InvalidStateError, "Cannot go forward"_s);
+    if (!m_currentEntryIndex || m_currentEntryIndex.value() == m_entries.size()) {
+        rejectWithError(committed, finished, ExceptionCode::InvalidStateError, "Cannot go forward"_s);
+        return;
+    }
 
-    return performTraversal(m_entries[m_currentEntryIndex.value() + 1], committed, finished);
+    performTraversal(m_entries[m_currentEntryIndex.value() + 1], committed, finished);
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigation-updatecurrententry
