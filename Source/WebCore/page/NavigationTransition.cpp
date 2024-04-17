@@ -32,10 +32,27 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(NavigationTransition);
 
-NavigationTransition::NavigationTransition(NavigationNavigationType type, Ref<NavigationHistoryEntry>&& fromEntry)
+NavigationTransition::NavigationTransition(NavigationNavigationType type, Ref<NavigationHistoryEntry>&& fromEntry, RefPtr<DeferredPromise>&& finished)
     : m_navigationType(type)
     , m_from(WTFMove(fromEntry))
+    , m_finished(WTFMove(finished))
 {
+}
+
+void NavigationTransition::resolvePromise()
+{
+    m_finished->resolve();
+}
+
+void NavigationTransition::rejectPromise(Exception&& exception)
+{
+    m_finished->reject(WTFMove(exception), RejectAsHandled::Yes);
+}
+
+DOMPromise* NavigationTransition::finished()
+{
+    auto& promise = *jsCast<JSC::JSPromise*>(m_finished->promise());
+    return DOMPromise::create(*m_finished->globalObject(), promise).ptr();
 }
 
 } // namespace WebCore

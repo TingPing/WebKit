@@ -551,8 +551,8 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
         RefPtr fromNavigationHistoryEntry = currentEntry();
         ASSERT(fromNavigationHistoryEntry);
 
-        // FIXME: Create finished promise
-        m_transition = NavigationTransition::create(navigationType, *fromNavigationHistoryEntry);
+        auto& domGlobalObject = *jsCast<JSDOMGlobalObject*>(scriptExecutionContext()->globalObject());
+        m_transition = NavigationTransition::create(navigationType, *fromNavigationHistoryEntry, DeferredPromise::create(domGlobalObject, DeferredPromise::Mode::RetainPromiseOnResolve));
 
         if (navigationType == NavigationNavigationType::Traverse)
             m_suppressNormalScrollRestorationDuringOngoingNavigation = true;
@@ -570,8 +570,10 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
             event->finish();
 
             // FIXME: 6. Fire an event named navigatesuccess at navigation.
-            // FIXME: 7. If navigation's transition is not null, then resolve navigation's transition's finished promise with undefined.
-            m_transition = nullptr;
+            if (m_transition) {
+                m_transition->resolvePromise();
+                m_transition = nullptr;
+            }
 
             if (apiMethodTracker)
                 resolveFinishedPromise(*apiMethodTracker);
