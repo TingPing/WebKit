@@ -1,4 +1,4 @@
 
 
-FAIL NavigationHistoryEntry's key and id after location.reload() null is not an object (evaluating 'i.contentWindow.navigation.currentEntry.key')
+FAIL NavigationHistoryEntry's key and id after location.reload() assert_equals: expected "dd4af9d9-0459-4a6e-ba57-55a592188ca5" but got "0017cb14-8158-462e-bbb7-d6a18fbb382a"
 

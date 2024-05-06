@@ -124,6 +124,7 @@ storage
 streams
 subresource-integrity
 svg
+svg-aam
 tools
 touch-events
 trusted-types
