@@ -351,6 +351,8 @@ public:
     void loadItem(HistoryItem&, HistoryItem* fromItem, FrameLoadType, ShouldTreatAsContinuingLoad);
     HistoryItem* requestedHistoryItem() const { return m_requestedHistoryItem.get(); }
 
+    void loadInSameDocument(URL, RefPtr<SerializedScriptValue> stateObject, const SecurityOrigin* requesterOrigin, bool isNewNavigation, NavigationHistoryBehavior historyHandling = NavigationHistoryBehavior::Auto);
+
 private:
     enum FormSubmissionCacheLoadPolicy {
         MayAttemptCacheOnlyLoadForFormSubmissionItem,
@@ -424,8 +426,6 @@ private:
 
     WEBCORE_EXPORT void detachChildren();
     void closeAndRemoveChild(LocalFrame&);
-
-    void loadInSameDocument(URL, RefPtr<SerializedScriptValue> stateObject, const SecurityOrigin* requesterOrigin, bool isNewNavigation, NavigationHistoryBehavior historyHandling = NavigationHistoryBehavior::Auto);
 
     void prepareForLoadStart();
     void provisionalLoadStarted();
