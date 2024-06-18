@@ -581,6 +581,18 @@ void Navigation::abortOngoingNavigation(NavigateEvent& event)
     }
 }
 
+static NavigationHistoryBehavior navigationTypeToHistoryBehavior(NavigationNavigationType navigationType)
+{
+    switch (navigationType) {
+    case NavigationNavigationType::Push:
+        return NavigationHistoryBehavior::Push;
+    case NavigationNavigationType::Replace:
+        return NavigationHistoryBehavior::Replace;
+    default:
+        return NavigationHistoryBehavior::Auto;
+    }
+}
+
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#inner-navigate-event-firing-algorithm
 bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationType, Ref<NavigationDestination>&& destination, const String& downloadRequestFilename, FormState* formState, SerializedScriptValue* classicHistoryAPIState)
 {
@@ -672,7 +684,8 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
         if (navigationType == NavigationNavigationType::Traverse)
             m_suppressNormalScrollRestorationDuringOngoingNavigation = true;
 
-        // FIXME: Step 7: URL and history update
+        if (navigationType == NavigationNavigationType::Push || navigationType == NavigationNavigationType::Replace)
+            frame()->loader().loadInSameDocument(destination->url(), classicHistoryAPIState, nullptr, false, navigationTypeToHistoryBehavior(navigationType));
     }
 
     if (endResultIsSameDocument) {
