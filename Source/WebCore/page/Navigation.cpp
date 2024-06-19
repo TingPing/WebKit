@@ -710,7 +710,7 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
 
             m_ongoingNavigateEvent = nullptr;
 
-            event->finish();
+            event->finish(*document, true);
 
             if (!failure) {
                 dispatchEvent(Event::create(eventNames().navigatesuccessEvent, { }));
@@ -727,6 +727,7 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
         } else {
             // FIXME: and the following failure steps given reason rejectionReason:
             m_ongoingNavigateEvent = nullptr;
+            event->finish(*document, false);
         }
     } else if (apiMethodTracker)
         cleanupAPIMethodTracker(apiMethodTracker.get());

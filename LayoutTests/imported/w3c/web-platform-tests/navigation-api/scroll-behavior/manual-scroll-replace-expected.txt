@@ -1,5 +1,3 @@
 
-Harness Error (TIMEOUT), message = null
-
-TIMEOUT scroll: scroll() should work on a replace navigation Test timed out
+FAIL scroll: scroll() should work on a replace navigation assert_equals: expected 0 but got 431
 

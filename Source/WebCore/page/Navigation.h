@@ -143,6 +143,8 @@ public:
     void updateForNavigation(Ref<HistoryItem>&&, NavigationNavigationType);
     void updateForReactivation(Vector<Ref<HistoryItem>>& newHistoryItems, HistoryItem& reactivatedItem);
 
+    bool suppressNormalScrollRestoration() const { return m_suppressNormalScrollRestorationDuringOngoingNavigation; }
+
 private:
     explicit Navigation(LocalDOMWindow&);
 
