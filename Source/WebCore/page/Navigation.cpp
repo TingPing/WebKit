@@ -844,7 +844,7 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
 
             RefPtr strongThis = weakThis.get();
 
-            m_ongoingNavigateEvent->finish();
+            m_ongoingNavigateEvent->finish(*document, true);
             m_ongoingNavigateEvent = nullptr;
 
             dispatchEvent(Event::create(eventNames().navigatesuccessEvent, { }));
@@ -863,7 +863,7 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
 
             RefPtr strongThis = weakThis.get();
 
-            m_ongoingNavigateEvent->finish();
+            m_ongoingNavigateEvent->finish(*document, false);
             m_ongoingNavigateEvent = nullptr;
 
             ErrorInformation errorInformation;
