@@ -316,7 +316,6 @@
 #if USE(GBM)
 #include "AcceleratedBackingStoreDMABuf.h"
 #endif
-#include "GtkSettingsManager.h"
 #include <WebCore/SelectionData.h>
 #endif
 

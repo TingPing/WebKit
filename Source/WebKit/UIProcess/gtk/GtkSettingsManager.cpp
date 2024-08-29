@@ -26,16 +26,15 @@
 #include "config.h"
 #include "GtkSettingsManager.h"
 
-#include "GtkSettingsManagerProxyMessages.h"
+#include "SystemSettingsProxyGLibMessages.h"
 #include "WebProcessPool.h"
 
 namespace WebKit {
 using namespace WebCore;
 
-GtkSettingsManager& GtkSettingsManager::singleton()
+void GtkSettingsManager::initialize()
 {
     static NeverDestroyed<GtkSettingsManager> manager;
-    return manager;
 }
 
 String GtkSettingsManager::themeName() const
@@ -134,61 +133,62 @@ bool GtkSettingsManager::enableAnimations() const
 
 void GtkSettingsManager::settingsDidChange()
 {
-    GtkSettingsState state;
+    auto& oldState = SystemSettingsGLib::singleton().settingsState();
+    SettingsStateGLib changedState;
 
     auto themeName = this->themeName();
-    if (m_settingsState.themeName != themeName)
-        m_settingsState.themeName = state.themeName = themeName;
+    if (oldState.themeName != themeName)
+        changedState.themeName = themeName;
 
     auto fontName = this->fontName();
-    if (m_settingsState.fontName != fontName)
-        m_settingsState.fontName = state.fontName = fontName;
+    if (oldState.fontName != fontName)
+        changedState.fontName = fontName;
 
     auto xftAntialias = this->xftAntialias();
-    if (m_settingsState.xftAntialias != xftAntialias)
-        m_settingsState.xftAntialias = state.xftAntialias = xftAntialias;
+    if (xftAntialias != -1 && oldState.xftAntialias != xftAntialias)
+        changedState.xftAntialias = xftAntialias;
 
     auto xftHinting = this->xftHinting();
-    if (m_settingsState.xftHinting != xftHinting)
-        m_settingsState.xftHinting = state.xftHinting = xftHinting;
-
-    auto xftHintStyle = this->xftHintStyle();
-    if (m_settingsState.xftHintStyle != xftHintStyle)
-        m_settingsState.xftHintStyle = state.xftHintStyle = xftHintStyle;
-
-    auto xftRGBA = this->xftRGBA();
-    if (m_settingsState.xftRGBA != xftRGBA)
-        m_settingsState.xftRGBA = state.xftRGBA = xftRGBA;
+    if (xftHinting != -1 && oldState.xftHinting != xftHinting)
+        changedState.xftHinting = xftHinting;
 
     auto xftDPI = this->xftDPI();
-    if (m_settingsState.xftDPI != xftDPI)
-        m_settingsState.xftDPI = state.xftDPI = xftDPI;
+    if (xftDPI != -1 && oldState.xftDPI != xftDPI)
+        changedState.xftDPI = xftDPI;
+
+    auto xftHintStyle = this->xftHintStyle();
+    if (oldState.xftHintStyle != xftHintStyle)
+        changedState.xftHintStyle = xftHintStyle;
+
+    auto xftRGBA = this->xftRGBA();
+    if (oldState.xftRGBA != xftRGBA)
+        changedState.xftRGBA = xftRGBA;
+
 
     auto cursorBlink = this->cursorBlink();
-    if (m_settingsState.cursorBlink != cursorBlink)
-        m_settingsState.cursorBlink = state.cursorBlink = cursorBlink;
+    if (oldState.cursorBlink != cursorBlink)
+        changedState.cursorBlink = cursorBlink;
 
     auto cursorBlinkTime = this->cursorBlinkTime();
-    if (m_settingsState.cursorBlinkTime != cursorBlinkTime)
-        m_settingsState.cursorBlinkTime = state.cursorBlinkTime = cursorBlinkTime;
+    if (oldState.cursorBlinkTime != cursorBlinkTime)
+        changedState.cursorBlinkTime = cursorBlinkTime;
 
     auto primaryButtonWarpsSlider = this->primaryButtonWarpsSlider();
-    if (m_settingsState.primaryButtonWarpsSlider != primaryButtonWarpsSlider)
-        m_settingsState.primaryButtonWarpsSlider = state.primaryButtonWarpsSlider = primaryButtonWarpsSlider;
+    if (oldState.primaryButtonWarpsSlider != primaryButtonWarpsSlider)
+        changedState.primaryButtonWarpsSlider = primaryButtonWarpsSlider;
 
     auto overlayScrolling = this->overlayScrolling();
-    if (m_settingsState.overlayScrolling != overlayScrolling)
-        m_settingsState.overlayScrolling = state.overlayScrolling = overlayScrolling;
+    if (oldState.overlayScrolling != overlayScrolling)
+        changedState.overlayScrolling = overlayScrolling;
 
     auto enableAnimations = this->enableAnimations();
-    if (m_settingsState.enableAnimations != enableAnimations)
-        m_settingsState.enableAnimations = state.enableAnimations = enableAnimations;
-
-    for (const auto& observer : m_observers.values())
-        observer(state);
+    if (oldState.enableAnimations != enableAnimations)
+        changedState.enableAnimations = enableAnimations;
 
     for (auto& processPool : WebProcessPool::allProcessPools())
-        processPool->sendToAllProcesses(Messages::GtkSettingsManagerProxy::SettingsDidChange(state));
+        processPool->sendToAllProcesses(Messages::SystemSettingsProxyGLib::SettingsDidChange(changedState));
+
+    SystemSettingsGLib::singleton().applySettings(WTFMove(changedState));
 }
 
 GtkSettingsManager::GtkSettingsManager()
@@ -197,19 +197,6 @@ GtkSettingsManager::GtkSettingsManager()
     auto settingsChangedCallback = +[](GtkSettingsManager* settingsManager) {
         settingsManager->settingsDidChange();
     };
-
-    m_settingsState.themeName = themeName();
-    m_settingsState.fontName = fontName();
-    m_settingsState.xftAntialias = xftAntialias();
-    m_settingsState.xftHinting = xftHinting();
-    m_settingsState.xftHintStyle = xftHintStyle();
-    m_settingsState.xftRGBA = xftRGBA();
-    m_settingsState.xftDPI = xftDPI();
-    m_settingsState.cursorBlink = cursorBlink();
-    m_settingsState.cursorBlinkTime = cursorBlinkTime();
-    m_settingsState.primaryButtonWarpsSlider = primaryButtonWarpsSlider();
-    m_settingsState.overlayScrolling = overlayScrolling();
-    m_settingsState.enableAnimations = enableAnimations();
 
     g_signal_connect_swapped(m_settings, "notify::gtk-theme-name", G_CALLBACK(settingsChangedCallback), this);
     g_signal_connect_swapped(m_settings, "notify::gtk-font-name", G_CALLBACK(settingsChangedCallback), this);
@@ -223,16 +210,8 @@ GtkSettingsManager::GtkSettingsManager()
     g_signal_connect_swapped(m_settings, "notify::gtk-primary-button-warps-slider", G_CALLBACK(settingsChangedCallback), this);
     g_signal_connect_swapped(m_settings, "notify::gtk-overlay-scrolling", G_CALLBACK(settingsChangedCallback), this);
     g_signal_connect_swapped(m_settings, "notify::gtk-enable-animations", G_CALLBACK(settingsChangedCallback), this);
-}
 
-void GtkSettingsManager::addObserver(Function<void(const GtkSettingsState&)>&& handler, void* context)
-{
-    m_observers.add(context, WTFMove(handler));
-}
-
-void GtkSettingsManager::removeObserver(void* context)
-{
-    m_observers.remove(context);
+    settingsDidChange();
 }
 
 } // namespace WebKit

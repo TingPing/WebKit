@@ -63,7 +63,7 @@ list(APPEND WebKit_MESSAGES_IN_FILES
 
     WebProcess/WebPage/dmabuf/AcceleratedSurfaceDMABuf
 
-    WebProcess/gtk/GtkSettingsManagerProxy
+    WebProcess/glib/SystemSettingsProxyGLib
 )
 
 if (USE_GBM)
@@ -71,6 +71,7 @@ if (USE_GBM)
 endif ()
 
 list(APPEND WebKit_SERIALIZATION_IN_FILES
+    Shared/glib/ArgumentCodersGLib.serialization.in
     Shared/glib/DMABufRendererBufferFormat.serialization.in
     Shared/glib/DMABufRendererBufferMode.serialization.in
     Shared/glib/InputMethodState.serialization.in

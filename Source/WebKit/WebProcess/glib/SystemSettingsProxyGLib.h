@@ -25,39 +25,25 @@
 
 #pragma once
 
+#include "MessageReceiver.h"
 #include <WebCore/SystemSettingsGLib.h>
-#include <gtk/gtk.h>
-#include <wtf/Function.h>
-#include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 
 namespace WebKit {
 
-class GtkSettingsManager {
-    WTF_MAKE_NONCOPYABLE(GtkSettingsManager);
-    friend NeverDestroyed<GtkSettingsManager>;
+class SystemSettingsProxyGLib : private IPC::MessageReceiver {
+    WTF_MAKE_NONCOPYABLE(SystemSettingsProxyGLib);
+    friend NeverDestroyed<SystemSettingsProxyGLib>;
 public:
-    static void initialize();
+    static SystemSettingsProxyGLib& singleton();
 
 private:
-    GtkSettingsManager();
+    SystemSettingsProxyGLib();
 
-    void settingsDidChange();
+    // IPC::MessageReceiver.
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
-    String themeName() const;
-    String fontName() const;
-    int xftAntialias() const;
-    int xftHinting() const;
-    String xftHintStyle() const;
-    String xftRGBA() const;
-    int xftDPI() const;
-    bool cursorBlink() const;
-    int cursorBlinkTime() const;
-    bool primaryButtonWarpsSlider() const;
-    bool overlayScrolling() const;
-    bool enableAnimations() const;
-
-    GtkSettings* m_settings;
+    void settingsDidChange(WebCore::SettingsStateGLib&&);
 };
 
 } // namespace WebKit

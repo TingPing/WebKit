@@ -20,14 +20,17 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-header: <WebCore/SelectionData.h>
-class WebCore::SelectionData {
-    String text()
-    String markup()
-    URL url()
-    String uriList()
-    RefPtr<WebCore::Image> image()
-    RefPtr<WebCore::SharedBuffer> customData()
-    bool canSmartReplace()
+struct WebCore::SettingsStateGLib {
+    std::optional<String> themeName;
+    std::optional<String> fontName;
+    std::optional<int> xftAntialias;
+    std::optional<int> xftHinting;
+    std::optional<String> xftHintStyle;
+    std::optional<String> xftRGBA;
+    std::optional<int> xftDPI;
+    std::optional<bool> cursorBlink;
+    std::optional<int> cursorBlinkTime;
+    std::optional<bool> primaryButtonWarpsSlider;
+    std::optional<bool> overlayScrolling;
+    std::optional<bool> enableAnimations;
 }
-

@@ -60,6 +60,7 @@
 #if PLATFORM(GTK) || PLATFORM(WPE)
 #include <WebCore/PlatformDisplayGBM.h>
 #include <WebCore/PlatformDisplaySurfaceless.h>
+#include <WebCore/SystemSettingsGLib.h>
 #endif
 
 #if PLATFORM(GTK)
@@ -84,11 +85,6 @@
 
 #if USE(ATSPI)
 #include <WebCore/AccessibilityAtspi.h>
-#endif
-
-#if PLATFORM(GTK)
-#include "GtkSettingsManagerProxy.h"
-#include <gtk/gtk.h>
 #endif
 
 #if USE(CAIRO)
@@ -229,9 +225,7 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
     if (parameters.disableFontHintingForTesting)
         FontRenderOptions::singleton().disableHintingForTesting();
 
-#if PLATFORM(GTK)
-    GtkSettingsManagerProxy::singleton().applySettings(WTFMove(parameters.gtkSettings));
-#endif
+    WebCore::SystemSettingsGLib::singleton().applySettings(WTFMove(parameters.systemSettings));
 
 #if PLATFORM(GTK)
     WebCore::setScreenProperties(parameters.screenProperties);

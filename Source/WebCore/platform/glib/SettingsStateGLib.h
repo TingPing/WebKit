@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2021 Purism SPC
+ * Copyright (C) 2024 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,32 +26,24 @@
 
 #pragma once
 
-#include "GtkSettingsState.h"
-#include "MessageReceiver.h"
-#include <gtk/gtk.h>
-#include <wtf/NeverDestroyed.h>
+#include <optional>
+#include <wtf/text/WTFString.h>
 
-namespace WebKit {
+namespace WebCore {
 
-class GtkSettingsManagerProxy : private IPC::MessageReceiver {
-    WTF_MAKE_NONCOPYABLE(GtkSettingsManagerProxy);
-    friend NeverDestroyed<GtkSettingsManagerProxy>;
-public:
-    static GtkSettingsManagerProxy& singleton();
-
-    void applySettings(GtkSettingsState&&);
-private:
-    GtkSettingsManagerProxy();
-
-    // IPC::MessageReceiver.
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
-
-    void settingsDidChange(GtkSettingsState&&);
-
-    void applyHintingSettings();
-    void applyAntialiasSettings();
-
-    GtkSettings* m_settings;
+struct SettingsStateGLib {
+    std::optional<String> themeName;
+    std::optional<String> fontName;
+    std::optional<int> xftAntialias;
+    std::optional<int> xftHinting;
+    std::optional<String> xftHintStyle;
+    std::optional<String> xftRGBA;
+    std::optional<int> xftDPI;
+    std::optional<bool> cursorBlink;
+    std::optional<int> cursorBlinkTime;
+    std::optional<bool> primaryButtonWarpsSlider;
+    std::optional<bool> overlayScrolling;
+    std::optional<bool> enableAnimations;
 };
 
-} // namespace WebKit
+} // namespace WebCore

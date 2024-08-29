@@ -36,9 +36,12 @@
 #include "Scrollbar.h"
 #include "ThemeAdwaita.h"
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#include "SystemSettingsGLib.h"
+#endif
+
 #if PLATFORM(GTK)
 #include "GtkUtilities.h"
-#include <gtk/gtk.h>
 #endif
 
 namespace WebCore {
@@ -77,6 +80,8 @@ bool ScrollbarThemeAdwaita::usesOverlayScrollbars() const
 {
 #if PLATFORM(GTK)
     return shouldUseOverlayScrollbars();
+#elif PLATFORM(WPE)
+    return SystemSettingsGLib::singleton().overlayScrolling().value_or(true);
 #else
     return true;
 #endif
@@ -323,14 +328,8 @@ ScrollbarButtonPressAction ScrollbarThemeAdwaita::handleMousePressEvent(Scrollba
     switch (pressedPart) {
     case BackTrackPart:
     case ForwardTrackPart:
-#if PLATFORM(GTK)
-        warpSlider = [] {
-            gboolean gtkWarpsSlader = FALSE;
-            g_object_get(gtk_settings_get_default(),
-                "gtk-primary-button-warps-slider",
-                &gtkWarpsSlader, nullptr);
-            return gtkWarpsSlader;
-        }();
+#if PLATFORM(GTK) || PLATFORM(WPE)
+        warpSlider = SystemSettingsGLib::singleton().primaryButtonWarpsSlider().value_or(true);
 #endif
         // The shift key or middle/right button reverses the sense.
         if (event.shiftKey() || event.button() != MouseButton::Left)

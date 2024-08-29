@@ -344,5 +344,4 @@ WebProcess/WebPage/gtk/WebPrintOperationGtk.cpp
 
 WebProcess/glib/WebProcessGLib.cpp
 
-WebProcess/gtk/GtkSettingsManagerProxy.cpp
 WebProcess/gtk/WebProcessMainGtk.cpp

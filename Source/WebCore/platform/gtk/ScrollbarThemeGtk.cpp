@@ -29,14 +29,13 @@
 
 #if !USE(GTK4) && USE(CAIRO)
 
-#include "GRefPtrGtk.h"
 #include "GraphicsContextCairo.h"
 #include "PlatformMouseEvent.h"
 #include "RenderThemeScrollbar.h"
 #include "ScrollView.h"
 #include "Scrollbar.h"
+#include "SystemSettingsGLib.h"
 #include <cstdlib>
-#include <gtk/gtk.h>
 
 namespace WebCore {
 
@@ -46,19 +45,19 @@ ScrollbarTheme& ScrollbarTheme::nativeTheme()
     return theme;
 }
 
-ScrollbarThemeGtk::~ScrollbarThemeGtk() = default;
-
-static void themeChangedCallback()
+ScrollbarThemeGtk::~ScrollbarThemeGtk()
 {
-    ScrollbarTheme::theme().themeChanged();
+    SystemSettingsGLib::singleton().removeObserver(this);
 }
 
 ScrollbarThemeGtk::ScrollbarThemeGtk()
 {
     static bool themeMonitorInitialized = false;
     if (!themeMonitorInitialized) {
-        g_signal_connect(gtk_settings_get_default(), "notify::gtk-theme-name", G_CALLBACK(themeChangedCallback), nullptr);
-        g_signal_connect(gtk_settings_get_default(), "notify::gtk-overlay-scrolling", G_CALLBACK(themeChangedCallback), nullptr);
+        SystemSettingsGLib::singleton().addObserver([](const SettingsStateGLib& state) mutable {
+            if (state.themeName || state.overlayScrolling)
+                ScrollbarTheme::theme().themeChanged();
+        }, this);
         themeMonitorInitialized = true;
         updateThemeProperties();
     }
@@ -494,19 +493,15 @@ bool ScrollbarThemeGtk::paint(Scrollbar& scrollbar, GraphicsContext& graphicsCon
 
 ScrollbarButtonPressAction ScrollbarThemeGtk::handleMousePressEvent(Scrollbar&, const PlatformMouseEvent& event, ScrollbarPart pressedPart)
 {
-    gboolean warpSlider = FALSE;
+    bool warpSlider;
     switch (pressedPart) {
     case BackTrackPart:
     case ForwardTrackPart:
-        g_object_get(gtk_settings_get_default(),
-            "gtk-primary-button-warps-slider",
-            &warpSlider, nullptr);
+        warpSlider = SystemSettingsGLib::singleton().primaryButtonWarpsSlider().value_or(true);
         // The shift key or middle/right button reverses the sense.
         if (event.shiftKey() || event.button() != MouseButton::Left)
             warpSlider = !warpSlider;
-        return warpSlider ?
-            ScrollbarButtonPressAction::CenterOnThumb:
-            ScrollbarButtonPressAction::Scroll;
+        return warpSlider ? ScrollbarButtonPressAction::CenterOnThumb : ScrollbarButtonPressAction::Scroll;
     case ThumbPart:
         if (event.button() != MouseButton::Right)
             return ScrollbarButtonPressAction::StartDrag;

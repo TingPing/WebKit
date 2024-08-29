@@ -23,30 +23,29 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "SystemSettingsProxyGLib.h"
 
-#include <wtf/text/WTFString.h>
-
-namespace IPC {
-class Decoder;
-class Encoder;
-}
+#include "SystemSettingsProxyGLibMessages.h"
+#include "WebProcess.h"
 
 namespace WebKit {
+using namespace WebCore;
 
-struct GtkSettingsState {
-    std::optional<String> themeName;
-    std::optional<String> fontName;
-    std::optional<int> xftAntialias;
-    std::optional<int> xftHinting;
-    std::optional<String> xftHintStyle;
-    std::optional<String> xftRGBA;
-    std::optional<int> xftDPI;
-    std::optional<bool> cursorBlink;
-    std::optional<int> cursorBlinkTime;
-    std::optional<bool> primaryButtonWarpsSlider;
-    std::optional<bool> overlayScrolling;
-    std::optional<bool> enableAnimations;
-};
+SystemSettingsProxyGLib& SystemSettingsProxyGLib::singleton()
+{
+    static NeverDestroyed<SystemSettingsProxyGLib> manager;
+    return manager;
+}
+
+SystemSettingsProxyGLib::SystemSettingsProxyGLib()
+{
+    WebProcess::singleton().addMessageReceiver(Messages::SystemSettingsProxyGLib::messageReceiverName(), *this);
+}
+
+void SystemSettingsProxyGLib::settingsDidChange(WebCore::SettingsStateGLib&& state)
+{
+    SystemSettingsGLib::singleton().applySettings(WTFMove(state));
+}
 
 } // namespace WebKit

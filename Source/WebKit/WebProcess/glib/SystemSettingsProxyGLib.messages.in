@@ -20,6 +20,6 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-messages -> GtkSettingsManagerProxy NotRefCounted {
-    SettingsDidChange(struct WebKit::GtkSettingsState settingsState)
+messages -> SystemSettingsProxyGLib NotRefCounted {
+    SettingsDidChange(struct WebCore::SettingsStateGLib settingsState)
 }

@@ -51,6 +51,8 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     accessibility/atspi/AccessibilityRootAtspi.h
 
     platform/glib/ApplicationGLib.h
+    platform/glib/SettingsStateGLib.h
+    platform/glib/SystemSettingsGLib.h
 
     platform/graphics/egl/PlatformDisplaySurfaceless.h
 
