@@ -32,6 +32,7 @@
 namespace WebCore {
 
 struct SettingsStateGLib {
+    /* These match existing GTK settings. */
     std::optional<String> themeName;
     std::optional<String> fontName;
     std::optional<int> xftAntialias;
@@ -44,6 +45,10 @@ struct SettingsStateGLib {
     std::optional<bool> primaryButtonWarpsSlider;
     std::optional<bool> overlayScrolling;
     std::optional<bool> enableAnimations;
+
+    /* These are for libadwaita with fallbacks guessing from GTK. */
+    std::optional<bool> darkMode;
+    std::optional<bool> highContrast;
 };
 
 } // namespace WebCore

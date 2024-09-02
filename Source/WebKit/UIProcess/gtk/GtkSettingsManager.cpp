@@ -54,6 +54,40 @@ String GtkSettingsManager::themeName() const
     return name;
 }
 
+bool GtkSettingsManager::highContrast() const
+{
+    gboolean highContrast = FALSE;
+    if (m_adwaitaStyleManager) {
+        g_object_get(m_adwaitaStyleManager, "high-contrast", &highContrast, nullptr);
+        return highContrast;
+    }
+
+    auto theme = themeName();
+    return theme == "HighContrast"_s || theme == "HighContrastInverse"_s;
+}
+
+bool GtkSettingsManager::darkMode() const
+{
+    gboolean dark = FALSE;
+    if (m_adwaitaStyleManager) {
+        g_object_get(m_adwaitaStyleManager, "dark", &dark, nullptr);
+        return dark;
+    }
+
+    g_object_get(m_settings, "gtk-application-prefer-dark-theme", &dark, nullptr);
+    if (dark)
+        return dark;
+
+    if (auto* themeNameEnv = g_getenv("GTK_THEME")) {
+        auto theme = String::fromUTF8(themeNameEnv);
+        return theme.endsWithIgnoringASCIICase("-dark"_s) || theme.endsWith(":dark"_s);
+    }
+
+    GUniqueOutPtr<char> themeNameSetting;
+    g_object_get(m_settings, "gtk-theme-name", &themeNameSetting.outPtr(), nullptr);
+    return String::fromUTF8(themeNameSetting.get()).endsWithIgnoringASCIICase("-dark"_s);
+}
+
 String GtkSettingsManager::fontName() const
 {
     GUniqueOutPtr<char> fontNameSetting;
@@ -185,6 +219,15 @@ void GtkSettingsManager::settingsDidChange()
     if (oldState.enableAnimations != enableAnimations)
         changedState.enableAnimations = enableAnimations;
 
+
+    auto darkMode = this->darkMode();
+    if (oldState.darkMode != darkMode)
+        changedState.darkMode = darkMode;
+
+    auto highContrast = this->highContrast();
+    if (oldState.highContrast != highContrast)
+        changedState.highContrast = highContrast;
+
     for (auto& processPool : WebProcessPool::allProcessPools())
         processPool->sendToAllProcesses(Messages::SystemSettingsProxyGLib::SettingsDidChange(changedState));
 
@@ -210,6 +253,21 @@ GtkSettingsManager::GtkSettingsManager()
     g_signal_connect_swapped(m_settings, "notify::gtk-primary-button-warps-slider", G_CALLBACK(settingsChangedCallback), this);
     g_signal_connect_swapped(m_settings, "notify::gtk-overlay-scrolling", G_CALLBACK(settingsChangedCallback), this);
     g_signal_connect_swapped(m_settings, "notify::gtk-enable-animations", G_CALLBACK(settingsChangedCallback), this);
+
+#if USE(GTK4)
+    gboolean (*adwaitaIsInitialized)(void);
+    GObject* (*adwaitaGetDefaultStyleManager)(void);
+
+    void* handle = dlopen(NULL, RTLD_NOW);
+    adwaitaIsInitialized = (gboolean (*)(void))dlsym(handle, "adw_is_initialized");
+    adwaitaGetDefaultStyleManager = (GObject* (*)(void))dlsym(handle, "adw_style_manager_get_default");
+
+    if (adwaitaIsInitialized && adwaitaGetDefaultStyleManager && adwaitaIsInitialized()) {
+        m_adwaitaStyleManager = adwaitaGetDefaultStyleManager();
+        g_signal_connect_swapped(m_adwaitaStyleManager, "notify::high-contrast", G_CALLBACK(settingsChangedCallback), this);
+        g_signal_connect_swapped(m_adwaitaStyleManager, "notify::dark", G_CALLBACK(settingsChangedCallback), this);
+    }
+#endif
 
     settingsDidChange();
 }

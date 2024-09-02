@@ -33,4 +33,7 @@ struct WebCore::SettingsStateGLib {
     std::optional<bool> primaryButtonWarpsSlider;
     std::optional<bool> overlayScrolling;
     std::optional<bool> enableAnimations;
+
+    std::optional<bool> darkMode;
+    std::optional<bool> highContrast;
 }

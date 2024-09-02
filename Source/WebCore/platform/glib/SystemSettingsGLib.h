@@ -54,6 +54,8 @@ public:
     std::optional<bool> overlayScrolling() const { return m_settings.overlayScrolling; };
     std::optional<bool> primaryButtonWarpsSlider() const { return m_settings.primaryButtonWarpsSlider; };
     std::optional<bool> enableAnimations() const { return m_settings.enableAnimations; };
+    std::optional<bool> darkMode() const { return m_settings.darkMode; };
+    std::optional<bool> highContrast() const { return m_settings.highContrast; };
 
 private:
     SystemSettingsGLib();

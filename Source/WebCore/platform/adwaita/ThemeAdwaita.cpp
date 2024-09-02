@@ -54,7 +54,7 @@ ThemeAdwaita::ThemeAdwaita()
 
     // Note that Theme is NeverDestroy'd so the destructor will never be called to disconnect this.
     SystemSettingsGLib::singleton().addObserver([this](const SettingsStateGLib &state) mutable {
-        if (state.enableAnimations || state.themeName)
+        if (state.enableAnimations || state.highContrast)
             this->refreshSettings();
     }, this);
 #endif // PLATFORM(GTK) || PLATFORM(WPE)
@@ -67,13 +67,8 @@ void ThemeAdwaita::refreshSettings()
     if (auto enableAnimations = SystemSettingsGLib::singleton().enableAnimations())
         m_prefersReducedMotion = !enableAnimations.value();
 
-    // For high contrast in GTK3 we can rely on the theme name and be accurate most of the time.
-    // However whether or not high-contrast is enabled is also stored in GSettings/xdg-desktop-portal.
-    // We could rely on libadwaita, dynamically, to re-use its logic.
-#if !USE(GTK4)
-    if (auto themeName = SystemSettingsGLib::singleton().themeName())
-        m_prefersContrast = themeName == "HighContrast"_s || themeName == "HighContrastInverse"_s;
-#endif // !USE(GTK4)
+    if (auto highContrast = SystemSettingsGLib::singleton().highContrast())
+        m_prefersContrast = *highContrast;
 }
 
 #endif // PLATFORM(GTK) || PLATFORM(WPE)

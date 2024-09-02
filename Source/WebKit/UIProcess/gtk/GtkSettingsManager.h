@@ -57,7 +57,11 @@ private:
     bool overlayScrolling() const;
     bool enableAnimations() const;
 
+    bool darkMode() const;
+    bool highContrast() const;
+
     GtkSettings* m_settings;
+    GObject* m_adwaitaStyleManager = nullptr;
 };
 
 } // namespace WebKit
