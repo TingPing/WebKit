@@ -341,6 +341,9 @@ Navigation::Result Navigation::navigate(const String& url, NavigateOptions&& opt
 
     RefPtr apiMethodTracker = maybeSetUpcomingNonTraversalTracker(WTFMove(committed), WTFMove(finished), WTFMove(options.info), serializedState.releaseReturnValue());
 
+    // With this most focus tests pass fine.
+    // frame()->checkedNavigationScheduler()->scheduleLocationChange(*window()->document(), window()->document()->securityOrigin(), newURL, nullString(), LockHistory::Yes, LockBackForwardList::Yes, options.history);
+
     auto request = FrameLoadRequest(*frame(), newURL);
     request.setNavigationHistoryBehavior(options.history);
     frame()->loader().loadFrameRequest(WTFMove(request), nullptr, { });
@@ -844,7 +847,8 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
 
             RefPtr strongThis = weakThis.get();
 
-            m_ongoingNavigateEvent->finish(*document, true);
+            bool focusChanged = std::exchange(m_focusChangedDuringOnoingNavigation, false);
+            m_ongoingNavigateEvent->finish(*document, true, focusChanged);
             m_ongoingNavigateEvent = nullptr;
 
             dispatchEvent(Event::create(eventNames().navigatesuccessEvent, { }));
@@ -863,7 +867,8 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
 
             RefPtr strongThis = weakThis.get();
 
-            m_ongoingNavigateEvent->finish(*document, false);
+            bool focusChanged = std::exchange(m_focusChangedDuringOnoingNavigation, false);
+            m_ongoingNavigateEvent->finish(*document, false, focusChanged);
             m_ongoingNavigateEvent = nullptr;
 
             ErrorInformation errorInformation;

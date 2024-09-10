@@ -27,10 +27,14 @@
 #include "NavigateEvent.h"
 
 #include "AbortController.h"
+#include "Element.h"
 #include "ExceptionCode.h"
 #include "HistoryController.h"
+#include "HTMLBodyElement.h"
 #include "LocalFrameView.h"
+#include "Navigation.h"
 #include "NavigationNavigationType.h"
+#include "wtf/TypeCasts.h"
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
@@ -149,13 +153,27 @@ void NavigateEvent::potentiallyProcessScrollBehavior(Document& document)
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigateevent-finish
-void NavigateEvent::finish(Document& document, bool didFulfill)
+void NavigateEvent::finish(Document& document, bool didFulfill, bool focusChanged)
 {
     ASSERT(m_interceptionState != InterceptionState::Intercepted && m_interceptionState != InterceptionState::Finished);
     if (!m_interceptionState)
         return;
 
-    // FIXME: 3. Potentially reset the focus
+    ASSERT(m_interceptionState == InterceptionState::Committed || m_interceptionState == InterceptionState::Scrolled);
+    if (!focusChanged && m_focusReset != NavigationFocusReset::Manual) {
+        auto* documentElement = document.documentElement();
+        ASSERT(documentElement);
+
+        RefPtr<Element> focusTarget = documentElement->findAutofocusDelegate();
+        if (!focusTarget)
+            focusTarget = document.body();
+        if (!focusTarget)
+            focusTarget = documentElement;
+
+        WTFLogAlways("NavigateEvent::finish");
+        document.setFocusedElement(focusTarget.get());
+    }
+
     if (didFulfill)
         potentiallyProcessScrollBehavior(document);
 

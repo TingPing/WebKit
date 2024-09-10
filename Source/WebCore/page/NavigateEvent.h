@@ -97,7 +97,7 @@ public:
     void setCanIntercept(bool canIntercept) { m_canIntercept = canIntercept; };
     void setInterceptionState(InterceptionState interceptionState) { m_interceptionState = interceptionState; };
 
-    void finish(Document&, bool didFulfill);
+    void finish(Document&, bool didFulfill, bool focusChanged);
 
     Vector<Ref<NavigationInterceptHandler>>& handlers() { return m_handlers; };
 
@@ -107,6 +107,8 @@ private:
     ExceptionOr<void> sharedChecks(Document&);
     void potentiallyProcessScrollBehavior(Document&);
     void processScrollBehavior(Document&);
+
+    void potentiallyResetFocus();
 
     NavigationNavigationType m_navigationType;
     RefPtr<NavigationDestination> m_destination;

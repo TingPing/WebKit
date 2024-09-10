@@ -153,6 +153,8 @@ public:
     std::optional<Ref<NavigationHistoryEntry>> findEntryByKey(const String& key);
     bool suppressNormalScrollRestoration() const { return m_suppressNormalScrollRestorationDuringOngoingNavigation; }
 
+    void setFocusChanged(bool changed) { m_focusChangedDuringOnoingNavigation = changed; }
+
 private:
     explicit Navigation(LocalDOMWindow&);
 
