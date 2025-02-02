@@ -132,6 +132,9 @@ static ExceptionOr<bool> verifyEd25519(const Vector<uint8_t>& key, size_t keyLen
         return false;
     }
 
+    if (gcry_sexp_length(keySexp) != gcry_sexp_length(dataSexp))
+        return false;
+
     // Perform the PK verification. We report success if there's no error returned, or
     // a failure in any other case. OperationError should not be returned at this point,
     // avoiding spilling information about the exact cause of verification failure.
