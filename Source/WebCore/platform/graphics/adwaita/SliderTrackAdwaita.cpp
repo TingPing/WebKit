@@ -91,12 +91,14 @@ void SliderTrackAdwaita::draw(GraphicsContext& graphicsContext, const FloatRound
         }
     } else {
         float offset = rangeRect.height() * sliderTrackPart.thumbPosition();
+        if (style.states.contains(ControlStyle::State::InlineFlippedWritingMode))
+            rangeRect.move(0, rangeRect.height() - offset);
+
         if (style.states.contains(ControlStyle::State::VerticalWritingMode)) {
             rangeRect.setHeight(offset);
             corners.setTopLeft(corner);
             corners.setTopRight(corner);
         } else {
-            rangeRect.move(0, rangeRect.height() - offset);
             rangeRect.setHeight(offset);
             corners.setBottomLeft(corner);
             corners.setBottomRight(corner);
