@@ -1997,6 +1997,10 @@ public:
     void attributeAddedToElement(const QualifiedName& attribute);
     void elementDisconnectedFromDocument(const Element&);
 
+    void freeze();
+    void resume();
+    void discard();
+    bool wasDiscarded() { return m_discarded; }
 
 protected:
     enum class ConstructionFlag : uint8_t {
@@ -2671,6 +2675,9 @@ private:
     bool m_hasVisuallyNonEmptyCustomContent { false };
 
     bool m_visibilityHiddenDueToDismissal { false };
+
+    bool m_frozen { false };
+    bool m_discarded { false };
 
 #if ENABLE(XSLT)
     bool m_hasPendingXSLTransforms { false };

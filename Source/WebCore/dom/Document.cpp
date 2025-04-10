@@ -11597,6 +11597,33 @@ Ref<Calculation::RandomKeyMap> Document::randomKeyMap() const
     return *m_randomKeyMap;
 }
 
+// https://wicg.github.io/page-lifecycle/spec.html#freeze-steps
+void Document::freeze()
+{
+    m_frozen = true;
+
+    dispatchEvent(Event::create(eventNames().freezeEvent, Event::CanBubble::No, Event::IsCancelable::No));
+
+    // FIXME: Handle pausing all media.
+}
+
+// https://wicg.github.io/page-lifecycle/spec.html#resume-steps
+void Document::resume()
+{
+    // FIXME: Resume media
+
+    dispatchEvent(Event::create(eventNames().resumeEvent, Event::CanBubble::No, Event::IsCancelable::No));
+
+    m_frozen = false;
+}
+
+// https://wicg.github.io/page-lifecycle/spec.html#discarding
+void Document::discard()
+{
+    // FIXME: https://html.spec.whatwg.org/multipage/document-sequences.html#garbage-collection-and-browsing-contexts
+    m_discarded = true;
+}
+
 } // namespace WebCore
 
 #undef DOCUMENT_RELEASE_LOG

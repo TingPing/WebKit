@@ -133,6 +133,7 @@ static void releaseCriticalMemory(Synchronous synchronous, MaintainBackForwardCa
         return document.get();
     });
     for (auto& document : protectedDocuments) {
+        document->discard(); // FIXME: Just a placeholder.
         document->clearQuerySelectorAllResults();
         document->styleScope().releaseMemory();
         if (RefPtr fontSelector = document->fontSelectorIfExists())

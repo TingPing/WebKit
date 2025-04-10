@@ -107,6 +107,7 @@
     "focusin": { },
     "focusout": { },
     "formdata": { },
+    "freeze": { },
     "fullscreenchange": { },
     "fullscreenerror": { },
     "gamepadconnected": { "categories": ["Gamepad"] },
