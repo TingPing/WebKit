@@ -226,7 +226,7 @@ private:
 
     static constexpr int s_minInterval = -3; // A cache hit pays for about 3 cache misses.
     static constexpr int s_maxInterval = 20; // Sampling at this interval has almost no overhead.
-    static constexpr unsigned s_maxSize = 500000; // Just enough to guard against pathological growth.
+    static constexpr unsigned s_maxSize = 50000; // Just enough to guard against pathological growth.
 
     int m_interval;
     int m_countdown;
