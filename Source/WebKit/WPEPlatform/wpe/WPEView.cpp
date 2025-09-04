@@ -561,7 +561,11 @@ void wpe_view_set_toplevel(WPEView* view, WPEToplevel* toplevel)
     priv->toplevel = toplevel;
 
     if (priv->toplevel) {
+        int toplevelHeight, toplevelWidth;
+        wpe_toplevel_get_size(priv->toplevel.get(), &toplevelWidth, &toplevelHeight);
+
         wpeToplevelAddView(priv->toplevel.get(), view);
+        wpe_view_resized(view, toplevelWidth, toplevelHeight);
         wpeViewScaleChanged(view, wpe_toplevel_get_scale(priv->toplevel.get()));
         wpeViewToplevelStateChanged(view, wpe_toplevel_get_state(priv->toplevel.get()));
         wpeViewScreenChanged(view);

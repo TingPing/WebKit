@@ -149,6 +149,17 @@ static void wpeToplevelGetProperty(GObject* object, guint propId, GValue* value,
     }
 }
 
+static void wpeToplevelConstructed(GObject* object)
+{
+    G_OBJECT_CLASS(wpe_toplevel_parent_class)->constructed(object);
+    auto* toplevel = WPE_TOPLEVEL(object);
+    auto* priv = toplevel->priv;
+    auto settings = wpe_display_get_settings(priv->display.get());
+
+    GVariant* toplevelSize = wpe_settings_get_value(settings, WPE_SETTING_TOPLEVEL_DEFAULT_SIZE, nullptr);
+    g_variant_get(toplevelSize, "(uu)", &priv->width, &priv->height);
+}
+
 static void wpe_toplevel_class_init(WPEToplevelClass* toplevelClass)
 {
     GObjectClass* objectClass = G_OBJECT_CLASS(toplevelClass);
@@ -156,6 +167,7 @@ static void wpe_toplevel_class_init(WPEToplevelClass* toplevelClass)
     objectClass->dispose = wpeToplevelDispose;
     objectClass->set_property = wpeToplevelSetProperty;
     objectClass->get_property = wpeToplevelGetProperty;
+    objectClass->constructed = wpeToplevelConstructed;
 
     /**
      * WPEToplevel:display:
