@@ -34,6 +34,7 @@ set(WPEPlatform_SOURCES
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEGestureController.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEGestureControllerImpl.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEGestureDetector.cpp
+    ${WEBKIT_DIR}/WPEPlatform/wpe/WPEPopupMenu.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPERectangle.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEScreen.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEScreenSyncObserver.cpp
@@ -66,6 +67,7 @@ set(WPEPlatform_INSTALLED_HEADERS
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEKeymapXKB.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEKeysyms.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEGestureController.h
+    ${WEBKIT_DIR}/WPEPlatform/wpe/WPEPopupMenu.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPERectangle.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEScreen.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEScreenSyncObserver.h

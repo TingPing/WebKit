@@ -22,6 +22,7 @@
 #include "WebPopupMenuProxy.h"
 #include <wtf/glib/GRefPtr.h>
 
+typedef struct _WPEPopupMenu WPEPopupMenu;
 typedef struct _WebKitOptionMenu WebKitOptionMenu;
 
 namespace WKWPE {
@@ -45,6 +46,7 @@ private:
     void cancelTracking() override;
 
     WKWPE::View& m_view;
+    GRefPtr<WPEPopupMenu> m_wpePlatformMenu;
     GRefPtr<WebKitOptionMenu> m_menu;
     std::optional<unsigned> m_selectedItem;
 };

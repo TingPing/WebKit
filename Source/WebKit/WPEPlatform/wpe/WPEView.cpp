@@ -32,6 +32,7 @@
 #include "WPEEnumTypes.h"
 #include "WPEEvent.h"
 #include "WPEGestureControllerImpl.h"
+#include "WPEPopupMenu.h"
 #include "WPESettings.h"
 #include "WPEToplevelPrivate.h"
 #include "WPEViewPrivate.h"
@@ -112,6 +113,7 @@ enum {
     EVENT,
     TOPLEVEL_STATE_CHANGED,
     PREFERRED_BUFFER_FORMATS_CHANGED,
+    SHOW_POPUP_MENU,
 
     LAST_SIGNAL
 };
@@ -488,6 +490,32 @@ static void wpe_view_class_init(WPEViewClass* viewClass)
         0, nullptr, nullptr,
         g_cclosure_marshal_generic,
         G_TYPE_NONE, 0);
+
+    /**
+     * WPEView::show-popup-menu:
+     * @view: a #WPEView
+     * @menu: a #WPEPopupMenu
+     *
+     * Emitted when a `select` element in the page needs to display a popup
+     * menu. A platform implementation should handle this signal to show a
+     * native popup, call wpe_popup_menu_select_item() as the user navigates
+     * items, and wpe_popup_menu_activate_item() when a choice is confirmed or
+     * wpe_popup_menu_close() if the menu is dismissed.
+     *
+     * Returns: %TRUE if the platform handled the popup, %FALSE to fall back
+     *   to the default WebKit popup handling.
+     *
+     * Since: 2.54
+     */
+    signals[SHOW_POPUP_MENU] = g_signal_new(
+        "show-popup-menu",
+        G_TYPE_FROM_CLASS(viewClass),
+        G_SIGNAL_RUN_LAST,
+        G_STRUCT_OFFSET(WPEViewClass, show_popup_menu),
+        g_signal_accumulator_true_handled, nullptr,
+        g_cclosure_marshal_generic,
+        G_TYPE_BOOLEAN, 1,
+        WPE_TYPE_POPUP_MENU);
 }
 
 void wpeViewToplevelStateChanged(WPEView* view, WPEToplevelState state)
@@ -1192,4 +1220,26 @@ WPEViewAccessible* wpe_view_get_accessible(WPEView* view)
         return viewClass->get_accessible(view);
 
     return nullptr;
+}
+
+/**
+ * wpe_view_show_popup_menu:
+ * @view: a #WPEView
+ * @menu: a #WPEPopupMenu
+ *
+ * Request the platform to display a popup menu.
+ * Emits the #WPEView::show-popup-menu signal with @menu.
+ *
+ * Returns: %TRUE if the platform handled the popup, %FALSE otherwise
+ *
+ * Since: 2.54
+ */
+gboolean wpe_view_show_popup_menu(WPEView* view, WPEPopupMenu* menu)
+{
+    g_return_val_if_fail(WPE_IS_VIEW(view), FALSE);
+    g_return_val_if_fail(WPE_IS_POPUP_MENU(menu), FALSE);
+
+    gboolean handled = FALSE;
+    g_signal_emit(view, signals[SHOW_POPUP_MENU], 0, menu, &handled);
+    return handled;
 }

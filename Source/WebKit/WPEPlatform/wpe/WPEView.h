@@ -33,6 +33,7 @@
 #include <glib-object.h>
 #include <wpe/WPEDefines.h>
 #include <wpe/WPEGestureController.h>
+#include <wpe/WPEPopupMenu.h>
 #include <wpe/WPEToplevel.h>
 
 G_BEGIN_DECLS
@@ -76,6 +77,8 @@ struct _WPEViewClass
                                                   guint               n_rects);
     gboolean           (* can_be_mapped)         (WPEView            *view);
     WPEViewAccessible *(* get_accessible)        (WPEView            *view);
+    gboolean           (* show_popup_menu)       (WPEView            *view,
+                                                  WPEPopupMenu       *menu);
 
     gpointer padding[32];
 };
@@ -155,6 +158,8 @@ WPE_API void                  wpe_view_set_gesture_controller       (WPEView    
                                                                      WPEGestureController *controller);
 WPE_API WPEGestureController *wpe_view_get_gesture_controller       (WPEView            *view);
 WPE_API WPEViewAccessible    *wpe_view_get_accessible               (WPEView            *view);
+WPE_API gboolean              wpe_view_show_popup_menu              (WPEView            *view,
+                                                                     WPEPopupMenu       *menu);
 
 G_END_DECLS
 

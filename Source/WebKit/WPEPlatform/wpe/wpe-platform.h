@@ -49,6 +49,7 @@
 #include <wpe/WPEKeymapXKB.h>
 #include <wpe/WPEKeysyms.h>
 #include <wpe/WPEKeysyms.h>
+#include <wpe/WPEPopupMenu.h>
 #include <wpe/WPERectangle.h>
 #include <wpe/WPEScreen.h>
 #include <wpe/WPEScreenSyncObserver.h>
