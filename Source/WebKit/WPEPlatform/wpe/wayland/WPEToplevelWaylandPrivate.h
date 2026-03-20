@@ -38,3 +38,4 @@ void wpeToplevelWaylandSetIsUnderTouch(WPEToplevelWayland*, bool);
 WPEView* wpeToplevelWaylandGetVisibleViewUnderTouch(WPEToplevelWayland*);
 void wpeToplevelWaylandViewVisibilityChanged(WPEToplevelWayland*, WPEView*);
 struct zwp_linux_surface_synchronization_v1* wpeToplevelWaylandGetSurfaceSync(WPEToplevelWayland*);
+struct xdg_surface* wpeToplevelWaylandGetXDGSurface(WPEToplevelWayland*);

@@ -52,7 +52,7 @@ WaylandSeat::~WaylandSeat()
     g_clear_pointer(&m_pointer.object, wl_pointer_destroy);
     g_clear_pointer(&m_keyboard.object, wl_keyboard_destroy);
     if (m_keyboard.repeat.source)
-        g_source_destroy(m_keyboard.repeat.source.get());
+        g_source_destroy(m_keyboard.repeat.source.get()); // TODO: verify
     wl_seat_destroy(m_seat);
 }
 
@@ -63,6 +63,17 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
         if (!surface)
             return;
 
+        auto& seat = *static_cast<WaylandSeat*>(data);
+
+        if (seat.m_externalSurface && surface == seat.m_externalSurface) {
+            seat.m_pointer.enterSerial = serial;
+            seat.m_pointer.x = wl_fixed_to_double(x);
+            seat.m_pointer.y = wl_fixed_to_double(y);
+            seat.m_pointerOnExternal = true;
+            return;
+        }
+        seat.m_pointerOnExternal = false;
+
         auto* toplevel = wl_surface_get_user_data(surface);
         if (!WPE_IS_TOPLEVEL(toplevel))
             return;
@@ -70,7 +81,6 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
         auto* toplevelWayland = WPE_TOPLEVEL_WAYLAND(toplevel);
         wpeToplevelWaylandSetHasPointer(toplevelWayland, true);
 
-        auto& seat = *static_cast<WaylandSeat*>(data);
         seat.m_pointer.toplevel.reset(toplevelWayland);
         seat.m_pointer.x = wl_fixed_to_double(x);
         seat.m_pointer.y = wl_fixed_to_double(y);
@@ -87,6 +97,12 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
     [](void* data, struct wl_pointer*, uint32_t /*serial*/, struct wl_surface*)
     {
         auto& seat = *static_cast<WaylandSeat*>(data);
+
+        if (seat.m_pointerOnExternal) {
+            seat.m_pointerOnExternal = false;
+            return;
+        }
+
         if (!seat.m_pointer.toplevel)
             return;
 
@@ -103,6 +119,16 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
         WTFEmitSignpost(wl_pointer, WaylandMotionEvent);
 
         auto& seat = *static_cast<WaylandSeat*>(data);
+
+        if (seat.m_pointerOnExternal) {
+            seat.m_pointer.x = wl_fixed_to_double(fixedX);
+            seat.m_pointer.y = wl_fixed_to_double(fixedY);
+            seat.m_pointer.time = time;
+            if (seat.m_externalCallback)
+                seat.m_externalCallback(time, seat.m_pointer.x, seat.m_pointer.y, 0, WL_POINTER_BUTTON_STATE_RELEASED);
+            return;
+        }
+
         if (!seat.m_pointer.toplevel)
             return;
 
@@ -123,11 +149,19 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
         wpe_view_event(view.get(), event.get());
     },
     // button
-    [](void* data, struct wl_pointer*, uint32_t /*serial*/, uint32_t time, uint32_t button, uint32_t state)
+    [](void* data, struct wl_pointer*, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
     {
         WTFEmitSignpost(wl_pointer, WaylandButtonEvent);
 
         auto& seat = *static_cast<WaylandSeat*>(data);
+        seat.m_pointer.buttonSerial = serial;
+
+        if (seat.m_pointerOnExternal) {
+            if (seat.m_externalCallback)
+                seat.m_externalCallback(time, seat.m_pointer.x, seat.m_pointer.y, button, state);
+            return;
+        }
+
         if (!seat.m_pointer.toplevel)
             return;
 
@@ -184,7 +218,7 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
     [](void* data, struct wl_pointer*, uint32_t time, uint32_t axis, wl_fixed_t value)
     {
         auto& seat = *static_cast<WaylandSeat*>(data);
-        if (!seat.m_pointer.toplevel)
+        if (seat.m_externalSurface || !seat.m_pointer.toplevel)
             return;
 
         switch (axis) {
@@ -204,7 +238,7 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
     [](void* data, struct wl_pointer*)
     {
         auto& seat = *static_cast<WaylandSeat*>(data);
-        if (!seat.m_pointer.toplevel)
+        if (seat.m_externalSurface || !seat.m_pointer.toplevel)
             return;
 
         seat.flushScrollEvent();
@@ -213,7 +247,7 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
     [](void* data, struct wl_pointer*, uint32_t source)
     {
         auto& seat = *static_cast<WaylandSeat*>(data);
-        if (!seat.m_pointer.toplevel)
+        if (seat.m_externalSurface || !seat.m_pointer.toplevel)
             return;
 
         switch (source) {
@@ -233,7 +267,7 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
     [](void* data, struct wl_pointer*, uint32_t time, uint32_t axis)
     {
         auto& seat = *static_cast<WaylandSeat*>(data);
-        if (!seat.m_pointer.toplevel)
+        if (seat.m_externalSurface || !seat.m_pointer.toplevel)
             return;
 
         switch (axis) {
@@ -252,7 +286,7 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
     [](void* data, struct wl_pointer*, uint32_t axis, int32_t value)
     {
         auto& seat = *static_cast<WaylandSeat*>(data);
-        if (!seat.m_pointer.toplevel)
+        if (seat.m_externalSurface || !seat.m_pointer.toplevel)
             return;
 
         switch (axis) {
@@ -269,7 +303,7 @@ const struct wl_pointer_listener WaylandSeat::s_pointerListener = {
     [](void* data, struct wl_pointer*, uint32_t axis, int32_t value)
     {
         auto& seat = *static_cast<WaylandSeat*>(data);
-        if (!seat.m_pointer.toplevel)
+        if (seat.m_externalSurface || !seat.m_pointer.toplevel)
             return;
 
         switch (axis) {
@@ -753,6 +787,20 @@ WPEAvailableInputDevices WaylandSeat::availableInputDevices() const
     if (m_touch.object)
         source = static_cast<WPEAvailableInputDevices>(source | WPE_AVAILABLE_INPUT_DEVICE_TOUCHSCREEN);
     return source;
+}
+
+void WaylandSeat::setExternalSurface(struct wl_surface* surface, Function<void(uint32_t, double, double, uint32_t, uint32_t)>&& callback)
+{
+    m_externalSurface = surface;
+    m_externalCallback = WTF::move(callback);
+    m_pointerOnExternal = false;
+}
+
+void WaylandSeat::clearExternalSurface()
+{
+    m_externalSurface = nullptr;
+    m_externalCallback = nullptr;
+    m_pointerOnExternal = false;
 }
 
 } // namespace WPE

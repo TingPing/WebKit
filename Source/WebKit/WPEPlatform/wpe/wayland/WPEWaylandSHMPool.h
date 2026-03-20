@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <cairo/cairo.h>
 #include <wayland-client.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/unix/UnixFileDescriptor.h>
@@ -41,6 +42,7 @@ public:
 
     int allocate(size_t);
     struct wl_buffer* createBuffer(uint32_t offset, uint32_t width, uint32_t height, uint32_t stride);
+    cairo_surface_t* createCairoSurface(int width, int height, int stride);
     void write(std::span<const uint8_t> data, int offset = 0);
     void write(std::span<const uint32_t> data, int offset = 0);
 

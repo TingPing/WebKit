@@ -26,6 +26,7 @@
 #include "config.h"
 #include "WPEWaylandSHMPool.h"
 
+#include <cairo/cairo.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -164,6 +165,11 @@ void WaylandSHMPool::write(std::span<const uint8_t> data, int offset)
 void WaylandSHMPool::write(std::span<const uint32_t> data, int offset)
 {
     write(asBytes(data), offset);
+}
+
+cairo_surface_t* WaylandSHMPool::createCairoSurface(int width, int height, int stride)
+{
+    return cairo_image_surface_create_for_data(static_cast<uint8_t*>(m_data), CAIRO_FORMAT_ARGB32, width, height, stride);
 }
 
 } // namespace WPE

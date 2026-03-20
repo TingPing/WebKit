@@ -300,6 +300,7 @@ if (ENABLE_WPE_PLATFORM)
     endif ()
 
     if (ENABLE_WPE_PLATFORM_WAYLAND)
+        find_package(Cairo REQUIRED)
         find_package(Wayland 1.20 REQUIRED)
         find_package(WaylandProtocols 1.24 REQUIRED)
         SET_AND_EXPOSE_TO_BUILD(ENABLE_WPE_PLATFORM_WAYLAND ON)

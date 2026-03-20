@@ -51,6 +51,7 @@ set(WPEPlatformWayland_SYSTEM_INCLUDE_DIRECTORIES
 )
 
 set(WPEPlatformWayland_LIBRARIES
+    Cairo::Cairo
     GLib::GioUnix
     ${WAYLAND_LIBRARIES}
     ${WPEPlatform_LIBRARIES}

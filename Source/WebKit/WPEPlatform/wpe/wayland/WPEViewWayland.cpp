@@ -26,9 +26,9 @@
 #include "config.h"
 #include "WPEViewWayland.h"
 
-#include "GRefPtrWPE.h"
 #include "WPEBufferFormats.h"
 #include "WPEDisplayWaylandPrivate.h"
+#include <wpe/WPEPopupMenu.h>
 #include "WPEToplevelWaylandPrivate.h"
 #include "WPEWaylandSHMPool.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
@@ -37,11 +37,15 @@
 #include "presentation-time-client-protocol.h"
 #endif
 #include "relative-pointer-unstable-v1-client-protocol.h"
+#include "xdg-shell-client-protocol.h"
+#include <cairo/cairo.h>
 #include <gio/gio.h>
+#include <linux/input-event-codes.h>
 #include <wtf/Deque.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/SystemTracing.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GSpanExtras.h>
@@ -82,6 +86,10 @@ private:
 };
 #endif
 
+
+class WPEWaylandPopupMenu;
+static void destroyPopupMenu(WPEWaylandPopupMenu*);
+
 /**
  * WPEViewWayland:
  *
@@ -101,6 +109,8 @@ struct _WPEViewWaylandPrivate {
     struct zwp_locked_pointer_v1* lockedPointer;
     uint32_t savedPointerModifiers { 0 };
     std::pair<double, double> savedPointerCoords { 0, 0 };
+
+    WPEWaylandPopupMenu* popupMenu { nullptr };
 };
 WEBKIT_DEFINE_FINAL_TYPE(WPEViewWayland, wpe_view_wayland, WPE_TYPE_VIEW, WPEView)
 
@@ -159,6 +169,7 @@ static void wpeViewWaylandConstructed(GObject* object)
 static void wpeViewWaylandDispose(GObject* object)
 {
     auto* priv = WPE_VIEW_WAYLAND(object)->priv;
+    g_clear_pointer(&priv->popupMenu, destroyPopupMenu);
     g_clear_pointer(&priv->frameCallback, wl_callback_destroy);
     g_clear_pointer(&priv->lockedPointer, zwp_locked_pointer_v1_destroy);
     g_clear_pointer(&priv->relativePointer, zwp_relative_pointer_v1_destroy);
@@ -714,6 +725,300 @@ static gboolean wpeViewWaylandCanBeMapped(WPEView* view)
     return FALSE;
 }
 
+static constexpr int kPopupItemHeight = 32;
+static constexpr int kPopupVerticalPadding = 8;
+static constexpr int kPopupHorizontalPadding = 8;
+static constexpr double kPopupItemFontSize = 14.0;
+static constexpr int kPopupDefaultWidth = 400;
+
+// This is a very basic implementation of a popup menu.
+// It supports: Simple text in fixed height rows, hover states, and activation.
+// It does not support: Tooltips, RTL text, accessibility, or scaling.
+// See wpe-platform-gtk if those are needed as it supports everything.
+class WPEWaylandPopupMenu {
+    WTF_MAKE_TZONE_ALLOCATED(WPEWaylandPopupMenu);
+public:
+    WPEWaylandPopupMenu(WPEView* view, WPEPopupMenu* menu)
+        : m_view(view)
+        , m_menu(menu)
+        , m_itemCount(static_cast<int>(wpe_popup_menu_get_n_items(menu)))
+    {
+        m_width = kPopupDefaultWidth;
+        m_height = 2 * kPopupVerticalPadding + m_itemCount * kPopupItemHeight;
+        m_stride = m_width * 4; // ARGB32 = 4 bytes per pixel
+
+        auto* display = WPE_DISPLAY_WAYLAND(wpe_view_get_display(view));
+        auto* compositor = wpe_display_wayland_get_wl_compositor(display);
+        auto* xdgWmBase = wpeDisplayWaylandGetXDGWMBase(display);
+        auto* seat = wpeDisplayWaylandGetSeat(display);
+        if (!compositor || !xdgWmBase || !seat)
+            return;
+
+        size_t bufferSize = static_cast<size_t>(m_stride) * m_height;
+        m_shmPool = WPE::WaylandSHMPool::create(wpe_display_wayland_get_wl_shm(display), bufferSize);
+        if (!m_shmPool)
+            return;
+
+        assert(m_shmPool->allocate(bufferSize) == 0);
+        m_wlBuffer = m_shmPool->createBuffer(0, m_width, m_height, m_stride);
+        if (!m_wlBuffer)
+            return;
+
+        paint();
+
+        m_surface = wl_compositor_create_surface(compositor);
+        if (!m_surface)
+            return;
+
+        auto* toplevel = WPE_TOPLEVEL_WAYLAND(wpe_view_get_toplevel(view));
+        auto* parentXdgSurface = toplevel ? wpeToplevelWaylandGetXDGSurface(toplevel) : nullptr;
+
+        WPERectangle rect;
+        wpe_popup_menu_get_rect(menu, &rect);
+
+        auto* positioner = xdg_wm_base_create_positioner(xdgWmBase);
+        xdg_positioner_set_size(positioner, m_width, m_height);
+        xdg_positioner_set_anchor_rect(positioner, rect.x, rect.y, std::max(1, rect.width), std::max(1, rect.height));
+        xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_BOTTOM_LEFT);
+        xdg_positioner_set_gravity(positioner, XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
+        xdg_positioner_set_constraint_adjustment(positioner,
+            XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X | XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y);
+
+        m_xdgSurface = xdg_wm_base_get_xdg_surface(xdgWmBase, m_surface);
+        xdg_surface_add_listener(m_xdgSurface, &m_xdgSurfaceListener, this);
+
+        m_xdgPopup = xdg_surface_get_popup(m_xdgSurface, parentXdgSurface, positioner);
+        xdg_popup_add_listener(m_xdgPopup, &m_xdgPopupListener, this);
+        xdg_positioner_destroy(positioner);
+
+        xdg_popup_grab(m_xdgPopup, seat->seat(), seat->pointerButtonSerial());
+
+        // Route pointer events from the seat to our surface
+        seat->setExternalSurface(m_surface, [this](uint32_t time, double x, double y, uint32_t button, uint32_t state) {
+            if (!button)
+                handleMotion(time, x, y);
+            else
+                handleButton(time, x, y, button, state);
+        });
+
+        wl_surface_commit(m_surface);
+    }
+
+    ~WPEWaylandPopupMenu()
+    {
+        auto* display = WPE_DISPLAY_WAYLAND(wpe_view_get_display(m_view));
+        if (auto* seat = wpeDisplayWaylandGetSeat(display))
+            seat->clearExternalSurface();
+
+        g_clear_pointer(&m_xdgPopup, xdg_popup_destroy);
+        g_clear_pointer(&m_xdgSurface, xdg_surface_destroy);
+        g_clear_pointer(&m_wlBuffer, wl_buffer_destroy);
+        g_clear_pointer(&m_surface, wl_surface_destroy);
+    }
+
+private:
+    void paint()
+    {
+        assert(m_wlBuffer); // Buffer for surface was allocated on construction.
+        auto* cairoSurface = m_shmPool->createCairoSurface(m_width, m_height, m_stride);
+        auto* cr = cairo_create(cairoSurface);
+
+        // White background
+        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+        cairo_paint(cr);
+
+        // Gray border
+        cairo_set_source_rgb(cr, 0.70, 0.70, 0.70);
+        cairo_set_line_width(cr, 1.0);
+        cairo_rectangle(cr, 0.5, 0.5, m_width - 1, m_height - 1);
+        cairo_stroke(cr);
+
+        // FIXME: WPE_SETTING_FONT_NAME
+        cairo_set_font_size(cr, kPopupItemFontSize);
+
+        for (int i = 0; i < m_itemCount; i++) {
+            auto* item = wpe_popup_menu_get_item(m_menu.get(), i);
+            double itemY = kPopupVerticalPadding + i * kPopupItemHeight;
+
+            bool isHovered = (i == m_hoveredIndex);
+            bool isEnabled = wpe_popup_menu_item_is_enabled(item);
+            WPEPopupMenuItemType itemType = wpe_popup_menu_item_get_item_type(item);
+            bool isSelected = (i == wpe_popup_menu_get_selected_index(m_menu.get()));
+            bool isInteractive = isEnabled && itemType != WPE_POPUP_MENU_ITEM_TYPE_OPTION_GROUP && itemType != WPE_POPUP_MENU_ITEM_TYPE_SEPARATOR;
+
+            // Item background
+            if (isHovered && isInteractive) // Bright blue
+                cairo_set_source_rgb(cr, 0.22, 0.56, 0.85);
+            else if (isSelected) // Light blue
+                cairo_set_source_rgb(cr, 0.76, 0.90, 1.0);
+            else // White
+                cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+
+            cairo_rectangle(cr, 1, itemY, m_width - 2, kPopupItemHeight);
+            cairo_fill(cr);
+
+            if (itemType == WPE_POPUP_MENU_ITEM_TYPE_SEPARATOR) {
+                // Draw a gray horizontal separator centred in the item row.
+                double sepY = itemY + kPopupItemHeight / 2.0;
+                cairo_set_source_rgb(cr, 0.80, 0.80, 0.80);
+                cairo_set_line_width(cr, 1.0);
+                cairo_move_to(cr, kPopupHorizontalPadding, sepY);
+                cairo_line_to(cr, m_width - kPopupHorizontalPadding, sepY);
+                cairo_stroke(cr);
+                continue;
+            }
+
+            if (!isEnabled)
+                cairo_set_source_rgb(cr, 0.60, 0.60, 0.60);
+            else if (isHovered && isInteractive)
+                cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+            else
+                cairo_set_source_rgb(cr, 0.10, 0.10, 0.10);
+
+            double textX = kPopupHorizontalPadding;
+            if (itemType == WPE_POPUP_MENU_ITEM_TYPE_OPTION_GROUP_CHILD)
+                textX += kPopupHorizontalPadding * 2; // Indent children
+            else if (itemType == WPE_POPUP_MENU_ITEM_TYPE_OPTION_GROUP)
+                cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+            else
+                cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+
+            cairo_move_to(cr, textX, itemY + kPopupItemHeight * 0.65);
+            cairo_show_text(cr, wpe_popup_menu_item_get_label(item));
+        }
+
+        cairo_destroy(cr);
+        cairo_surface_destroy(cairoSurface);
+    }
+
+    int itemAtY(double y) const
+    {
+        double adjustedY = y - kPopupVerticalPadding;
+        if (adjustedY < 0 || adjustedY >= m_itemCount * kPopupItemHeight)
+            return -1;
+        return static_cast<int>(adjustedY / kPopupItemHeight);
+    }
+
+    void handleMotion(uint32_t /*time*/, double /*x*/, double y)
+    {
+        int newHovered = itemAtY(y);
+        if (newHovered == m_hoveredIndex)
+            return;
+
+        m_hoveredIndex = newHovered;
+        paint();
+
+        if (m_surface) {
+            wl_surface_attach(m_surface, m_wlBuffer, 0, 0);
+            wl_surface_damage(m_surface, 0, 0, m_width, m_height);
+            wl_surface_commit(m_surface);
+        }
+
+        if (m_hoveredIndex >= 0) {
+            auto* item = wpe_popup_menu_get_item(m_menu.get(), m_hoveredIndex);
+            WPEPopupMenuItemType itemType = wpe_popup_menu_item_get_item_type(item);
+            if (wpe_popup_menu_item_is_enabled(item) && itemType != WPE_POPUP_MENU_ITEM_TYPE_OPTION_GROUP && itemType != WPE_POPUP_MENU_ITEM_TYPE_SEPARATOR)
+                wpe_popup_menu_select_item(m_menu.get(), m_hoveredIndex);
+        }
+    }
+
+    void handleButton(uint32_t /*time*/, double /*x*/, double y, uint32_t button, uint32_t state)
+    {
+        if (button != BTN_LEFT)
+            return;
+
+        if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+            m_pressedIndex = itemAtY(y);
+            return;
+        }
+        // else button released
+        int pressed = m_pressedIndex;
+        m_pressedIndex = -1;
+
+        int released = itemAtY(y);
+        if (released >= 0 && released == pressed) {
+            auto* item = wpe_popup_menu_get_item(m_menu.get(), released);
+            WPEPopupMenuItemType itemType = wpe_popup_menu_item_get_item_type(item);
+            if (wpe_popup_menu_item_is_enabled(item) && itemType != WPE_POPUP_MENU_ITEM_TYPE_OPTION_GROUP && itemType != WPE_POPUP_MENU_ITEM_TYPE_SEPARATOR) {
+                GRefPtr<WPEPopupMenu> menu = m_menu;
+                // NOTE: activate_item will fire item-activated, which destroys 'this' via our
+                // signal handler in wpeViewWaylandShowPopupMenu. Do NOT access any members after.
+                wpe_popup_menu_activate_item(menu.get(), released);
+                // 'this' is now destroyed — return immediately
+                return;
+            }
+        }
+    }
+
+    static const struct xdg_surface_listener m_xdgSurfaceListener;
+    static const struct xdg_popup_listener m_xdgPopupListener;
+
+    WPEView* m_view;
+    GRefPtr<WPEPopupMenu> m_menu;
+    std::unique_ptr<WPE::WaylandSHMPool> m_shmPool;
+    struct wl_buffer* m_wlBuffer { nullptr };
+    struct wl_surface* m_surface { nullptr };
+    struct xdg_surface* m_xdgSurface { nullptr };
+    struct xdg_popup* m_xdgPopup { nullptr };
+
+    int m_width { 0 };
+    int m_height { 0 };
+    int m_stride { 0 };
+    int m_itemCount { 0 };
+    int m_hoveredIndex { -1 };
+    int m_pressedIndex { -1 };
+};
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WPEWaylandPopupMenu);
+
+static void destroyPopupMenu(WPEWaylandPopupMenu* popup) { delete popup; }
+
+const struct xdg_surface_listener WPEWaylandPopupMenu::m_xdgSurfaceListener = {
+    // configure
+    [](void* data, struct xdg_surface* xdgSurface, uint32_t serial)
+    {
+        xdg_surface_ack_configure(xdgSurface, serial);
+        auto* self = static_cast<WPEWaylandPopupMenu*>(data);
+        if (!self->m_surface || !self->m_wlBuffer) {
+            return;
+        }
+        wl_surface_attach(self->m_surface, self->m_wlBuffer, 0, 0);
+        wl_surface_damage(self->m_surface, 0, 0, self->m_width, self->m_height);
+        wl_surface_commit(self->m_surface);
+    }
+};
+
+const struct xdg_popup_listener WPEWaylandPopupMenu::m_xdgPopupListener = {
+    // configure
+    [](void*, struct xdg_popup*, int32_t, int32_t, int32_t, int32_t) { },
+    // popup_done
+    [](void* data, struct xdg_popup*)
+    {
+        auto* self = static_cast<WPEWaylandPopupMenu*>(data);
+        GRefPtr<WPEPopupMenu> menu = self->m_menu;
+        // Calling close fires the signal which frees the menu.
+        wpe_popup_menu_close(menu.get());
+    },
+    // repositioned
+    [](void*, struct xdg_popup*, uint32_t) { }
+};
+
+static gboolean wpeViewWaylandShowPopupMenu(WPEView* view, WPEPopupMenu* menu)
+{
+    auto priv = WPE_VIEW_WAYLAND(view)->priv;
+    g_clear_pointer(&priv->popupMenu, destroyPopupMenu);
+    priv->popupMenu = new WPEWaylandPopupMenu(view, menu);
+
+    g_signal_connect(menu, "item-activated", G_CALLBACK(+[](WPEPopupMenu*, gint, WPEViewWayland* v) {
+        g_clear_pointer(&v->priv->popupMenu, destroyPopupMenu);
+    }), view);
+
+    g_signal_connect(menu, "close", G_CALLBACK(+[](WPEPopupMenu*, WPEViewWayland* v) {
+    g_clear_pointer(&v->priv->popupMenu, destroyPopupMenu);
+    }), view);
+
+    return TRUE;
+}
+
 static void wpe_view_wayland_class_init(WPEViewWaylandClass* viewWaylandClass)
 {
     GObjectClass* objectClass = G_OBJECT_CLASS(viewWaylandClass);
@@ -728,6 +1033,7 @@ static void wpe_view_wayland_class_init(WPEViewWaylandClass* viewWaylandClass)
     viewClass->set_cursor_from_bytes = wpeViewWaylandSetCursorFromBytes;
     viewClass->set_opaque_rectangles = wpeViewWaylandSetOpaqueRectangles;
     viewClass->can_be_mapped = wpeViewWaylandCanBeMapped;
+    viewClass->show_popup_menu = wpeViewWaylandShowPopupMenu;
 }
 
 /**

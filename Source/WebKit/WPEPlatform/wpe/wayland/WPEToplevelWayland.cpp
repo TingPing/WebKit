@@ -919,6 +919,11 @@ struct zwp_linux_surface_synchronization_v1* wpeToplevelWaylandGetSurfaceSync(WP
     return toplevel->priv->surfaceSync;
 }
 
+struct xdg_surface* wpeToplevelWaylandGetXDGSurface(WPEToplevelWayland* toplevel)
+{
+    return toplevel->priv->xdgSurface;
+}
+
 /**
  * wpe_toplevel_wayland_get_wl_surface: (skip)
  * @toplevel: a #WPEToplevelWayland
