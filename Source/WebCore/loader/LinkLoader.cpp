@@ -170,6 +170,8 @@ std::optional<CachedResource::Type> LinkLoader::resourceTypeFromAsAttribute(cons
         return CachedResource::Type::Script;
     case FetchRequestDestination::Document:
         return std::nullopt;
+    case FetchRequestDestination::CompressionDictionary:
+        return std::nullopt;
     case FetchRequestDestination::Embed:
         return std::nullopt;
     case FetchRequestDestination::Environmentmap:
