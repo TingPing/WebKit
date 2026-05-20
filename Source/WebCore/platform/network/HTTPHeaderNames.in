@@ -38,6 +38,7 @@ Access-Control-Request-Headers
 Access-Control-Request-Method
 Age
 Authorization
+Available-Dictionary
 Cache-Control
 Clear-Site-Data
 Connection
@@ -60,6 +61,7 @@ Cross-Origin-Resource-Policy
 Date
 DNT
 Default-Style
+Dictionary-ID
 ETag
 Expect
 Expires
@@ -113,6 +115,7 @@ Trailer
 Transfer-Encoding
 Upgrade
 Upgrade-Insecure-Requests
+Use-As-Dictionary
 User-Agent
 Vary
 Via

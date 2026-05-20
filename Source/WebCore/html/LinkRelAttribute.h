@@ -53,6 +53,9 @@ struct LinkRelAttribute {
     bool isApplicationManifest : 1 { false };
 #endif
     bool isInternalResourceLink : 1 { false };
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    bool isCompressionDictionary : 1 { false };
+#endif
 
     LinkRelAttribute() = default;
     LinkRelAttribute(Document&, StringView);

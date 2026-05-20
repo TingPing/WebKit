@@ -31,6 +31,7 @@ enum FetchRequestDestination {
     "",
     "audio",
     "audioworklet",
+    "compression-dictionary",
     "document",
     "embed",
     "environmentmap",

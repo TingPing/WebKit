@@ -2104,6 +2104,22 @@ CompositingRepaintCountersVisible:
     WebCore:
       default: false
 
+CompressionDictionaryEnabled:
+  type: bool
+  status: testable
+  category: networking
+  condition: ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+  humanReadableName: "Compression Dictionary Transport"
+  humanReadableDescription: "Enable compression dictionary transport"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+  sharedPreferenceForWebProcess: true
+
 CompressionStreamEnabled:
   type: bool
   status: stable
