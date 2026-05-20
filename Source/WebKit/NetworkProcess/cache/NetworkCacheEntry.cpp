@@ -35,6 +35,12 @@
 #include <wtf/persistence/PersistentEncoder.h>
 #include <wtf/text/StringBuilder.h>
 
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+#include "FetchOptionsDestinationConverter.h"
+#include <pal/crypto/CryptoDigest.h>
+#include <wtf/HexNumber.h>
+#endif
+
 namespace WebKit {
 namespace NetworkCache {
 
@@ -65,6 +71,25 @@ Entry::Entry(const Key& key, const WebCore::ResourceResponse& response, const We
     m_redirectRequest->setHTTPBody(nullptr);
 }
 
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+Entry::Entry(const Key& key, const WebCore::ResourceResponse& response, RefPtr<WebCore::FragmentedSharedBuffer>&& buffer, const Vector<std::pair<String, String>>& varyingRequestHeaders, const CompressionDictionaryData& compressionDictionaryData)
+    : m_key(key)
+    , m_timeStamp(WallTime::now())
+    , m_response(response)
+    , m_varyingRequestHeaders(varyingRequestHeaders)
+    , m_buffer(WTF::move(buffer))
+    , m_compressionDictionaryData(compressionDictionaryData)
+{
+    ASSERT(m_key.type() == "CompressionDictionary"_s);
+
+    auto crypto = PAL::Crypto::CryptoDigest::create(PAL::Crypto::CryptoDigest::Algorithm::SHA_256);
+    m_buffer->forEachSegment([&](auto segment) {
+        crypto->addBytes(segment);
+    });
+    memcpySpan(std::span<uint8_t, CompressionDictionaryData::hashSize>(m_compressionDictionaryData->hash), crypto->computeHash().span());
+}
+#endif
+
 Entry::Entry(const Entry& other)
     : m_key(other.m_key)
     , m_timeStamp(other.m_timeStamp)
@@ -73,6 +98,9 @@ Entry::Entry(const Entry& other)
     , m_redirectRequest(other.m_redirectRequest)
     , m_buffer(other.m_buffer)
     , m_sourceStorageRecord(other.m_sourceStorageRecord)
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    , m_compressionDictionaryData(other.m_compressionDictionaryData)
+#endif
 {
 }
 
@@ -81,7 +109,11 @@ Entry::Entry(const Storage::Record& storageEntry)
     , m_timeStamp(storageEntry.timeStamp)
     , m_sourceStorageRecord(storageEntry)
 {
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    ASSERT(m_key.type() == "Resource"_s || m_key.type() == "CompressionDictionary"_s);
+#else
     ASSERT(m_key.type() == "Resource"_s);
+#endif
 }
 
 Storage::Record Entry::encodeAsStorageRecord() const
@@ -103,6 +135,22 @@ Storage::Record Entry::encodeAsStorageRecord() const
     encoder << m_maxAgeCap;
     
     encoder.encodeChecksum();
+
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    if (m_key.type() == "CompressionDictionary"_s) {
+        ASSERT(m_compressionDictionaryData);
+        encoder << m_compressionDictionaryData->match;
+        encoder << m_compressionDictionaryData->id;
+        encoder << toHexString(m_compressionDictionaryData->hash);
+        bool hasMatchDest = !m_compressionDictionaryData->matchDest.isEmpty();
+        encoder << hasMatchDest;
+        if (hasMatchDest) {
+            encoder << m_compressionDictionaryData->matchDest.map([](auto& destination) {
+                return FetchOptionsDestinationConverter::convertEnumerationToString(destination);
+            });
+        }
+    }
+#endif
 
     Data header(encoder.span());
     Data body;
@@ -168,6 +216,56 @@ std::unique_ptr<Entry> Entry::decodeStorageRecord(const Storage::Record& storage
         return nullptr;
     }
 
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    if (entry->m_key.type() == "CompressionDictionary"_s) {
+        CompressionDictionaryData compressionDictionaryData;
+        std::optional<String> match;
+        decoder >> match;
+        if (!match)
+            return nullptr;
+        compressionDictionaryData.match = WTF::move(*match);
+
+        std::optional<String> id;
+        decoder >> id;
+        if (!id)
+            return nullptr;
+        compressionDictionaryData.id = WTF::move(*id);
+
+        std::optional<String> hash;
+        decoder >> hash;
+        if (!hash || hash->length() != 2 * CompressionDictionaryData::hashSize)
+            return nullptr;
+        for (size_t i = 0; i < CompressionDictionaryData::hashSize; i++) {
+            auto high = (*hash)[2 * i];
+            auto low = (*hash)[2 * i + 1];
+            if (!isASCIIHexDigit(high) || !isASCIIHexDigit(low))
+                return nullptr;
+            compressionDictionaryData.hash[i] = toASCIIHexValue(high, low);
+        }
+
+        std::optional<bool> hasMatchDest;
+        decoder >> hasMatchDest;
+        if (!hasMatchDest)
+            return nullptr;
+        if (*hasMatchDest) {
+            std::optional<Vector<String>> matchDest;
+            decoder >> matchDest;
+            if (!matchDest)
+                return nullptr;
+            for (auto& item : *matchDest) {
+                auto destination = FetchOptionsDestinationConverter::parseEnumerationFromString(item);
+                if (!destination)
+                    return nullptr;
+                compressionDictionaryData.matchDest.append(*destination);
+            }
+        }
+        entry->m_compressionDictionaryData = WTF::move(compressionDictionaryData);
+    }
+#else
+    if (entry->m_key.type() == "CompressionDictionary"_s)
+        return nullptr;
+#endif
+
     return entry;
 }
 
@@ -232,6 +330,11 @@ void Entry::setNeedsValidation(bool value)
 void Entry::asJSON(StringBuilder& json, const Storage::RecordInfo& info) const
 {
     json.append("{\n"_s
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+        "\"type\": "_s);
+    json.appendQuotedJSONString(m_key.type());
+    json.append(",\n"_s
+#endif
         "\"hash\": "_s);
     json.appendQuotedJSONString(m_key.hashAsString());
     json.append(",\n"_s
@@ -256,6 +359,30 @@ void Entry::asJSON(StringBuilder& json, const Storage::RecordInfo& info) const
         json.append(": "_s);
         json.appendQuotedJSONString(header.value);
     }
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    if (auto data = m_compressionDictionaryData) {
+        json.append("\n"_s
+            "},\n"_s,
+            "\"compressionDictionaryData\": {\n"_s,
+            "\"match\": "_s);
+        json.appendQuotedJSONString(data->match);
+        json.append(",\n"_s
+            "\"id\": "_s);
+        json.appendQuotedJSONString(data->id);
+        json.append(",\n"_s
+            "\"hash\": "_s);
+        json.appendQuotedJSONString(toHexString(data->hash));
+        json.append(",\n"_s
+            "\"matchDest\": [\n"_s);
+        bool firstDestination = true;
+        for (auto& destination : data->matchDest) {
+            json.append(std::exchange(firstDestination, false) ? ""_s : ",\n"_s, "    "_s);
+            json.appendQuotedJSONString(FetchOptionsDestinationConverter::convertEnumerationToString(destination));
+        }
+        json.append("\n"_s
+            "]"_s);
+    }
+#endif
     json.append("\n"_s
         "}\n"_s
         "}"_s);
