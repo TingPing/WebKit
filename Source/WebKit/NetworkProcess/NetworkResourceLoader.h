@@ -213,6 +213,9 @@ private:
 #endif
 
     void processClearSiteDataHeader(const WebCore::ResourceResponse&, CompletionHandler<void()>&&);
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    void processUseAsDictionaryHeader(const WebCore::ResourceResponse&);
+#endif
 
     bool canUseCache(const WebCore::ResourceRequest&) const;
     bool canUseCachedRedirect(const WebCore::ResourceRequest&) const;
@@ -331,6 +334,9 @@ private:
     WebCore::Timer m_bufferingTimer;
     RefPtr<NetworkCache::Cache> m_cache;
     WebCore::SharedBufferBuilder m_bufferedDataForCache;
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    std::optional<WebKit::NetworkCache::Entry::CompressionDictionaryData> m_compressionDictionaryDataForCache;
+#endif
     std::unique_ptr<NetworkCache::Entry> m_cacheEntryForValidation;
     std::unique_ptr<NetworkCache::Entry> m_cacheEntryForMaxAgeCapValidation;
     bool m_isWaitingContinueWillSendRequestForCachedRedirect { false };
