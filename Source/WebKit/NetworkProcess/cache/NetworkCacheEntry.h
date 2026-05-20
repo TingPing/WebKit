@@ -35,6 +35,8 @@
 #include <wtf/TZoneMalloc.h>
 #include <wtf/text/WTFString.h>
 
+#include <WebCore/FetchOptionsDestination.h>
+
 namespace WebCore {
 class FragmentedSharedBuffer;
 }
@@ -46,6 +48,16 @@ class Entry {
 public:
     Entry(const Key&, const WebCore::ResourceResponse&, PrivateRelayed, RefPtr<WebCore::FragmentedSharedBuffer>&&, const Vector<std::pair<String, String>>& varyingRequestHeaders);
     Entry(const Key&, const WebCore::ResourceResponse&, const WebCore::ResourceRequest& redirectRequest, const Vector<std::pair<String, String>>& varyingRequestHeaders);
+
+    struct CompressionDictionaryData {
+        String match;
+        String id;
+        static constexpr size_t hashSize = 32;
+        std::array<uint8_t, hashSize> hash;
+        Vector<WebCore::FetchOptionsDestination> matchDest;
+    };
+    Entry(const Key&, const WebCore::ResourceResponse&, RefPtr<WebCore::FragmentedSharedBuffer>&&, const Vector<std::pair<String, String>>& varyingRequestHeaders, const CompressionDictionaryData&);
+
     explicit Entry(const Storage::Record&);
     Entry(const Entry&);
 
@@ -75,6 +87,8 @@ public:
     bool hasReachedPrevalentResourceAgeCap() const;
     void NODELETE capMaxAge(const Seconds);
 
+    const CompressionDictionaryData& compressionDictionaryData() const { return *m_compressionDictionaryData; };
+
 private:
     void initializeBufferFromStorageRecord() const;
 
@@ -93,6 +107,8 @@ private:
     
     std::optional<Seconds> m_maxAgeCap;
     PrivateRelayed m_privateRelayed { PrivateRelayed::No };
+
+    std::optional<CompressionDictionaryData> m_compressionDictionaryData;
 };
 
 }
