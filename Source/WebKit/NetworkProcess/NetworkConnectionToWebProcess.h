@@ -184,6 +184,7 @@ public:
 
     bool usesSingleWebProcess() const { return m_sharedPreferencesForWebProcess.usesSingleWebProcess; }
     bool blobFileAccessEnforcementEnabled() const { return m_sharedPreferencesForWebProcess.blobFileAccessEnforcementEnabled; }
+    bool compressionDictionaryEnabled() const { return m_sharedPreferencesForWebProcess.compressionDictionaryEnabled; }
 
     void didCleanupResourceLoader(NetworkResourceLoader&);
     void transferKeptAliveLoad(NetworkResourceLoader&);

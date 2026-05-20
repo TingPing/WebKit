@@ -224,6 +224,7 @@ private:
 #endif
 
     void processClearSiteDataHeader(const WebCore::ResourceResponse&, CompletionHandler<void()>&&);
+    void processUseAsDictionaryHeader(const WebCore::ResourceResponse&);
 
     bool canUseCache(const WebCore::ResourceRequest&) const;
     bool canUseCachedRedirect(const WebCore::ResourceRequest&) const;
@@ -344,6 +345,7 @@ private:
     WebCore::Timer m_bufferingTimer;
     RefPtr<NetworkCache::Cache> m_cache;
     WebCore::SharedBufferBuilder m_bufferedDataForCache;
+    std::optional<WebKit::NetworkCache::Entry::CompressionDictionaryData> m_compressionDictionaryDataForCache;
     std::unique_ptr<NetworkCache::Entry> m_cacheEntryForValidation;
     std::unique_ptr<NetworkCache::Entry> m_cacheEntryForMaxAgeCapValidation;
     bool m_isWaitingContinueWillSendRequestForCachedRedirect { false };
