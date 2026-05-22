@@ -102,6 +102,7 @@ ModelProcess/ModelProcess.cpp
 ModelProcess/ModelConnectionToWebProcess.cpp
 ModelProcess/ModelProcessModelPlayerManagerProxy.cpp
 
+NetworkProcess/FetchOptionsDestinationConverter.cpp
 NetworkProcess/BackgroundFetchLoad.cpp @cost:4
 NetworkProcess/DatabaseUtilities.cpp @cost:3
 NetworkProcess/EarlyHintsResourceLoader.cpp @cost:6
