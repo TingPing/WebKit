@@ -174,6 +174,9 @@ private:
     WebCore::NetworkLoadMetrics m_networkLoadMetrics;
     bool m_isBlockingCookies { false };
     RefPtr<WebCore::SecurityOrigin> m_sourceOrigin;
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    RefPtr<WebCore::SharedBuffer> m_compressionDictionary;
+#endif
     RunLoop::Timer m_timeoutSource;
 };
 

@@ -35,6 +35,7 @@
 #include <WebCore/ResourceLoaderOptions.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SecurityOrigin.h>
+#include <WebCore/SharedBuffer.h>
 #include <wtf/ProcessID.h>
 
 namespace WebKit {
@@ -67,6 +68,10 @@ struct NetworkLoadParameters {
     bool isInitiatedByDedicatedWorker { false };
 
     uint64_t requiredCookiesVersion { 0 };
+
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    RefPtr<WebCore::SharedBuffer> compressionDictionaryBuffer;
+#endif
 };
 
 } // namespace WebKit

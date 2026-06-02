@@ -63,6 +63,9 @@ NetworkDataTaskSoup::NetworkDataTaskSoup(NetworkSession& session, NetworkDataTas
     , m_shouldContentSniff(parameters.contentSniffingPolicy)
     , m_shouldPreconnectOnly(parameters.shouldPreconnectOnly)
     , m_sourceOrigin(parameters.sourceOrigin)
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    , m_compressionDictionary(parameters.compressionDictionaryBuffer)
+#endif
     , m_timeoutSource(RunLoop::mainSingleton(), "NetworkDataTaskSoup::TimeoutSource"_s, this, &NetworkDataTaskSoup::timeoutFired)
 {
     auto request = parameters.request;
@@ -155,6 +158,14 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
         scheduleFailure(FailureType::InvalidURL);
         return;
     }
+
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    if (m_compressionDictionary) {
+        auto span = m_compressionDictionary->span();
+        GRefPtr<GBytes> bytes = adoptGRef(g_bytes_new(span.data(), span.size()));
+        soup_message_set_compression_dictionary(m_soupMessage.get(), bytes.get());
+    }
+#endif
 
     if (m_shouldPreconnectOnly == PreconnectOnly::Yes) {
         g_signal_connect(m_soupMessage.get(), "accept-certificate", G_CALLBACK(acceptCertificateCallback), this);

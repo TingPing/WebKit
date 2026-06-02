@@ -93,7 +93,10 @@ NetworkLoadParameters NetworkResourceLoadParameters::networkLoadParameters() con
         allowPrivacyProxy,
         advancedPrivacyProtections,
         isInitiatedByDedicatedWorker,
-        requiredCookiesVersion
+        requiredCookiesVersion,
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+        nullptr, // compressionDictionaryBuffer
+#endif
     };
 }
 

@@ -546,6 +546,10 @@ void NetworkResourceLoader::continueStartNetworkLoadAfterCompressionDictionaryRe
 
     parameters.request = WTF::move(request);
     parameters.isNavigatingToAppBoundDomain = m_parameters.isNavigatingToAppBoundDomain;
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    if (m_bestMatchForCompressionDictionary)
+        parameters.compressionDictionaryBuffer = m_bestMatchForCompressionDictionary->buffer()->makeContiguous();
+#endif
     m_networkLoad = NetworkLoad::create(*this, WTF::move(parameters), *networkSession);
     
     WeakPtr weakThis { *this };
