@@ -363,6 +363,14 @@ ResourceErrorOr<Ref<CachedResource>> CachedResourceLoader::requestLinkResource(C
     return requestResource(type, WTF::move(request));
 }
 
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+ResourceErrorOr<Ref<CachedResource>> CachedResourceLoader::requestCompressionDictionary(CachedResourceRequest&& request)
+{
+    ASSERT(frame());
+    return requestResource(CachedResource::Type::RawResource, WTF::move(request));
+}
+#endif
+
 ResourceErrorOr<Ref<CachedRawResource>> CachedResourceLoader::requestMedia(CachedResourceRequest&& request)
 {
     auto resourceType = CachedResource::Type::MediaResource;

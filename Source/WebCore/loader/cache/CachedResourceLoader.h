@@ -107,6 +107,9 @@ public:
     ResourceErrorOr<Ref<CachedXSLStyleSheet>> requestXSLStyleSheet(CachedResourceRequest&&);
 #endif
     ResourceErrorOr<Ref<CachedResource>> requestLinkResource(CachedResource::Type, CachedResourceRequest&&);
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    ResourceErrorOr<Ref<CachedResource>> requestCompressionDictionary(CachedResourceRequest&&);
+#endif
 #if ENABLE(VIDEO)
     ResourceErrorOr<Ref<CachedTextTrack>> requestTextTrack(CachedResourceRequest&&);
 #endif

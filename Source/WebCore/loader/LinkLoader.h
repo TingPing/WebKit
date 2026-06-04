@@ -63,6 +63,9 @@ public:
     virtual ~LinkLoader();
 
     void loadLink(const LinkLoadParameters&, Document&);
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    void loadCompressionDictionaryLink(const LinkLoadParameters&, Document&);
+#endif
     enum class ShouldLog : bool { No, Yes };
     enum class IsModulePreload : bool { No, Yes };
     static std::optional<CachedResource::Type> resourceTypeFromAsAttribute(const String&, Document&, ShouldLog = ShouldLog::No, IsModulePreload = IsModulePreload::No);
@@ -86,10 +89,16 @@ private:
     static void preconnectIfNeeded(const LinkLoadParameters&, Document&);
     static RefPtr<LinkPreloadResourceClient> preloadIfNeeded(const LinkLoadParameters&, Document&, LinkLoader*);
     void prefetchIfNeeded(const LinkLoadParameters&, Document&);
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    static RefPtr<LinkPreloadResourceClient> loadCompressionDictionaryIfNeeded(const LinkLoadParameters&, Document&, LinkLoader*);
+#endif
 
     WeakPtr<LinkLoaderClient> m_client;
     CachedResourceHandle<CachedResource> m_cachedLinkResource;
     RefPtr<LinkPreloadResourceClient> m_preloadResourceClient;
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+    RefPtr<LinkPreloadResourceClient> m_compressionDictionaryLoadResourceClient;
+#endif
 };
 
 }
