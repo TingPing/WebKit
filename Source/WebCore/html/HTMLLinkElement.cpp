@@ -405,6 +405,11 @@ void HTMLLinkElement::process()
         return;
     }
 
+    if (m_relAttribute.isCompressionDictionary) {
+        m_linkLoader->loadCompressionDictionaryLink(params, document);
+        return;
+    }
+
 #if ENABLE(APPLICATION_MANIFEST)
     if (isApplicationManifest()) {
         if (RefPtr loader = document->loader())
