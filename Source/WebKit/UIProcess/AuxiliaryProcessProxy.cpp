@@ -435,9 +435,9 @@ void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::C
 
     drainPendingMessages(*connection);
 
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
     protect(throttler())->didConnectToProcess(*this);
-#if PLATFORM(MAC)
+#if PLATFORM(MAC) && USE(RUNNINGBOARD)
     m_boostedJetsamAssertion = ProcessAssertion::create(*this, "Jetsam Boost"_s, ProcessAssertionType::BoostedJetsam);
 #endif
 #if USE(EXTENSIONKIT)
@@ -445,17 +445,17 @@ void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::C
     if (launcher)
         launcher->releaseLaunchGrant();
 #endif // USE(EXTENSIONKIT)
-#endif // USE(RUNNINGBOARD)
+#endif // USE(RUNNINGBOARD) || USE(GLIB)
 }
 
 void AuxiliaryProcessProxy::outgoingMessageQueueIsGrowingLarge()
 {
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
     wakeUpTemporarilyForIPC();
 #endif
 }
 
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
 void AuxiliaryProcessProxy::wakeUpTemporarilyForIPC()
 {
     // If we keep trying to send IPC to a suspended process, the outgoing message queue may grow large and result

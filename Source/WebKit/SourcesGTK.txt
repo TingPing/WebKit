@@ -270,7 +270,9 @@ UIProcess/glib/DisplayVBlankMonitorDRM.cpp
 UIProcess/glib/DisplayVBlankMonitorThreaded.cpp
 UIProcess/glib/DisplayVBlankMonitorTimer.cpp
 UIProcess/glib/FenceMonitor.cpp
+UIProcess/glib/ProcessAssertionGLib.cpp
 UIProcess/glib/ScreenManager.cpp
+UIProcess/glib/SystemdScopeManager.cpp
 UIProcess/glib/SystemSettingsManagerProxy.cpp
 UIProcess/glib/TextCheckerGLib.cpp @no-unify
 UIProcess/glib/WebPageProxyGLib.cpp

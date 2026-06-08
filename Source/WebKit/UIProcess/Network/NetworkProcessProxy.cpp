@@ -2052,7 +2052,7 @@ void NetworkProcessProxy::didPerformEvictionForDomains(PAL::SessionID sessionID,
         store->client().didEvictDataForDomains(domains);
 }
 
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
 void NetworkProcessProxy::wakeUpWebProcessForIPC(WebCore::ProcessIdentifier processIdentifier)
 {
     auto webProcess = WebProcessProxy::processForIdentifier(processIdentifier);

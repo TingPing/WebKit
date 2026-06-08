@@ -168,7 +168,7 @@ NetworkConnectionToWebProcess::NetworkConnectionToWebProcess(NetworkProcess& net
     Ref protectedConnection = m_connection;
     protectedConnection->setOnlySendMessagesAsDispatchWhenWaitingForSyncReplyWhenProcessingSuchAMessage(true);
     protectedConnection->open(*this);
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
     protectedConnection->setOutgoingMessageQueueIsGrowingLargeCallback([weakThis = WeakPtr { *this }] {
         ensureOnMainRunLoop([weakThis] {
             if (weakThis)

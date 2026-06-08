@@ -410,7 +410,7 @@ private:
     void contentExtensionRules(UserContentControllerIdentifier);
 #endif
 
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
     void wakeUpWebProcessForIPC(WebCore::ProcessIdentifier);
 #endif
 

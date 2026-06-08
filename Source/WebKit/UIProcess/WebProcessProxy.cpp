@@ -858,6 +858,12 @@ bool WebProcessProxy::shouldTakeNearSuspendedAssertion() const
             return true;
     }
 #endif
+#if USE(GLIB)
+    // On Linux we use cgroup freezing: hold the NearSuspended assertion so the process is not
+    // immediately frozen. The actual freeze happens when the drop-after-delay timer fires and
+    // didDropLastAssertion() is called.
+    return true;
+#endif
     return false;
 }
 
@@ -2040,6 +2046,9 @@ void WebProcessProxy::didDropLastAssertion()
 {
     m_backgroundResponsivenessTimer->updateState();
     updateRuntimeStatistics();
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    platformSuspendProcess();
+#endif
 }
 
 void WebProcessProxy::prepareToDropLastAssertion(CompletionHandler<void()>&& completionHandler)

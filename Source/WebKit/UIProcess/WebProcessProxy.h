@@ -923,7 +923,7 @@ private:
     const std::unique_ptr<AudioSessionRoutingArbitratorProxy> m_routingArbitrator;
 #endif
     bool m_isConnectedToHardwareConsole { true };
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || USE(GLIB)
     bool m_platformSuspendDidReleaseNearSuspendedAssertion { false };
 #endif
     mutable SharedPreferencesForWebProcess m_sharedPreferencesForWebProcess;

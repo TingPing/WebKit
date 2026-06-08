@@ -222,7 +222,7 @@ public:
 
     std::optional<SandboxExtensionHandle> createMobileGestaltSandboxExtensionIfNeeded() const;
 
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
     void wakeUpTemporarilyForIPC();
 #endif
 

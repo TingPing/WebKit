@@ -206,6 +206,8 @@ bool defaultShouldDropNearSuspendedAssertionAfterDelay()
 #if PLATFORM(COCOA)
     static bool newSDK = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::FullySuspendsBackgroundContent);
     return newSDK;
+#elif USE(GLIB)
+    return true;
 #else
     return false;
 #endif

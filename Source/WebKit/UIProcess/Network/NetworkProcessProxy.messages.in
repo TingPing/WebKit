@@ -110,7 +110,7 @@ messages -> NetworkProcessProxy WantsDispatchMessage {
 
     DidPerformEvictionForDomains(PAL::SessionID sessionID, Vector<WebCore::RegistrableDomain> domains)
 
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
     WakeUpWebProcessForIPC(WebCore::ProcessIdentifier processIdentifier)
 #endif
 

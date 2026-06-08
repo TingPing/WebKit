@@ -505,7 +505,7 @@ static constexpr Seconds resetRecentCrashCountDelay = 30_s;
 static constexpr unsigned maximumWebProcessRelaunchAttempts = 1;
 static constexpr Seconds tryCloseTimeoutDelay = 50_ms;
 
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
 static constexpr Seconds audibleActivityClearDelay = 10_s;
 #endif
 
@@ -3558,7 +3558,7 @@ void WebPageProxy::updateThrottleState()
     else if (!internals().pageIsUserObservableCount)
         internals().pageIsUserObservableCount = processPool->userObservablePageCount();
 
-#if USE(RUNNINGBOARD)
+#if USE(RUNNINGBOARD) || USE(GLIB)
     if (isViewVisible()) {
         if (!hasValidVisibleActivity()) {
             WEBPAGEPROXY_RELEASE_LOG(ProcessSuspension, "updateThrottleState: UIProcess is taking a foreground assertion because the view is visible");
@@ -4341,6 +4341,11 @@ void WebPageProxy::sendMouseEvent(FrameIdentifier frameID, const NativeWebMouseE
     if (event.isActivationTriggeringEvent())
         internals().lastActivationTimestamp = MonotonicTime::now();
 
+#if USE(GLIB)
+    // Thaw the process cgroup before delivering input so that the IPC can be processed immediately.
+    processContainingFrame(frameID)->platformResumeProcess();
+#endif
+
     sendToProcessContainingFrame(frameID, Messages::WebPage::MouseEvent(frameID, event, WTF::move(sandboxExtensions)));
 }
 
@@ -4357,13 +4362,6 @@ void WebPageProxy::handleMouseEvent(const NativeWebMouseEvent& event)
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     WTFBeginSignpost(event.signpostIdentifier(), HandleMouseEvent, "id: %" PRIuPTR ", type: %s", event.signpostIdentifier(), toString(event.type()).characters());
-#endif
-
-#if ENABLE(CONTEXT_MENU_EVENT)
-    if (event.button() == WebMouseEventButton::Right && event.type() == WebEventType::MouseDown) {
-        ASSERT(m_contextMenuPreventionState != EventPreventionState::Waiting);
-        m_contextMenuPreventionState = EventPreventionState::Waiting;
-    }
 #endif
 
     // If we receive multiple mousemove or mouseforcechanged events and the most recent mousemove or mouseforcechanged event
@@ -4451,6 +4449,15 @@ void WebPageProxy::processNextQueuedMouseEvent()
     }
 
     LOG_WITH_STREAM(MouseHandling, stream << "UIProcess: sent mouse event " << eventType << " (queue size " << internals().mouseEventQueue.size() << ", coalesced events size " << internals().coalescedMouseEvents.size() << ")");
+
+#if ENABLE(CONTEXT_MENU_EVENT)
+    // Set the Waiting state immediately before dispatching so that queued right-clicks
+    // (e.g. a second click arriving while the process was frozen) each get a fresh cycle.
+    if (event->button() == WebMouseEventButton::Right && event->type() == WebEventType::MouseDown) {
+        ASSERT(m_contextMenuPreventionState != EventPreventionState::Waiting);
+        m_contextMenuPreventionState = EventPreventionState::Waiting;
+    }
+#endif
 
     sendMouseEvent(targetFrame->frameID(), eventWithCoalescedEvents, WTF::move(sandboxExtensions));
 
@@ -4822,6 +4829,12 @@ void WebPageProxy::sendKeyEvent(const NativeWebKeyboardEvent& event)
     targetProcess->recordUserGestureAuthorizationToken(targetFrameID, webPageIDInMainFrameProcess(), event.authorizationToken());
     if (event.isActivationTriggeringEvent())
         internals().lastActivationTimestamp = MonotonicTime::now();
+
+#if USE(GLIB)
+    // Thaw the process cgroup before delivering input so that the IPC can be processed immediately.
+    targetProcess->platformResumeProcess();
+#endif
+
     sendToProcessContainingFrame(targetFrameID, Messages::WebPage::KeyEvent(targetFrameID, event));
 }
 

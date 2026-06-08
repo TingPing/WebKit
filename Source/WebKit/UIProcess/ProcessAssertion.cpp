@@ -132,7 +132,7 @@ Ref<ProcessAndUIAssertion> ProcessAndUIAssertion::create(ProcessID processID, co
 
 #endif
 
-#if !PLATFORM(COCOA) || !USE(RUNNINGBOARD)
+#if (!PLATFORM(COCOA) || !USE(RUNNINGBOARD)) && !USE(GLIB)
 
 ProcessAssertion::ProcessAssertion(ProcessID pid, const String& reason, ProcessAssertionType assertionType, const String&)
     : m_assertionType(assertionType)

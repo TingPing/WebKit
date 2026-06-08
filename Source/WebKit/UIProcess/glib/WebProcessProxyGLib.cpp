@@ -26,10 +26,10 @@
 #include "config.h"
 #include "WebProcessProxy.h"
 
+#include "SystemdScopeManager.h"
 #include "UserMessage.h"
 #include "WebProcessPool.h"
 #include "WebsiteDataStore.h"
-#include <WebCore/NotImplemented.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <wtf/FileSystem.h>
@@ -83,14 +83,19 @@ void WebProcessProxy::sendMessageToWebContext(UserMessage&& message)
 
 void WebProcessProxy::platformSuspendProcess()
 {
-    // FIXME: https://webkit.org/b/280014
-    notImplemented();
+    m_platformSuspendDidReleaseNearSuspendedAssertion = throttler().isHoldingNearSuspendedAssertion();
+    protect(throttler())->setShouldTakeNearSuspendedAssertion(false);
+    SystemdScopeManager::singleton().ensureScope(processID());
+    SystemdScopeManager::singleton().freeze(processID());
 }
 
 void WebProcessProxy::platformResumeProcess()
 {
-    // FIXME: https://webkit.org/b/280014
-    notImplemented();
+    SystemdScopeManager::singleton().thaw(processID());
+    if (m_platformSuspendDidReleaseNearSuspendedAssertion) {
+        m_platformSuspendDidReleaseNearSuspendedAssertion = false;
+        protect(throttler())->setShouldTakeNearSuspendedAssertion(true);
+    }
 }
 
 void WebProcessProxy::systemBeep()
