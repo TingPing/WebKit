@@ -70,7 +70,8 @@ struct NetworkLoadParameters {
     uint64_t requiredCookiesVersion { 0 };
 
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-    RefPtr<WebCore::SharedBuffer> compressionDictionaryBuffer;
+    std::optional<std::array<uint8_t, 32>> compressionDictionaryHash;
+    WebCore::FetchOptionsDestination compressionDictionaryDestination { WebCore::FetchOptionsDestination::EmptyString };
 #endif
 };
 

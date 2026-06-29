@@ -223,12 +223,13 @@ public:
     std::unique_ptr<Entry> makeEntry(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, PrivateRelayed, RefPtr<WebCore::FragmentedSharedBuffer>&&);
     std::unique_ptr<Entry> makeRedirectEntry(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, const WebCore::ResourceRequest& redirectRequest);
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-    std::unique_ptr<Entry> makeCompressionDictionaryEntry(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, RefPtr<WebCore::FragmentedSharedBuffer>&& responseData, const Entry::CompressionDictionaryData&);
-    struct CompressionDictionaryBestMatchMappedBody {
-        WebCore::ResourceRequest request;
-        std::unique_ptr<Entry> bestMatch;
+    struct CompressionDictionaryMatch {
+        std::array<uint8_t, Entry::CompressionDictionaryData::hashSize> hash;
+        String id;
     };
-    void retrieveCompressionDictionaryBestMatch(WebCore::ResourceRequest&&, WebCore::FetchOptionsDestination, Function<void(CompressionDictionaryBestMatchMappedBody&&)>&& completionHandler);
+    std::unique_ptr<Entry> makeCompressionDictionaryEntry(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, RefPtr<WebCore::FragmentedSharedBuffer>&& responseData, const Entry::CompressionDictionaryData&);
+    void retrieveCompressionDictionaryBestMatchHash(WebCore::ResourceRequest&&, WebCore::FetchOptionsDestination, Function<void(WebCore::ResourceRequest&&, std::optional<CompressionDictionaryMatch>&&)>&&);
+    void retrieveCompressionDictionaryByHash(const String& partition, std::span<const uint8_t> hash, Function<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
 #endif
 
     void dumpContentsToFile();

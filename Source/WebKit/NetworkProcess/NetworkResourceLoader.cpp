@@ -478,48 +478,27 @@ void NetworkResourceLoader::startNetworkLoad(ResourceRequest&& request, FirstLoa
         // 6. Let compressionDictionaryCache be the result of determining the compression-dictionary cache partition given request.
         // 7. If compressionDictionaryCache is null, then return the result of running fallback.
         // 8. Let bestMatch be the result of finding the best matching dictionary in compressionDictionaryCache for request.
-        protect(m_cache)->retrieveCompressionDictionaryBestMatch(WTF::move(request), m_parameters.options.destination, [protectedThis = Ref { *this }, parameters = WTF::move(parameters)](auto&& mappedBody) mutable {
-            protectedThis->continueStartNetworkLoadAfterCompressionDictionaryRetrieval(WTF::move(mappedBody.request), WTF::move(parameters), WTF::move(mappedBody.bestMatch));
+        protect(m_cache)->retrieveCompressionDictionaryBestMatchHash(WTF::move(request), m_parameters.options.destination, [protectedThis = Ref { *this }, parameters = WTF::move(parameters)](auto&& request, auto&& match) mutable {
+            protectedThis->continueStartNetworkLoadAfterCompressionDictionaryRetrieval(WTF::move(request), WTF::move(parameters), WTF::move(match));
         });
         return;
     }
 #endif
-    continueStartNetworkLoadAfterCompressionDictionaryRetrieval(WTF::move(request), WTF::move(parameters), nullptr);
+    continueStartNetworkLoadAfterCompressionDictionaryRetrieval(WTF::move(request), WTF::move(parameters), std::nullopt);
 }
 
-#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-
-static void setCompressionDictionaryRequestHeaders(ResourceRequest& request, const NetworkCache::Entry& dictionary)
-{
-    const auto& data = dictionary.compressionDictionaryData();
-    // https://datatracker.ietf.org/doc/html/rfc8941#ser-binary
-    StringBuilder availableHashBuilder;
-    availableHashBuilder.append(':');
-    availableHashBuilder.append(base64EncodeToString(data.hash));
-    availableHashBuilder.append(':');
-    request.setHTTPHeaderField(HTTPHeaderName::AvailableDictionary, availableHashBuilder.toString());
-    if (!data.id.isEmpty()) {
-        // https://www.rfc-editor.org/info/rfc9651#name-serializing-a-string
-        StringBuilder idBuilder;
-        idBuilder.append('"');
-        idBuilder.append(makeStringByReplacingAll(makeStringByReplacingAll(data.id, '\\', "\\\\"_s), '"', "\\\""_s));
-        idBuilder.append('"');
-        request.setHTTPHeaderField(HTTPHeaderName::DictionaryID, idBuilder.toString());
-    }
-}
-#endif
-
-void NetworkResourceLoader::continueStartNetworkLoadAfterCompressionDictionaryRetrieval(ResourceRequest&& request, NetworkLoadParameters parameters, std::unique_ptr<NetworkCache::Entry> bestMatchForCompressionDictionary)
+void NetworkResourceLoader::continueStartNetworkLoadAfterCompressionDictionaryRetrieval(ResourceRequest&& request, NetworkLoadParameters parameters, std::optional<NetworkCache::Cache::CompressionDictionaryMatch>&& compressionDictionaryMatch)
 {
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
     // https://fetch.spec.whatwg.org/#http-network-compression-dictionary-fetch
-    m_bestMatchForCompressionDictionary = WTF::move(bestMatchForCompressionDictionary);
-    if (m_bestMatchForCompressionDictionary) {
-        LOADER_RELEASE_LOG("Compression dictionary found for %s!", request.url().string().latin1().data());
+    if (compressionDictionaryMatch) {
+        m_compressionDictionaryHash = compressionDictionaryMatch->hash;
         // 10. Add the Available-Dictionary and Dictionary-ID (if applicable) headers to request using bestMatch.
-        setCompressionDictionaryRequestHeaders(request, *m_bestMatchForCompressionDictionary);
-        // 11-12. appending `Accept-Encoding` is handled by the platform library (e.g. libsoup).
-    }
+        //     The Available-Dictionary header (and Accept-Encoding, steps 11-12) are added by the
+        //     network library (e.g. libsoup); only Dictionary-ID must be set here.
+        request.setCompressionDictionaryIDHeader(compressionDictionaryMatch->id);
+    } else
+        m_compressionDictionaryHash = std::nullopt;
     // 9. If bestMatch is null, then return the result of running fallback.
     // 13. Let response be the result of running fallback.
 #endif
@@ -547,8 +526,9 @@ void NetworkResourceLoader::continueStartNetworkLoadAfterCompressionDictionaryRe
     parameters.request = WTF::move(request);
     parameters.isNavigatingToAppBoundDomain = m_parameters.isNavigatingToAppBoundDomain;
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-    if (m_bestMatchForCompressionDictionary)
-        parameters.compressionDictionaryBuffer = m_bestMatchForCompressionDictionary->buffer()->makeContiguous();
+    if (m_compressionDictionaryHash)
+        parameters.compressionDictionaryHash = m_compressionDictionaryHash;
+    parameters.compressionDictionaryDestination = m_parameters.options.destination;
 #endif
     m_networkLoad = NetworkLoad::create(*this, WTF::move(parameters), *networkSession);
     
@@ -1223,13 +1203,13 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
 
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
     // https://fetch.spec.whatwg.org/#determine-the-compression-dictionary-cache-partition
-    if (m_bestMatchForCompressionDictionary) {
+    if (m_compressionDictionaryHash) {
         // 14. Let codings be the result of extracting header list values given `Content-Encoding` and response’s header list.
         auto codings = m_response.httpHeaderField(HTTPHeaderName::ContentEncoding);
         // 15. If codings is null or does not contain `dcb` or `dcz`, then return response.
         if (codings.isNull() || (!codings.contains("dcb"_s) && !codings.contains("dcz"_s))) {
             // Continue to handle this request without a compression dictionary.
-            m_bestMatchForCompressionDictionary = nullptr;
+            m_compressionDictionaryHash = std::nullopt;
         } else {
             // 16. If request’s response tainting is "opaque", then return a network error.
             if (m_response.tainting() == ResourceResponse::Tainting::Opaque) {
@@ -1241,24 +1221,11 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
                 return completionHandler(PolicyAction::Ignore);
             }
 
-            // 17. Let availableDictionaryItem be the result of getting a structured field value given Available-Dictionary, "item", and request’s header list.
-            auto availableDictionaryItem = RFC8941::parseItemStructuredFieldValue((m_networkLoad ? m_networkLoad->currentRequest() : originalRequest()).httpHeaderField(HTTPHeaderName::AvailableDictionary));
-
-            // 18. If availableDictionaryItem is null, then return a network error.
-            if (!availableDictionaryItem) {
-                LOADER_RELEASE_LOG_ERROR("didReceiveResponse: Interrupting worker load because the Available-Dictionary header was specified in the request but is absent from the response.");
-                RunLoop::mainSingleton().dispatch([protectedThis = Ref { *this }, url = m_response.url()] {
-                    if (protectedThis->m_networkLoad)
-                        protectedThis->didFailLoading(ResourceError { errorDomainWebKitInternal, 0, url, "Worker load was blocked because Available-Dictionary header was specified in the request but is absent from the response"_s });
-                });
-                return completionHandler(PolicyAction::Ignore);
-            }
-
-            // 19. Let availableDictionaryHash be the bare item of availableDictionaryItem.
-            const auto availableDictionaryHash = std::get_if<Vector<uint8_t>>(&availableDictionaryItem->first);
-
-            // 20. hash verification and decoding is performed by the platform library (e.g. libsoup) from the compression dictionary's buffer so we actually don't do anything with availableDictionaryHash here.
-            ASSERT_UNUSED(availableDictionaryHash, availableDictionaryHash && equalSpans(availableDictionaryHash->span(), std::span(m_bestMatchForCompressionDictionary->compressionDictionaryData().hash)));
+            // 17-20. The Available-Dictionary request header is added by the network library (e.g. libsoup),
+            //        not by WebKit, so it is not visible on m_networkLoad->currentRequest(). The hash we matched
+            //        (m_compressionDictionaryHash) is the authoritative value, and hash verification and decoding
+            //        are performed by the network library from the dictionary's buffer, so there is nothing to
+            //        validate here.
 
             // 22. delete `Content-Encoding` from response’s header list.
             m_response.sanitizeHTTPHeaderFields(ResourceResponseBase::SanitizationType::RemoveContentEncoding);
@@ -1858,19 +1825,19 @@ void NetworkResourceLoader::continueWillSendRequest(ResourceRequest&& newRequest
         if (shouldSendResourceLoadMessages() && !newRequest.isNull())
             connectionToWebProcess().networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::ResourceLoadDidPerformHTTPRedirection(webPageProxyID(), resourceLoadInfo(), m_redirectResponse, newRequest), 0);
 
-#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-        if (canUseCache(newRequest)) {
-            protect(m_cache)->retrieveCompressionDictionaryBestMatch(WTF::move(newRequest), m_parameters.options.destination, [this, protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](auto&& mappedBody) mutable {
-                m_bestMatchForCompressionDictionary = WTF::move(mappedBody.bestMatch);
-                if (m_bestMatchForCompressionDictionary) {
-                    LOADER_RELEASE_LOG("Compression dictionary found for %s!", mappedBody.request.url().string().latin1().data());
-                    setCompressionDictionaryRequestHeaders(mappedBody.request, *m_bestMatchForCompressionDictionary);
-                }
-                completionHandler(WTF::move(mappedBody.request));
-            });
-            return;
-        }
-#endif
+// #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+//         if (canUseCache(newRequest)) {
+//             protect(m_cache)->retrieveCompressionDictionaryBestMatch(WTF::move(newRequest), m_parameters.options.destination, [this, protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](auto&& mappedBody) mutable {
+//                 m_bestMatchForCompressionDictionary = WTF::move(mappedBody.bestMatch);
+//                 if (m_bestMatchForCompressionDictionary) {
+//                     LOADER_RELEASE_LOG("Compression dictionary found for %s!", mappedBody.request.url().string().latin1().data());
+//                     setCompressionDictionaryRequestHeaders(mappedBody.request, *m_bestMatchForCompressionDictionary);
+//                 }
+//                 completionHandler(WTF::move(mappedBody.request));
+//             });
+//             return;
+//         }
+// #endif
 
         completionHandler(WTF::move(newRequest));
     } else

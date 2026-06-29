@@ -664,40 +664,24 @@ std::unique_ptr<Entry> Cache::storeCompressionDictionary(const WebCore::Resource
     return cacheEntry;
 }
 
-void Cache::retrieveCompressionDictionaryBestMatch(WebCore::ResourceRequest&& request, WebCore::FetchOptionsDestination destination, Function<void(CompressionDictionaryBestMatchMappedBody&&)>&& completionHandler)
+void Cache::retrieveCompressionDictionaryBestMatchHash(WebCore::ResourceRequest&& request, WebCore::FetchOptionsDestination destination, Function<void(WebCore::ResourceRequest&&, std::optional<CompressionDictionaryMatch>&&)>&& completionHandler)
 {
-    LOG(NetworkCache, "(NetworkProcess) best compression dictionary for %s", request.url().string().latin1().data());
+    LOG(NetworkCache, "(NetworkProcess) retrieving best compression dictionary for %s", request.url().string().latin1().data());
 
-    std::unique_ptr<Entry> bestMatch;
-    m_storage->traverse(compressionDictionaryType(), request.cachePartition(), { }, [protectedThis = Ref { *this }, request = WTF::move(request), bestMatch = WTF::move(bestMatch), destination = destination, completionHandler = WTF::move(completionHandler)](const Storage::Record* record, const Storage::RecordInfo& recordInfo) mutable {
+    auto partition = request.cachePartition();
+    m_storage->traverse(compressionDictionaryType(), partition, { }, [request = WTF::move(request), destination, bestMatchData = std::optional<Entry::CompressionDictionaryData> { }, bestMatchTimestamp = WallTime { }, completionHandler = WTF::move(completionHandler)](const Storage::Record* record, const Storage::RecordInfo&) mutable {
         if (!record) {
-            if (!bestMatch) {
-                CompressionDictionaryBestMatchMappedBody mappedBody;
-                mappedBody.request = WTF::move(request);
-                ASSERT(completionHandler);
-                completionHandler(WTF::move(mappedBody));
-                return;
-            }
-            // Retrieve the full record (including body bytes) for the best match found during traversal.
-            // Traversal only loads the header, so we must do a separate retrieve to get the dictionary content.
-            auto key = bestMatch->key();
-            protectedThis->m_storage->retrieve(key, 1, [completionHandler = WTF::move(completionHandler), request = WTF::move(request)](Storage::Record&& fullRecord, const Storage::Timings&) mutable {
-                CompressionDictionaryBestMatchMappedBody mappedBody;
-                mappedBody.request = WTF::move(request);
-                if (!fullRecord.isNull())
-                    mappedBody.bestMatch = Entry::decodeStorageRecord(fullRecord);
-                ASSERT(completionHandler);
-                completionHandler(WTF::move(mappedBody));
-                return !fullRecord.isNull();
-            });
+            ASSERT(completionHandler);
+            std::optional<CompressionDictionaryMatch> match;
+            if (bestMatchData)
+                match = CompressionDictionaryMatch { bestMatchData->hash, bestMatchData->id };
+            completionHandler(WTF::move(request), WTF::move(match));
             return;
         }
         auto entry = Entry::decodeStorageRecord(*record);
         if (!entry)
             return;
 
-        auto cachePartition = request.cachePartition();
-        ASSERT_UNUSED(cachePartition, equalIgnoringNullity(entry->key().partition(), cachePartition));
         // https://www.rfc-editor.org/info/rfc9842/#section-2.2.2
         auto data = entry->compressionDictionaryData();
         if (!data.matchDest.isEmpty() && !data.matchDest.contains(destination))
@@ -707,26 +691,60 @@ void Cache::retrieveCompressionDictionaryBestMatch(WebCore::ResourceRequest&& re
         auto result = WebCore::URLPattern::create(data.match, WTF::move(dataURL), { });
         if (result.hasException() || result.returnValue()->hasRegExpGroups())
             return;
-        auto urlToMatch = request.url().string();
-        auto testResult = result.returnValue()->test(urlToMatch, String());
+        auto testResult = result.returnValue()->test(request.url().string(), String());
         if (testResult.hasException() || !testResult.returnValue())
             return;
 
-        if (bestMatch) {
-            // Multiple matches.
-            // https://www.rfc-editor.org/rfc/rfc9842#section-2.2.3
-            auto bestMatchData = bestMatch->compressionDictionaryData();
+        if (bestMatchData) {
+            // Multiple matches — pick the better one per RFC 9842 §2.2.3.
             bool isBetterMatch = false;
-            if (data.matchDest.isEmpty() != bestMatchData.matchDest.isEmpty())
+            if (data.matchDest.isEmpty() != bestMatchData->matchDest.isEmpty())
                 isBetterMatch = !data.matchDest.isEmpty();
-            else if (data.match.length() != bestMatchData.match.length())
-                isBetterMatch = data.match.length() > bestMatchData.match.length();
+            else if (data.match.length() != bestMatchData->match.length())
+                isBetterMatch = data.match.length() > bestMatchData->match.length();
             else
-                isBetterMatch = entry->timeStamp() > bestMatch->timeStamp();
+                isBetterMatch = entry->timeStamp() > bestMatchTimestamp;
             if (!isBetterMatch)
                 return;
         }
-        bestMatch = WTF::move(entry);
+        bestMatchData = WTF::move(data);
+        bestMatchTimestamp = entry->timeStamp();
+    });
+}
+
+void Cache::retrieveCompressionDictionaryByHash(const String& partition, std::span<const uint8_t> hashSpan, Function<void(RefPtr<WebCore::SharedBuffer>&&)>&& completionHandler)
+{
+    std::array<uint8_t, Entry::CompressionDictionaryData::hashSize> hash;
+    ASSERT(hashSpan.size() == hash.size());
+    std::copy(hashSpan.begin(), hashSpan.end(), hash.begin());
+
+    m_storage->traverse(compressionDictionaryType(), partition, { },
+        [protectedThis = Ref { *this }, hash, matchedKey = std::optional<Key> { }, completionHandler = WTF::move(completionHandler)]
+        (const Storage::Record* record, const Storage::RecordInfo&) mutable {
+        if (!record) {
+            if (!matchedKey) {
+                completionHandler(nullptr);
+                return;
+            }
+            protectedThis->m_storage->retrieve(*matchedKey, 1, [completionHandler = WTF::move(completionHandler)](Storage::Record&& fullRecord, const Storage::Timings&) mutable {
+                if (fullRecord.isNull()) {
+                    completionHandler(nullptr);
+                    return false;
+                }
+                auto entry = Entry::decodeStorageRecord(fullRecord);
+                RefPtr<WebCore::SharedBuffer> buffer = entry && entry->buffer() ? entry->buffer()->makeContiguous().ptr() : nullptr;
+                completionHandler(WTF::move(buffer));
+                return true;
+            });
+            return;
+        }
+        if (matchedKey)
+            return;
+        auto entry = Entry::decodeStorageRecord(*record);
+        if (!entry)
+            return;
+        if (entry->compressionDictionaryData().hash == hash)
+            matchedKey = entry->key();
     });
 }
 #endif
@@ -989,7 +1007,7 @@ void Cache::deleteDataForRegistrableDomains(const Vector<WebCore::RegistrableDom
         }
 
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-        traverse(compressionDictionaryType(), [this, protectedThis = Ref { *this }, domainSet = WTF::move(domainSet), completionHandler = WTF::move(completionHandler), keysToDelete = WTF::move(keysToDelete), domainsDeleted = WTF::move(domainsDeleted)](auto* traversalEntry) mutable {
+        traverse(compressionDictionaryType(), [protectedThis = Ref { *this }, domainSet = WTF::move(domainSet), completionHandler = WTF::move(completionHandler), keysToDelete = WTF::move(keysToDelete), domainsDeleted = WTF::move(domainsDeleted)](auto* traversalEntry) mutable {
             if (traversalEntry) {
                 auto domain = WebCore::RegistrableDomain { traversalEntry->entry.response().url() };
                 if (domainSet.contains(domain)) {
@@ -999,7 +1017,7 @@ void Cache::deleteDataForRegistrableDomains(const Vector<WebCore::RegistrableDom
                 return;
             }
 
-            remove(keysToDelete, [completionHandler = WTF::move(completionHandler), domainsDeleted = WTF::move(domainsDeleted)]() mutable {
+            protectedThis->remove(keysToDelete, [completionHandler = WTF::move(completionHandler), domainsDeleted = WTF::move(domainsDeleted)]() mutable {
                 completionHandler(WTF::move(domainsDeleted));
             });
         });

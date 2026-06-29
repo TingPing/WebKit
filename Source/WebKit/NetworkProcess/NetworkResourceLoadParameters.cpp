@@ -95,7 +95,8 @@ NetworkLoadParameters NetworkResourceLoadParameters::networkLoadParameters() con
         isInitiatedByDedicatedWorker,
         requiredCookiesVersion,
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-        nullptr, // compressionDictionaryBuffer
+        std::nullopt, // compressionDictionaryHash
+        options.destination, // compressionDictionaryDestination
 #endif
     };
 }

@@ -29,8 +29,10 @@
 #include "AuthenticationChallengeDisposition.h"
 #include "AuthenticationManager.h"
 #include "Download.h"
+#include "NetworkCache.h"
 #include "NetworkLoad.h"
 #include "NetworkProcess.h"
+#include "NetworkSession.h"
 #include "NetworkSessionSoup.h"
 #include "PrivateRelayed.h"
 #include "WebErrors.h"
@@ -64,7 +66,8 @@ NetworkDataTaskSoup::NetworkDataTaskSoup(NetworkSession& session, NetworkDataTas
     , m_shouldPreconnectOnly(parameters.shouldPreconnectOnly)
     , m_sourceOrigin(parameters.sourceOrigin)
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-    , m_compressionDictionary(parameters.compressionDictionaryBuffer)
+    , m_compressionDictionaryHash(parameters.compressionDictionaryHash)
+    , m_compressionDictionaryDestination(parameters.compressionDictionaryDestination)
 #endif
     , m_timeoutSource(RunLoop::mainSingleton(), "NetworkDataTaskSoup::TimeoutSource"_s, this, &NetworkDataTaskSoup::timeoutFired)
 {
@@ -160,10 +163,10 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
     }
 
 #if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
-    if (m_compressionDictionary) {
-        auto span = m_compressionDictionary->span();
-        GRefPtr<GBytes> bytes = adoptGRef(g_bytes_new(span.data(), span.size()));
-        soup_message_set_compression_dictionary(m_soupMessage.get(), bytes.get());
+    if (m_compressionDictionaryHash) {
+        GRefPtr<GBytes> hashBytes = adoptGRef(g_bytes_new(m_compressionDictionaryHash->data(), m_compressionDictionaryHash->size()));
+        soup_message_set_compression_dictionary_hash(m_soupMessage.get(), hashBytes.get());
+        g_signal_connect(m_soupMessage.get(), "request-compression-dictionary", G_CALLBACK(requestCompressionDictionaryCallback), this);
     }
 #endif
 
@@ -878,12 +881,38 @@ void NetworkDataTaskSoup::continueHTTPRedirection()
             if (!request.hasHTTPHeaderField(HTTPHeaderName::UserAgent))
                 request.setHTTPUserAgent(userAgent);
         }
-        createRequest(WTF::move(request), wasBlockingCookies);
-        if (m_soupMessage && m_state != State::Suspended) {
-            m_state = State::Suspended;
-            resume();
+
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+        // The best matching dictionary depends on the request URL, so it must be
+        // recomputed for the redirected URL before the request is created.
+        if (auto* cache = m_session->cache()) {
+            cache->retrieveCompressionDictionaryBestMatchHash(WTF::move(request), m_compressionDictionaryDestination, [this, protectedThis = protect(*this), wasBlockingCookies](ResourceRequest&& request, std::optional<NetworkCache::Cache::CompressionDictionaryMatch>&& match) mutable {
+                // After clearRequest() during a redirect the state is Completed; that is expected here and
+                // continueCreateRequestForRedirection() will re-create the message. Only bail on an cancel.
+                if (m_state == State::Canceling)
+                    return;
+                if (match) {
+                    m_compressionDictionaryHash = match->hash;
+                    request.setCompressionDictionaryIDHeader(match->id);
+                } else
+                    m_compressionDictionaryHash = std::nullopt;
+                continueCreateRequestForRedirection(WTF::move(request), wasBlockingCookies);
+            });
+            return;
         }
+        m_compressionDictionaryHash = std::nullopt;
+#endif
+        continueCreateRequestForRedirection(WTF::move(request), wasBlockingCookies);
     });
+}
+
+void NetworkDataTaskSoup::continueCreateRequestForRedirection(ResourceRequest&& request, WasBlockingCookies wasBlockingCookies)
+{
+    createRequest(WTF::move(request), wasBlockingCookies);
+    if (m_soupMessage && m_state != State::Suspended) {
+        m_state = State::Suspended;
+        resume();
+    }
 }
 
 void NetworkDataTaskSoup::readCallback(GInputStream* inputStream, GAsyncResult* result, NetworkDataTaskSoup* task)
@@ -1366,6 +1395,49 @@ void NetworkDataTaskSoup::startingCallback(SoupMessage* soupMessage, NetworkData
     ASSERT(task->m_soupMessage.get() == soupMessage);
     task->didStartRequest();
 }
+
+#if ENABLE(COMPRESSION_DICTIONARY_TRANSPORT)
+gboolean NetworkDataTaskSoup::requestCompressionDictionaryCallback(SoupMessage* soupMessage, SoupCompressionDictionaryRequest* request, NetworkDataTaskSoup* task)
+{
+    if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client) {
+        soup_compression_dictionary_request_cancel(request);
+        return TRUE;
+    }
+
+    ASSERT(task->m_soupMessage.get() == soupMessage);
+    task->requestCompressionDictionary(request);
+    return TRUE;
+}
+
+void NetworkDataTaskSoup::requestCompressionDictionary(SoupCompressionDictionaryRequest* request)
+{
+    auto* cache = m_session->cache();
+    if (!cache) {
+        soup_compression_dictionary_request_cancel(request);
+        return;
+    }
+
+    ASSERT(m_compressionDictionaryHash);
+    cache->retrieveCompressionDictionaryByHash(m_currentRequest.cachePartition(),
+        std::span { *m_compressionDictionaryHash },
+        [this, protectedThis = protect(*this), request = GRefPtr<SoupCompressionDictionaryRequest>(request)](RefPtr<WebCore::SharedBuffer>&& buffer) {
+            if (m_state == State::Canceling || m_state == State::Completed || !m_soupMessage) {
+                soup_compression_dictionary_request_cancel(request.get());
+                return;
+            }
+            if (!buffer) {
+                soup_compression_dictionary_request_cancel(request.get());
+                return;
+            }
+            RefPtr dict = WTF::move(buffer);
+            auto span = dict->span();
+            GRefPtr<GBytes> bytes = adoptGRef(g_bytes_new_with_free_func(span.data(), span.size(),
+                [](gpointer userData) { static_cast<WebCore::SharedBuffer*>(userData)->deref(); },
+                dict.leakRef()));
+            soup_compression_dictionary_request_set_dictionary(request.get(), bytes.get());
+        });
+}
+#endif
 
 bool NetworkDataTaskSoup::shouldAllowHSTSPolicySetting() const
 {
