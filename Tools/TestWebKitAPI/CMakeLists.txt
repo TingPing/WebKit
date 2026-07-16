@@ -265,6 +265,7 @@ if (ENABLE_WEBCORE)
         Tests/WebCore/TimeRanges.cpp
         Tests/WebCore/TransformationMatrix.cpp
         Tests/WebCore/URLParserTextEncoding.cpp
+        Tests/WebCore/URLPatternTests.cpp
         Tests/WebCore/WritingModeTests.cpp
         Tests/WebCore/XRCompositionLayer.cpp
     )
