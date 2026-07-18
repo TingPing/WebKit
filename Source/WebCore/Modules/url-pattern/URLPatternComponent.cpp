@@ -41,7 +41,19 @@
 namespace WebCore {
 namespace URLPatternUtilities {
 
+// Parsed representation of a component used to match without a regular-expression engine.
+// The delimiter and ignoreCase are those the part list was parsed with, and are needed to
+// reproduce segment-wildcard and case-folding semantics at match time.
+struct StructuralPattern {
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(StructuralPattern);
+
+    Vector<Part> partList;
+    String delimiterCodepoint;
+    bool ignoreCase { false };
+};
+
 WTF_MAKE_TZONE_ALLOCATED_IMPL(URLPatternComponent::CompiledPattern);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(StructuralPattern);
 
 URLPatternComponent::URLPatternComponent() = default;
 
@@ -53,6 +65,14 @@ URLPatternComponent& URLPatternComponent::operator=(URLPatternComponent&&) = def
 URLPatternComponent::URLPatternComponent(String&& patternString, std::unique_ptr<CompiledPattern>&& compiled, Vector<String>&& groupNameList, bool hasRegexpGroupsFromPartsList)
     : m_patternString(WTF::move(patternString))
     , m_compiledPattern(WTF::move(compiled))
+    , m_groupNameList(WTF::move(groupNameList))
+    , m_hasRegexGroupsFromPartList(hasRegexpGroupsFromPartsList)
+{
+}
+
+URLPatternComponent::URLPatternComponent(String&& patternString, std::unique_ptr<StructuralPattern>&& structural, Vector<String>&& groupNameList, bool hasRegexpGroupsFromPartsList)
+    : m_patternString(WTF::move(patternString))
+    , m_structuralPattern(WTF::move(structural))
     , m_groupNameList(WTF::move(groupNameList))
     , m_hasRegexGroupsFromPartList(hasRegexpGroupsFromPartsList)
 {
@@ -92,10 +112,208 @@ ExceptionOr<URLPatternComponent> URLPatternComponent::compile(StringView input, 
     return URLPatternComponent { WTF::move(patternString), WTF::move(compiled), WTF::move(nameList), hasRegexGroups };
 }
 
+ExceptionOr<URLPatternComponent> URLPatternComponent::compileWithoutRegExp(StringView input, EncodingCallbackType type, const URLPatternStringOptions& options)
+{
+    auto maybePartList = URLPatternParser::parse(input, options, type);
+    if (maybePartList.hasException())
+        return maybePartList.releaseException();
+    Vector<Part> partList = maybePartList.releaseReturnValue();
+
+    // A regexp group cannot be matched without a regular-expression engine. Fail as early as
+    // possible — before doing any further work — so createWithoutRegExpSupport() rejects such a
+    // pattern outright rather than producing one that can never be matched.
+    bool hasRegexGroups = partList.containsIf([](auto& part) {
+        return part.type == PartType::Regexp;
+    });
+    if (hasRegexGroups)
+        return Exception { ExceptionCode::TypeError, "URLPattern contains a regular expression group, which is not supported without a regular-expression engine."_s };
+
+    Vector<String> nameList;
+    for (auto& part : partList) {
+        if (part.type != PartType::FixedText)
+            nameList.append(part.name);
+    }
+
+    String patternString = generatePatternString(partList, options);
+
+    if (options.ignoreCase) {
+        // Match case-insensitively by case-folding the literal parts (prefix, fixed value, suffix)
+        // up front; the input string is folded to match in matchesWithoutRegExp().
+        for (auto& part : partList) {
+            part.prefix = part.prefix.foldCase();
+            part.value = part.value.foldCase();
+            part.suffix = part.suffix.foldCase();
+        }
+    }
+
+    auto structural = makeUnique<StructuralPattern>(StructuralPattern { WTF::move(partList), options.delimiterCodepoint, options.ignoreCase });
+
+    return URLPatternComponent { WTF::move(patternString), WTF::move(structural), WTF::move(nameList), hasRegexGroups };
+}
+
+static bool isComponentDelimiter(char16_t character, StringView delimiterCodepoint)
+{
+    // The delimiter, when present, is always a single ASCII code point ("/" for paths, "." for hosts).
+    return !delimiterCodepoint.isEmpty() && character == delimiterCodepoint[0];
+}
+
+static bool literalMatchesAt(StringView input, unsigned position, StringView literal, unsigned& endPosition)
+{
+    if (position > input.length() || literal.length() > input.length() - position)
+        return false;
+
+    // Both the input and the literal have already been case-folded when the component was compiled
+    // with ignoreCase, so this comparison is always case-sensitive.
+    if (StringView(input).substring(position, literal.length()) != literal)
+        return false;
+
+    endPosition = position + literal.length();
+    return true;
+}
+
+// Appends every end position reachable by matching exactly one occurrence of `part` (prefix, then
+// its core, then suffix) starting at `start`. This mirrors how generateRegexAndNameList() would
+// encode the part, but evaluated directly against the input rather than via a regular expression.
+static void appendSingleOccurrenceEnds(const Part& part, StringView input, unsigned start, StringView delimiterCodepoint, Vector<unsigned>& ends)
+{
+    unsigned length = input.length();
+
+    unsigned afterPrefix;
+    if (!literalMatchesAt(input, start, part.prefix, afterPrefix))
+        return;
+
+    auto appendWithSuffix = [&](unsigned afterCore) {
+        unsigned afterSuffix;
+        if (literalMatchesAt(input, afterCore, part.suffix, afterSuffix))
+            ends.append(afterSuffix);
+    };
+
+    switch (part.type) {
+    case PartType::FixedText: {
+        unsigned afterCore;
+        if (literalMatchesAt(input, afterPrefix, part.value, afterCore))
+            appendWithSuffix(afterCore);
+        break;
+    }
+    case PartType::SegmentWildcard: {
+        // Matches one or more code units, none of which is the component delimiter.
+        for (unsigned position = afterPrefix; position < length && !isComponentDelimiter(input[position], delimiterCodepoint); ) {
+            ++position;
+            appendWithSuffix(position);
+        }
+        break;
+    }
+    case PartType::FullWildcard: {
+        // Matches zero or more code units of any kind.
+        for (unsigned position = afterPrefix; position <= length; ++position)
+            appendWithSuffix(position);
+        break;
+    }
+    case PartType::Regexp:
+        // Cannot be matched without a regular-expression engine; callers reject via hasRegexGroupsFromPartList().
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
+    }
+}
+
+static void markReachableEnds(const Part& part, StringView input, unsigned start, StringView delimiterCodepoint, Vector<bool>& reachable)
+{
+    switch (part.modifier) {
+    case Modifier::None: {
+        Vector<unsigned> ends;
+        appendSingleOccurrenceEnds(part, input, start, delimiterCodepoint, ends);
+        for (unsigned end : ends)
+            reachable[end] = true;
+        return;
+    }
+    case Modifier::Optional: {
+        reachable[start] = true;
+        Vector<unsigned> ends;
+        appendSingleOccurrenceEnds(part, input, start, delimiterCodepoint, ends);
+        for (unsigned end : ends)
+            reachable[end] = true;
+        return;
+    }
+    case Modifier::ZeroOrMore:
+    case Modifier::OneOrMore: {
+        if (part.modifier == Modifier::ZeroOrMore)
+            reachable[start] = true;
+
+        Vector<bool> expanded(FillWith { }, input.length() + 1, false);
+        Vector<unsigned> worklist;
+        worklist.append(start);
+        while (!worklist.isEmpty()) {
+            unsigned position = worklist.takeLast();
+            if (expanded[position])
+                continue;
+            expanded[position] = true;
+
+            Vector<unsigned> ends;
+            appendSingleOccurrenceEnds(part, input, position, delimiterCodepoint, ends);
+            for (unsigned end : ends) {
+                reachable[end] = true;
+                if (!expanded[end])
+                    worklist.append(end);
+            }
+        }
+        return;
+    }
+    }
+}
+
+static bool matchPartListFrom(const Vector<Part>& parts, unsigned partIndex, unsigned position, StringView input, StringView delimiterCodepoint, Vector<std::optional<bool>>& memo)
+{
+    unsigned length = input.length();
+    if (partIndex == parts.size())
+        return position == length;
+
+    unsigned key = partIndex * (length + 1) + position;
+    if (memo[key])
+        return *memo[key];
+
+    Vector<bool> reachable(FillWith { }, length + 1, false);
+    markReachableEnds(parts[partIndex], input, position, delimiterCodepoint, reachable);
+
+    bool result = false;
+    for (unsigned end = 0; end <= length && !result; ++end) {
+        if (reachable[end] && matchPartListFrom(parts, partIndex + 1, end, input, delimiterCodepoint, memo))
+            result = true;
+    }
+
+    memo[key] = result;
+    return result;
+}
+
+bool URLPatternComponent::matchesWithoutRegExp(StringView input) const
+{
+    RELEASE_ASSERT(m_structuralPattern);
+    ASSERT(!m_hasRegexGroupsFromPartList);
+
+    String foldedInput;
+    if (m_structuralPattern->ignoreCase) {
+        foldedInput = input.toString().foldCase();
+        input = foldedInput;
+    }
+
+    const auto& parts = m_structuralPattern->partList;
+    unsigned length = input.length();
+    Vector<std::optional<bool>> memo((parts.size() + 1) * (length + 1));
+    return matchPartListFrom(parts, 0, 0, input, m_structuralPattern->delimiterCodepoint, memo);
+}
+
+static constexpr std::array specialSchemeList { "ftp"_s, "file"_s, "http"_s, "https"_s, "ws"_s, "wss"_s };
+
+// https://urlpattern.spec.whatwg.org/#protocol-component-matches-a-special-scheme
+bool URLPatternComponent::matchesSpecialSchemeProtocolWithoutRegExp() const
+{
+    return std::ranges::any_of(specialSchemeList, [this](auto scheme) {
+        return matchesWithoutRegExp(StringView { scheme });
+    });
+}
+
 // https://urlpattern.spec.whatwg.org/#protocol-component-matches-a-special-scheme
 bool URLPatternComponent::matchSpecialSchemeProtocol() const
 {
-    static constexpr std::array specialSchemeList { "ftp"_s, "file"_s, "http"_s, "https"_s, "ws"_s, "wss"_s };
     return std::ranges::any_of(specialSchemeList, [this](const String& scheme) {
         return componentExec(scheme).has_value();
     });

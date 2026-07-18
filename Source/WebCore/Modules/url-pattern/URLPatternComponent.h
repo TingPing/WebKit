@@ -47,10 +47,16 @@ template<typename> class ExceptionOr;
 
 namespace URLPatternUtilities {
 struct URLPatternStringOptions;
+struct StructuralPattern;
 
 class URLPatternComponent {
 public:
     static ExceptionOr<URLPatternComponent> compile(StringView, EncodingCallbackType, const URLPatternStringOptions&);
+
+    static ExceptionOr<URLPatternComponent> compileWithoutRegExp(StringView, EncodingCallbackType, const URLPatternStringOptions&);
+    bool matchesWithoutRegExp(StringView input) const;
+    bool matchesSpecialSchemeProtocolWithoutRegExp() const;
+
     const String& patternString() const LIFETIME_BOUND { return m_patternString; }
     bool hasRegexGroupsFromPartList() const { return m_hasRegexGroupsFromPartList; }
     bool matchSpecialSchemeProtocol() const;
@@ -70,9 +76,11 @@ private:
     };
 
     URLPatternComponent(String&&, std::unique_ptr<CompiledPattern>&&, Vector<String>&&, bool);
+    URLPatternComponent(String&&, std::unique_ptr<StructuralPattern>&&, Vector<String>&&, bool);
 
     String m_patternString;
     std::unique_ptr<CompiledPattern> m_compiledPattern;
+    std::unique_ptr<StructuralPattern> m_structuralPattern;
     Vector<String> m_groupNameList;
     bool m_hasRegexGroupsFromPartList { false };
 };
