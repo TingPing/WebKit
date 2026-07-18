@@ -1036,12 +1036,12 @@ void NetworkResourceLoader::processUseAsDictionaryHeader(const WebCore::Resource
     // 19.8 Let pattern be the result of creating a URL pattern given the bare item of dictionaryValue["match"], the serialization of request’s current URL, and an empty map. If this throws an exception, then return response.
     String currentURL = m_networkLoad->currentRequest().url().string();
 
-    auto result = WebCore::URLPattern::create(data.match, WTF::move(currentURL), { });
-    if (result.hasException())
-        return;
-
     // 19.9 If pattern is failure or pattern has regexp groups, then return response.
-    if (result.returnValue()->hasRegExpGroups())
+    // The pattern is matched without a regular-expression engine so that no YARR code runs on this
+    // untrusted, network-supplied value inside the network process; createWithoutRegExpSupport()
+    // fails if the pattern is invalid or contains regexp groups.
+    auto result = WebCore::URLPattern::createWithoutRegExpSupport(data.match, WTF::move(currentURL), { });
+    if (result.hasException())
         return;
 
     // 19.10 Let expirationTime be the time at which the response becomes a stale response.

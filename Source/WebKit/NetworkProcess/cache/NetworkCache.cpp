@@ -688,11 +688,10 @@ void Cache::retrieveCompressionDictionaryBestMatchHash(WebCore::ResourceRequest&
             return;
 
         auto dataURL = entry->response().url().string();
-        auto result = WebCore::URLPattern::create(data.match, WTF::move(dataURL), { });
-        if (result.hasException() || result.returnValue()->hasRegExpGroups())
+        auto result = WebCore::URLPattern::createWithoutRegExpSupport(data.match, WTF::move(dataURL), { });
+        if (result.hasException())
             return;
-        auto testResult = result.returnValue()->test(request.url().string(), String());
-        if (testResult.hasException() || !testResult.returnValue())
+        if (!result.returnValue()->testWithoutRegExp(request.url()))
             return;
 
         if (bestMatchData) {
