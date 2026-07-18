@@ -31,6 +31,7 @@
 #include "HTTPParsers.h"
 #include "ResourceRequest.h"
 #include "URLPatternCanonical.h"
+#include "URLPatternComponent.h"
 #include "URLPatternParser.h"
 #include <wtf/CrossThreadCopier.h>
 
@@ -87,25 +88,6 @@ static URLPatternUtilities::URLPatternStringOptions computeOptions(EncodingCallb
     return { };
 }
 
-static Expected<String, ExceptionData> validateAndCompileURLPatternComponent(StringView component, EncodingCallbackType type, bool shouldIgnoreCase)
-{
-    auto options = computeOptions(type, shouldIgnoreCase);
-    auto result = URLPatternUtilities::URLPatternParser::parse(component, options, type);
-    if (result.hasException())
-        return makeUnexpected(ExceptionData { result.exception().code(), result.releaseException().releaseMessage() });
-
-    auto parts = result.releaseReturnValue();
-
-    bool hasRegexGroups = parts.containsIf([](auto& part) {
-        return part.type == URLPatternUtilities::PartType::Regexp;
-    });
-    ASSERT(!hasRegexGroups);
-    if (hasRegexGroups)
-        return makeUnexpected(ExceptionData { ExceptionCode::TypeError, "Service Worker route url pattern has regexp groups"_s });
-
-    return generateRegexAndNameList(parts, options).first;
-}
-
 static std::optional<ExceptionData> validateAndUpdateURLPatternComponent(String& component, EncodingCallbackType type, bool shouldIgnoreCase)
 {
     if (component == "*"_s) {
@@ -113,11 +95,12 @@ static std::optional<ExceptionData> validateAndUpdateURLPatternComponent(String&
         return { };
     }
 
-    auto exceptionOrCompiledExpression = validateAndCompileURLPatternComponent(component, type, shouldIgnoreCase);
-    if (!exceptionOrCompiledExpression)
-        return exceptionOrCompiledExpression.error();
+    auto compiled = URLPatternUtilities::URLPatternComponent::compileWithoutRegExp(component, type, computeOptions(type, shouldIgnoreCase));
+    if (compiled.hasException()) {
+        auto exception = compiled.releaseException();
+        return ExceptionData { exception.code(), exception.releaseMessage() };
+    }
 
-    component = exceptionOrCompiledExpression.value();
     return { };
 }
 
@@ -170,48 +153,44 @@ std::optional<ExceptionData> validateServiceWorkerRoute(ServiceWorkerRoute& rout
     return validateServiceWorkerRouteCondition(route.condition);
 }
 
-static bool matchURLPatternComponent(const String& pattern, StringView value, bool shouldIgnoreCase)
+static bool matchURLPatternComponent(const String& pattern, EncodingCallbackType type, StringView value, bool shouldIgnoreCase)
 {
     if (pattern.isNull())
         return true;
 
-#if !PLATFORM(COCOA)
-    UNUSED_PARAM(shouldIgnoreCase);
-    // FIXME: Fully support pattern matching, check for case, whitespace...
-    bool isPatternFinishingByStar = pattern.endsWith("*"_s);
-    return isPatternFinishingByStar ? value.startsWith(pattern.substring(pattern.length() - 1)) : value == pattern;
-#else
-    return isRegexpMatching(pattern, value, shouldIgnoreCase);
-#endif
+    auto component = URLPatternUtilities::URLPatternComponent::compileWithoutRegExp(pattern, type, computeOptions(type, shouldIgnoreCase));
+    if (component.hasException())
+        return false;
+    return component.returnValue().matchesWithoutRegExp(value);
 }
 
 static bool matchURLPattern(const ServiceWorkerRoutePattern& urlPattern, const URL& url)
 {
-    if (!matchURLPatternComponent(urlPattern.protocol, url.protocol(), urlPattern.shouldIgnoreCase))
+    if (!matchURLPatternComponent(urlPattern.protocol, EncodingCallbackType::Protocol, url.protocol(), urlPattern.shouldIgnoreCase))
         return false;
 
-    if (!matchURLPatternComponent(urlPattern.username, url.encodedUser(), urlPattern.shouldIgnoreCase))
+    if (!matchURLPatternComponent(urlPattern.username, EncodingCallbackType::Username, url.encodedUser(), urlPattern.shouldIgnoreCase))
         return false;
 
-    if (!matchURLPatternComponent(urlPattern.password, url.encodedPassword(), urlPattern.shouldIgnoreCase))
+    if (!matchURLPatternComponent(urlPattern.password, EncodingCallbackType::Password, url.encodedPassword(), urlPattern.shouldIgnoreCase))
         return false;
 
-    if (!matchURLPatternComponent(urlPattern.hostname, url.host(), urlPattern.shouldIgnoreCase))
+    if (!matchURLPatternComponent(urlPattern.hostname, EncodingCallbackType::Host, url.host(), urlPattern.shouldIgnoreCase))
         return false;
 
     String port;
     if (auto portNumber = url.port())
         port = String::number(*portNumber);
-    if (!matchURLPatternComponent(urlPattern.port, port, urlPattern.shouldIgnoreCase))
+    if (!matchURLPatternComponent(urlPattern.port, EncodingCallbackType::Port, port, urlPattern.shouldIgnoreCase))
         return false;
 
-    if (!matchURLPatternComponent(urlPattern.pathname, url.path(), urlPattern.shouldIgnoreCase))
+    if (!matchURLPatternComponent(urlPattern.pathname, EncodingCallbackType::Path, url.path(), urlPattern.shouldIgnoreCase))
         return false;
 
-    if (!matchURLPatternComponent(urlPattern.search, url.query(), urlPattern.shouldIgnoreCase))
+    if (!matchURLPatternComponent(urlPattern.search, EncodingCallbackType::Search, url.query(), urlPattern.shouldIgnoreCase))
         return false;
 
-    return matchURLPatternComponent(urlPattern.hash, url.fragmentIdentifier(), urlPattern.shouldIgnoreCase);
+    return matchURLPatternComponent(urlPattern.hash, EncodingCallbackType::Hash, url.fragmentIdentifier(), urlPattern.shouldIgnoreCase);
 }
 
 // https://w3c.github.io/ServiceWorker/#match-router-condition

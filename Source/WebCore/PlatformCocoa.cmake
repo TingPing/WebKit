@@ -495,8 +495,6 @@ list(APPEND WebCore_SOURCES
     testing/MockContentFilterManager.cpp
     testing/MockContentFilterSettings.cpp
     testing/MockParentalControlsURLFilter.mm
-
-    workers/service/ServiceWorkerRoute.mm
 )
 
 list(APPEND WebCore_USER_AGENT_STYLE_SHEETS

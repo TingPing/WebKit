@@ -1525,7 +1525,6 @@
 		4181C5CD2555836900AEB0FF /* LibWebRTCRtpTransformableFrame.h in Headers */ = {isa = PBXBuildFile; fileRef = 4181C5CC2555836800AEB0FF /* LibWebRTCRtpTransformableFrame.h */; };
 		4181C5D12555895600AEB0FF /* LibWebRTCRtpTransformBackend.h in Headers */ = {isa = PBXBuildFile; fileRef = 4181C5CF2555895600AEB0FF /* LibWebRTCRtpTransformBackend.h */; };
 		418205471E53E98C00D62207 /* RTCController.h in Headers */ = {isa = PBXBuildFile; fileRef = 418205451E53C8CD00D62207 /* RTCController.h */; };
-		41832D3A2F16461600103096 /* ServiceWorkerRoute.mm in Sources */ = {isa = PBXBuildFile; fileRef = 41C4FE9F2F0C253200AF90B8 /* ServiceWorkerRoute.mm */; settings = {COMPILER_FLAGS = "-fobjc-arc"; }; };
 		4184F5161EAF05A800F18BF0 /* OrientationNotifier.h in Headers */ = {isa = PBXBuildFile; fileRef = 4184F5151EAF059800F18BF0 /* OrientationNotifier.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		41860F0D2847A49600E4A395 /* FetchEvent.h in Headers */ = {isa = PBXBuildFile; fileRef = 41AF37881F8C1E7900111C31 /* FetchEvent.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		41860F0E2847A58B00E4A395 /* ExtendableEvent.h in Headers */ = {isa = PBXBuildFile; fileRef = 41AF378A1F8C1E7A00111C31 /* ExtendableEvent.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -11488,7 +11487,6 @@
 		41C3B89E2649B1B7004ED4DE /* AudioMediaStreamTrackRendererInternalUnit.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = AudioMediaStreamTrackRendererInternalUnit.cpp; sourceTree = "<group>"; };
 		41C3B89F2649B1B7004ED4DE /* AudioMediaStreamTrackRendererInternalUnit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioMediaStreamTrackRendererInternalUnit.h; sourceTree = "<group>"; };
 		41C3B8A02649B1B7004ED4DE /* AudioMediaStreamTrackRendererUnit.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = AudioMediaStreamTrackRendererUnit.cpp; sourceTree = "<group>"; };
-		41C4FE9F2F0C253200AF90B8 /* ServiceWorkerRoute.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ServiceWorkerRoute.mm; sourceTree = "<group>"; };
 		41C6B69C2E20E6BE009E1D19 /* LibWebRTCRefWrappers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = LibWebRTCRefWrappers.h; path = libwebrtc/LibWebRTCRefWrappers.h; sourceTree = "<group>"; };
 		41C7E1051E6A54360027B4DE /* CanvasCaptureMediaStreamTrack.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CanvasCaptureMediaStreamTrack.cpp; sourceTree = "<group>"; };
 		41C7E1061E6A54360027B4DE /* CanvasCaptureMediaStreamTrack.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CanvasCaptureMediaStreamTrack.h; sourceTree = "<group>"; };
@@ -29244,7 +29242,6 @@
 				51F1754A1F3EBC0C00C74950 /* ServiceWorkerRegistrationOptions.h */,
 				419B36162D50FB4600F11700 /* ServiceWorkerRoute.cpp */,
 				419B36152D50FB4600F11700 /* ServiceWorkerRoute.h */,
-				41C4FE9F2F0C253200AF90B8 /* ServiceWorkerRoute.mm */,
 				515E37F41FAA938800D7F22A /* ServiceWorkerTypes.h */,
 				51F175471F3EBC0C00C74950 /* ServiceWorkerUpdateViaCache.h */,
 				51F175461F3EBC0C00C74950 /* ServiceWorkerUpdateViaCache.idl */,
@@ -38231,8 +38228,8 @@
 				BCCE029B2E789AD90028EA38 /* StyleSingleAnimationRangeName.h */,
 				BC73202B2E73487A00A6584F /* StyleSingleAnimationTimeline.cpp */,
 				BC73201B2E7343D900A6584F /* StyleSingleAnimationTimeline.h */,
-				715FD2F6300838CD00E41A1C /* StyleSingleAnimationTrigger.h */,
 				715FD2F7300838CD00E41A1C /* StyleSingleAnimationTrigger.cpp */,
+				715FD2F6300838CD00E41A1C /* StyleSingleAnimationTrigger.h */,
 			);
 			path = animations;
 			sourceTree = "<group>";
@@ -47265,7 +47262,6 @@
 				E451C6322394031A00993190 /* MarginTypes.h in Headers */,
 				CE1866451F72E5B400A0CAB6 /* MarkedText.h in Headers */,
 				93309DF8099E64920056E581 /* markup.h in Headers */,
-				715FD2F8300838D500E41A1C /* StyleSingleAnimationTrigger.h in Headers */,
 				9728C3141268E4390041E89B /* MarkupAccumulator.h in Headers */,
 				3A18A2ED2AFEAA7C00DB976C /* MarkupExclusionRule.h in Headers */,
 				00C60E3F13D76D7E0092A275 /* MarkupTokenizerInlines.h in Headers */,
@@ -49122,6 +49118,7 @@
 				BC73201F2E7343E800A6584F /* StyleSingleAnimationRange.h in Headers */,
 				BCCE029C2E789AD90028EA38 /* StyleSingleAnimationRangeName.h in Headers */,
 				BC73201D2E7343E800A6584F /* StyleSingleAnimationTimeline.h in Headers */,
+				715FD2F8300838D500E41A1C /* StyleSingleAnimationTrigger.h in Headers */,
 				BCCE02912E766AA30028EA38 /* StyleSingleTransitionDelay.h in Headers */,
 				BCCE02922E766AAA0028EA38 /* StyleSingleTransitionDuration.h in Headers */,
 				BC7320022E732F3F00A6584F /* StyleSingleTransitionProperty.h in Headers */,
@@ -50937,7 +50934,6 @@
 				43B85ED418CBEC5200E31AF4 /* SelectorPseudoClassAndCompatibilityElementMap.cpp in Sources */,
 				26AA0F9E18D2A18B00419381 /* SelectorPseudoElementMap.cpp in Sources */,
 				5CFC9C842B71AE1800F8D289 /* SerializedPlatformDataCueValue.mm in Sources */,
-				41832D3A2F16461600103096 /* ServiceWorkerRoute.mm in Sources */,
 				7CD58DFD1F9565A800112791 /* Settings.cpp in Sources */,
 				46C963C82B6CA1BC002F46D1 /* ShareableBitmapCG.mm in Sources */,
 				B6F201102EAC22B200BBF4AA /* ShareableSpatialImage.cpp in Sources */,
