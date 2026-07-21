@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <WebCore/URLPatternStructuralMatcher.h>
+
 #include <optional>
 #include <wtf/UniqueRef.h>
 #include <wtf/Vector.h>
@@ -52,6 +54,10 @@ struct URLPatternStringOptions;
 class URLPatternComponent {
 public:
     static ExceptionOr<URLPatternComponent> compile(StringView, EncodingCallbackType, const URLPatternStringOptions&);
+
+    static ExceptionOr<URLPatternComponent> compileWithoutRegExp(StringView, EncodingCallbackType, const URLPatternStringOptions&);
+    bool matchesWithoutRegExp(StringView input) const;
+
     const String& patternString() const LIFETIME_BOUND { return m_patternString; }
     bool hasRegexGroupsFromPartList() const { return m_hasRegexGroupsFromPartList; }
     bool matchSpecialSchemeProtocol() const;
@@ -69,9 +75,11 @@ private:
     };
 
     URLPatternComponent(String&&, std::optional<CompiledPattern>&&, Vector<String>&&, bool);
+    URLPatternComponent(String&&, std::optional<URLPatternStructuralMatcher>&&, Vector<String>&&, bool);
 
     String m_patternString;
     std::optional<CompiledPattern> m_compiledPattern;
+    std::optional<URLPatternStructuralMatcher> m_structuralMatcher;
     Vector<String> m_groupNameList;
     bool m_hasRegexGroupsFromPartList { false };
 };
