@@ -211,6 +211,10 @@ public:
     };
     void traverse(const String& type, Function<void(const TraversalEntry*)>&&);
     void traverse(const String& type, const String& partition, Function<void(const TraversalEntry*)>&&);
+    // Traverse several record types in sequence, invoking the handler for each entry and once with
+    // nullptr after the last type has been traversed.
+    void traverse(Vector<String>&& types, Function<void(const TraversalEntry*)>&&);
+    void traverse(Vector<String>&& types, const String& partition, Function<void(const TraversalEntry*)>&&);
     void remove(const Key&);
     void remove(const WebCore::ResourceRequest&);
     void remove(const Vector<Key>&, Function<void()>&&);

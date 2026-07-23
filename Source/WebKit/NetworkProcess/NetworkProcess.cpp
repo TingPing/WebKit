@@ -2017,7 +2017,6 @@ void NetworkProcess::deleteWebsiteDataForOrigin(PAL::SessionID sessionID, Option
         if (CheckedPtr networkStorageSession = storageSession(sessionID))
             networkStorageSession->deleteCookies(origin, [clearTasksHandler] { });
 
-        // TODO: Refactor this a bit...
         // See https://github.com/w3c/webappsec-clear-site-data/pull/94... but we don't seem to do that for the HTTP Cache currently?
         if (RefPtr cache = session->cache()) {
             Vector<NetworkCache::Key> cacheKeysToDelete;
@@ -2032,7 +2031,6 @@ void NetworkProcess::deleteWebsiteDataForOrigin(PAL::SessionID sessionID, Option
                     return;
                 }
                 cache->remove(cacheKeysToDelete, [clearTasksHandler] { });
-                return;
             });
         }
     }
@@ -2042,26 +2040,14 @@ void NetworkProcess::deleteWebsiteDataForOrigin(PAL::SessionID sessionID, Option
             RegistrableDomain topDomain = RegistrableDomain::uncheckedCreateFromHost(origin.topOrigin.host());
             String cachePartition = origin.clientOrigin == origin.topOrigin ? emptyString() : (topDomain.isEmpty() ? emptyString() : topDomain.string());
             bool shouldClearAllEntriesInPartition = origin.clientOrigin == origin.topOrigin;
-            // TODO: Refactor this a bit...
-            cache->traverse("Resource"_s, cachePartition, [cache, clearTasksHandler, shouldClearAllEntriesInPartition, origin = origin.clientOrigin, cachePartition, cacheKeysToDelete = WTF::move(cacheKeysToDelete)](auto* traversalEntry) mutable {
+            cache->traverse({ "Resource"_s, "CompressionDictionary"_s }, cachePartition, [cache, clearTasksHandler, shouldClearAllEntriesInPartition, origin = origin.clientOrigin, cachePartition, cacheKeysToDelete = WTF::move(cacheKeysToDelete)](auto* traversalEntry) mutable {
                 if (traversalEntry) {
                     ASSERT_UNUSED(cachePartition, equalIgnoringNullity(traversalEntry->entry.key().partition(), cachePartition));
                     if (shouldClearAllEntriesInPartition || SecurityOriginData::fromURLWithoutStrictOpaqueness(traversalEntry->entry.response().url()) == origin)
                         cacheKeysToDelete.append(traversalEntry->entry.key());
                     return;
                 }
-
-                cache->traverse("CompressionDictionary"_s, cachePartition, [cache, clearTasksHandler, shouldClearAllEntriesInPartition, origin = origin, cachePartition, cacheKeysToDelete = WTF::move(cacheKeysToDelete)](auto* traversalEntry) mutable {
-                if (traversalEntry) {
-                    ASSERT_UNUSED(cachePartition, equalIgnoringNullity(traversalEntry->entry.key().partition(), cachePartition));
-                    if (shouldClearAllEntriesInPartition || SecurityOriginData::fromURLWithoutStrictOpaqueness(traversalEntry->entry.response().url()) == origin)
-                        cacheKeysToDelete.append(traversalEntry->entry.key());
-                    return;
-                }
-
                 cache->remove(cacheKeysToDelete, [clearTasksHandler] { });
-                return;
-            });
             });
         }
     }

@@ -819,6 +819,40 @@ void Cache::traverse(const String& type, const String& partition, Function<void(
     });
 }
 
+void Cache::traverse(Vector<String>&& types, Function<void(const TraversalEntry*)>&& traverseHandler)
+{
+    if (types.isEmpty()) {
+        traverseHandler(nullptr);
+        return;
+    }
+
+    auto type = types.takeLast();
+    traverse(type, [this, protectedThis = Ref { *this }, types = WTF::move(types), traverseHandler = WTF::move(traverseHandler)] (const TraversalEntry* traversalEntry) mutable {
+        if (traversalEntry) {
+            traverseHandler(traversalEntry);
+            return;
+        }
+        traverse(WTF::move(types), WTF::move(traverseHandler));
+    });
+}
+
+void Cache::traverse(Vector<String>&& types, const String& partition, Function<void(const TraversalEntry*)>&& traverseHandler)
+{
+    if (types.isEmpty()) {
+        traverseHandler(nullptr);
+        return;
+    }
+
+    auto type = types.takeLast();
+    traverse(type, partition, [this, protectedThis = Ref { *this }, types = WTF::move(types), partition, traverseHandler = WTF::move(traverseHandler)] (const TraversalEntry* traversalEntry) mutable {
+        if (traversalEntry) {
+            traverseHandler(traversalEntry);
+            return;
+        }
+        traverse(WTF::move(types), partition, WTF::move(traverseHandler));
+    });
+}
+
 String Cache::dumpFilePath() const
 {
     return pathByAppendingComponent(m_storage->versionPath(), "dump.json"_s);
@@ -946,8 +980,7 @@ void Cache::deleteData(const Vector<WebCore::SecurityOriginData>& origins, Compl
         originSet.add(origin);
 
     Vector<NetworkCache::Key> keysToDelete;
-    // TODO: Refactor this a bit...
-    traverse(resourceType(), [this, protectedThis = Ref { *this }, originSet = WTF::move(originSet), completionHandler = WTF::move(completionHandler), keysToDelete = WTF::move(keysToDelete)](auto* traversalEntry) mutable {
+    traverse({ resourceType(), compressionDictionaryType() }, [this, protectedThis = Ref { *this }, originSet = WTF::move(originSet), completionHandler = WTF::move(completionHandler), keysToDelete = WTF::move(keysToDelete)](auto* traversalEntry) mutable {
         if (traversalEntry) {
             auto origin = WebCore::SecurityOriginData::fromURLWithoutStrictOpaqueness(traversalEntry->entry.response().url());
             if (originSet.contains(origin))
@@ -955,16 +988,7 @@ void Cache::deleteData(const Vector<WebCore::SecurityOriginData>& origins, Compl
             return;
         }
 
-        traverse(compressionDictionaryType(), [this, protectedThis = Ref { *this }, originSet = WTF::move(originSet), completionHandler = WTF::move(completionHandler), keysToDelete = WTF::move(keysToDelete)](auto* traversalEntry) mutable {
-            if (traversalEntry) {
-                auto origin = WebCore::SecurityOriginData::fromURLWithoutStrictOpaqueness(traversalEntry->entry.response().url());
-                if (originSet.contains(origin))
-                    keysToDelete.append(traversalEntry->entry.key());
-                return;
-            }
-
-            remove(keysToDelete, WTF::move(completionHandler));
-        });
+        remove(keysToDelete, WTF::move(completionHandler));
     });
 }
 
@@ -976,8 +1000,7 @@ void Cache::deleteDataForRegistrableDomains(const Vector<WebCore::RegistrableDom
 
     Vector<NetworkCache::Key> keysToDelete;
     HashSet<WebCore::RegistrableDomain> domainsDeleted;
-    // TODO: Refactor this a bit...
-    traverse(resourceType(), [this, protectedThis = Ref { *this }, domainSet = WTF::move(domainSet), completionHandler = WTF::move(completionHandler), keysToDelete = WTF::move(keysToDelete), domainsDeleted = WTF::move(domainsDeleted)](auto* traversalEntry) mutable {
+    traverse({ resourceType(), compressionDictionaryType() }, [protectedThis = Ref { *this }, domainSet = WTF::move(domainSet), completionHandler = WTF::move(completionHandler), keysToDelete = WTF::move(keysToDelete), domainsDeleted = WTF::move(domainsDeleted)](auto* traversalEntry) mutable {
         if (traversalEntry) {
             auto domain = WebCore::RegistrableDomain { traversalEntry->entry.response().url() };
             if (domainSet.contains(domain)) {
@@ -987,19 +1010,8 @@ void Cache::deleteDataForRegistrableDomains(const Vector<WebCore::RegistrableDom
             return;
         }
 
-        traverse(compressionDictionaryType(), [protectedThis = Ref { *this }, domainSet = WTF::move(domainSet), completionHandler = WTF::move(completionHandler), keysToDelete = WTF::move(keysToDelete), domainsDeleted = WTF::move(domainsDeleted)](auto* traversalEntry) mutable {
-            if (traversalEntry) {
-                auto domain = WebCore::RegistrableDomain { traversalEntry->entry.response().url() };
-                if (domainSet.contains(domain)) {
-                    keysToDelete.append(traversalEntry->entry.key());
-                    domainsDeleted.add(domain);
-                }
-                return;
-            }
-
-            protectedThis->remove(keysToDelete, [completionHandler = WTF::move(completionHandler), domainsDeleted = WTF::move(domainsDeleted)]() mutable {
-                completionHandler(WTF::move(domainsDeleted));
-            });
+        protectedThis->remove(keysToDelete, [completionHandler = WTF::move(completionHandler), domainsDeleted = WTF::move(domainsDeleted)]() mutable {
+            completionHandler(WTF::move(domainsDeleted));
         });
     });
 }
