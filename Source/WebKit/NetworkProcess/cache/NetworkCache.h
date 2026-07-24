@@ -101,6 +101,7 @@ namespace NetworkCache {
 
 class AsyncRevalidation;
 class Cache;
+class CompressionDictionaryCache;
 class SpeculativeLoadManager;
 
 struct MappedBody {
@@ -231,6 +232,7 @@ public:
     std::unique_ptr<Entry> makeCompressionDictionaryEntry(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, RefPtr<WebCore::FragmentedSharedBuffer>&& responseData, const Entry::CompressionDictionaryData&);
     void retrieveCompressionDictionaryBestMatchHash(WebCore::ResourceRequest&&, WebCore::FetchOptionsDestination, Function<void(WebCore::ResourceRequest&&, std::optional<CompressionDictionaryMatch>&&)>&&);
     void retrieveCompressionDictionaryByHash(const String& partition, std::span<const uint8_t> hash, Function<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
+    void removeCompressionDictionaries(const String& partition, std::optional<WebCore::SecurityOriginData>, CompletionHandler<void()>&&);
 
     void dumpContentsToFile();
 
@@ -256,6 +258,8 @@ private:
     Key makeCacheKey(const String& type, const WebCore::ResourceRequest&);
 
     static void completeRetrieve(RetrieveCompletionHandler&&, std::unique_ptr<Entry>, RetrieveInfo&);
+    void ensureCompressionDictionaryCache(const String& partition, CompletionHandler<void()>&&);
+    void retrieveCompressionDictionaryByHash(const String& partition, std::array<uint8_t, Entry::CompressionDictionaryData::hashSize>&&, Function<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
 
     String dumpFilePath() const;
     void deleteDumpFile();
@@ -263,6 +267,7 @@ private:
     std::optional<Seconds> maxAgeCap(Entry&, const WebCore::ResourceRequest&, PAL::SessionID);
 
     const Ref<Storage> m_storage;
+    std::unique_ptr<CompressionDictionaryCache> m_compressionDictionaryCache;
     const Ref<NetworkProcess> m_networkProcess;
 
     bool shouldUseSpeculativeLoadManager() const;

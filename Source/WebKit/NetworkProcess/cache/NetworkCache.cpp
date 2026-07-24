@@ -52,6 +52,7 @@
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
+#include <wtf/text/SuperFastHash.h>
 
 #if PLATFORM(COCOA)
 #include <notify.h>
@@ -81,6 +82,273 @@ static const AtomString& compressionDictionaryType()
     static MainRunLoopNeverDestroyed<const AtomString> compressionDictionary("CompressionDictionary"_s);
     return compressionDictionary;
 }
+
+class CompressionDictionaryHash {
+public:
+    CompressionDictionaryHash() = default;
+    explicit CompressionDictionaryHash(const std::array<uint8_t, Entry::CompressionDictionaryData::hashSize>& hash)
+        : m_hash(hash)
+        , m_state(State::Value)
+    {
+    }
+    explicit CompressionDictionaryHash(WTF::HashTableEmptyValueType)
+        : m_state(State::Empty)
+    {
+    }
+    explicit CompressionDictionaryHash(WTF::HashTableDeletedValueType)
+        : m_state(State::Deleted)
+    {
+    }
+
+    const std::array<uint8_t, Entry::CompressionDictionaryData::hashSize>& hash() const { return m_hash; }
+    bool isEmptyValue() const { return m_state == State::Empty; }
+    bool isDeletedValue() const { return m_state == State::Deleted; }
+    bool operator==(const CompressionDictionaryHash&) const = default;
+
+private:
+    enum class State : uint8_t { Empty, Deleted, Value };
+
+    std::array<uint8_t, Entry::CompressionDictionaryData::hashSize> m_hash { };
+    State m_state { State::Empty };
+};
+
+struct CompressionDictionaryHashHash {
+    static unsigned hash(const CompressionDictionaryHash& hash)
+    {
+        return SuperFastHash::computeHash(std::span<const uint8_t> { hash.hash() });
+    }
+    static bool equal(const CompressionDictionaryHash& a, const CompressionDictionaryHash& b) { return a == b; }
+    static constexpr bool safeToCompareToEmptyOrDeleted = false;
+};
+
+struct CompressionDictionaryHashTraits : WTF::GenericHashTraits<CompressionDictionaryHash> {
+    static constexpr bool emptyValueIsZero = false;
+    static constexpr bool hasIsEmptyValueFunction = true;
+
+    static CompressionDictionaryHash emptyValue() { return CompressionDictionaryHash { WTF::HashTableEmptyValue }; }
+    static bool isEmptyValue(const CompressionDictionaryHash& hash) { return hash.isEmptyValue(); }
+    static void constructDeletedValue(CompressionDictionaryHash& hash) { new (NotNull, std::addressof(hash)) CompressionDictionaryHash { WTF::HashTableDeletedValue }; }
+    static bool isDeletedValue(const CompressionDictionaryHash& hash) { return hash.isDeletedValue(); }
+};
+
+struct CompressionDictionaryKeyHash : WTF::NetworkCacheKeyHash {
+    static bool equal(const Key& a, const Key& b) { return a.hash() == b.hash(); }
+};
+
+static String normalizedCompressionDictionaryPartition(const String& partition)
+{
+    return partition.isNull() ? emptyString() : partition;
+}
+
+class CompressionDictionaryCache {
+    WTF_MAKE_TZONE_ALLOCATED(CompressionDictionaryCache);
+public:
+    using ReadyHandler = CompletionHandler<void()>;
+
+    bool isInitialized(const String& partition) const { return m_initializedPartitions.contains(normalizedCompressionDictionaryPartition(partition)); }
+
+    bool addPendingHandler(const String& partition, ReadyHandler&& handler)
+    {
+        auto result = m_pendingHandlers.add(normalizedCompressionDictionaryPartition(partition), Vector<ReadyHandler> { });
+        result.iterator->value.append(WTF::move(handler));
+        return result.isNewEntry;
+    }
+
+    Vector<ReadyHandler> takePendingHandlers(const String& partition)
+    {
+        return m_pendingHandlers.take(normalizedCompressionDictionaryPartition(partition));
+    }
+
+    uint64_t generation() const { return m_generation; }
+
+    void markInitialized(const String& partition)
+    {
+        m_initializedPartitions.add(normalizedCompressionDictionaryPartition(partition));
+    }
+
+    void add(const Entry& entry, RefPtr<WebCore::FragmentedSharedBuffer>&& bufferToCacheInMemory = { })
+    {
+        auto& data = entry.compressionDictionaryData();
+        auto baseURL = entry.response().url().string();
+        auto result = WebCore::URLPattern::createWithoutRegExpSupport(data.match, WTF::move(baseURL), { });
+        if (result.hasException()) {
+            remove(entry.key());
+            return;
+        }
+
+        auto now = WallTime::now();
+        auto freshnessLifetime = WebCore::computeFreshnessLifetimeForHTTPFamily(entry.response(), entry.timeStamp());
+        auto currentAge = WebCore::computeCurrentAge(entry.response(), entry.timeStamp());
+        if (currentAge > freshnessLifetime) {
+            remove(entry.key());
+            return;
+        }
+        auto expirationTime = now + freshnessLifetime - currentAge;
+
+        auto partition = normalizedCompressionDictionaryPartition(entry.key().partition());
+        auto& entries = m_entries.ensure(partition, [] {
+            return DictionaryMap { };
+        }).iterator->value;
+        if (auto existing = entries.find(entry.key()); existing != entries.end()) {
+            if (existing->value->timeStamp >= entry.timeStamp())
+                return;
+            removeHashReference(partition, existing->value->hash, entry.key());
+        }
+
+        entries.set(entry.key(), makeUnique<Dictionary>(Dictionary {
+            result.releaseReturnValue(),
+            WebCore::SecurityOriginData::fromURLWithoutStrictOpaqueness(entry.response().url()),
+            data.id,
+            data.hash,
+            data.matchDest,
+            data.match.length(),
+            entry.timeStamp(),
+            expirationTime
+        }));
+
+        m_keysByHash.ensure(partition, [] {
+            return HashMapByHash { };
+        }).iterator->value.set(CompressionDictionaryHash { data.hash }, DictionaryStorageData { entry.key(), WTF::move(bufferToCacheInMemory) });
+    }
+
+    void remove(const Key& key)
+    {
+        auto partition = normalizedCompressionDictionaryPartition(key.partition());
+        auto partitionIterator = m_entries.find(partition);
+        if (partitionIterator == m_entries.end())
+            return;
+        auto entryIterator = partitionIterator->value.find(key);
+        if (entryIterator == partitionIterator->value.end())
+            return;
+
+        auto hash = entryIterator->value->hash;
+        partitionIterator->value.remove(entryIterator);
+        removeHashReference(partition, hash, key);
+        if (partitionIterator->value.isEmpty())
+            m_entries.remove(partitionIterator);
+    }
+
+    void clear()
+    {
+        m_entries.clear();
+        m_keysByHash.clear();
+        m_initializedPartitions.clear();
+        ++m_generation;
+    }
+
+    std::optional<Cache::CompressionDictionaryMatch> bestMatch(const String& partition, const URL& url, WebCore::FetchOptionsDestination destination) const
+    {
+        auto iterator = m_entries.find(normalizedCompressionDictionaryPartition(partition));
+        if (iterator == m_entries.end())
+            return std::nullopt;
+
+        auto now = WallTime::now();
+        const Dictionary* bestMatch = nullptr;
+        for (auto& dictionary : iterator->value.values()) {
+            auto& entry = *dictionary;
+            if (entry.expirationTime < now)
+                continue;
+            if (!entry.matchDest.isEmpty() && !entry.matchDest.contains(destination))
+                continue;
+            if (!entry.pattern->testWithoutRegExp(url))
+                continue;
+
+            if (bestMatch) {
+                bool isBetterMatch = false;
+                if (entry.matchDest.isEmpty() != bestMatch->matchDest.isEmpty())
+                    isBetterMatch = !entry.matchDest.isEmpty();
+                else if (entry.matchLength != bestMatch->matchLength)
+                    isBetterMatch = entry.matchLength > bestMatch->matchLength;
+                else
+                    isBetterMatch = entry.timeStamp > bestMatch->timeStamp;
+                if (!isBetterMatch)
+                    continue;
+            }
+            bestMatch = &entry;
+        }
+
+        if (!bestMatch)
+            return std::nullopt;
+        return Cache::CompressionDictionaryMatch { bestMatch->hash, bestMatch->id };
+    }
+
+    std::optional<std::pair<Key, RefPtr<WebCore::FragmentedSharedBuffer>>> dataForHash(const String& partition, const std::array<uint8_t, Entry::CompressionDictionaryData::hashSize>& hash) const
+    {
+        auto partitionIterator = m_keysByHash.find(normalizedCompressionDictionaryPartition(partition));
+        if (partitionIterator == m_keysByHash.end())
+            return std::nullopt;
+        auto hashIterator = partitionIterator->value.find(CompressionDictionaryHash { hash });
+        if (hashIterator == partitionIterator->value.end())
+            return std::nullopt;
+        return std::pair { hashIterator->value.key, hashIterator->value.buffer };
+    }
+
+    Vector<Key> keysForOrigin(const String& partition, const std::optional<WebCore::SecurityOriginData>& origin) const
+    {
+        Vector<Key> result;
+        auto iterator = m_entries.find(normalizedCompressionDictionaryPartition(partition));
+        if (iterator == m_entries.end())
+            return result;
+        for (auto& [key, dictionary] : iterator->value) {
+            if (!origin || dictionary->origin == *origin)
+                result.append(key);
+        }
+        return result;
+    }
+private:
+    struct Dictionary {
+        WTF_MAKE_STRUCT_TZONE_ALLOCATED(Dictionary);
+        Ref<WebCore::URLPattern> pattern;
+        WebCore::SecurityOriginData origin;
+        String id;
+        std::array<uint8_t, Entry::CompressionDictionaryData::hashSize> hash;
+        Vector<WebCore::FetchOptionsDestination> matchDest;
+        size_t matchLength;
+        WallTime timeStamp;
+        WallTime expirationTime;
+    };
+
+    struct DictionaryStorageData {
+        Key key;
+        RefPtr<WebCore::FragmentedSharedBuffer> buffer;
+    };
+
+    using DictionaryMap = HashMap<Key, std::unique_ptr<Dictionary>, CompressionDictionaryKeyHash>;
+    using HashMapByHash = HashMap<CompressionDictionaryHash, DictionaryStorageData, CompressionDictionaryHashHash, CompressionDictionaryHashTraits>;
+
+    void removeHashReference(const String& partition, const std::array<uint8_t, Entry::CompressionDictionaryData::hashSize>& hash, const Key& key)
+    {
+        auto normalizedPartition = normalizedCompressionDictionaryPartition(partition);
+        auto partitionIterator = m_keysByHash.find(normalizedPartition);
+        if (partitionIterator == m_keysByHash.end())
+            return;
+        auto hashIterator = partitionIterator->value.find(CompressionDictionaryHash { hash });
+        if (hashIterator == partitionIterator->value.end() || hashIterator->value.key.hash() != key.hash())
+            return;
+        auto buffer = hashIterator->value.buffer;
+        partitionIterator->value.remove(hashIterator);
+
+        if (auto entriesIterator = m_entries.find(normalizedPartition); entriesIterator != m_entries.end()) {
+            for (auto& [candidateKey, dictionary] : entriesIterator->value) {
+                if (candidateKey.hash() != key.hash() && dictionary->hash == hash) {
+                    partitionIterator->value.set(CompressionDictionaryHash { hash }, DictionaryStorageData { candidateKey, WTF::move(buffer) });
+                    return;
+                }
+            }
+        }
+        if (partitionIterator->value.isEmpty())
+            m_keysByHash.remove(partitionIterator);
+    }
+
+    HashMap<String, DictionaryMap> m_entries;
+    HashMap<String, HashMapByHash> m_keysByHash;
+    HashSet<String> m_initializedPartitions;
+    HashMap<String, Vector<ReadyHandler>> m_pendingHandlers;
+    uint64_t m_generation { 0 };
+};
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(CompressionDictionaryCache);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(CompressionDictionaryCache::Dictionary);
 
 static size_t computeCapacity(CacheModel cacheModel, const String& cachePath)
 {
@@ -124,6 +392,7 @@ static void dumpFileChanged(Cache* cache)
 
 Cache::Cache(NetworkProcess& networkProcess, const String& storageDirectory, Ref<Storage>&& storage, OptionSet<CacheOption> options, PAL::SessionID sessionID)
     : m_storage(WTF::move(storage))
+    , m_compressionDictionaryCache(makeUnique<CompressionDictionaryCache>())
     , m_networkProcess(networkProcess)
     , m_sessionID(sessionID)
     , m_storageDirectory(storageDirectory)
@@ -647,14 +916,58 @@ std::unique_ptr<Entry> Cache::storeCompressionDictionary(const WebCore::Resource
     auto record = cacheEntry->encodeAsStorageRecord();
     bool storeBlobInMemoryCache = request.isTopSite();
 
-    m_storage->store(record, [protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](const Data& bodyData) mutable {
+    m_storage->store(record, [protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](const Data&) mutable {
         MappedBody mappedBody;
         if (completionHandler)
             completionHandler(WTF::move(mappedBody));
         LOG(NetworkCache, "(NetworkProcess) stored");
-    }, storeBlobInMemoryCache);
+    }, storeBlobInMemoryCache, [protectedThis = Ref { *this }, storeBlobInMemoryCache](const Storage::Record& record) {
+        if (auto entry = Entry::decodeStorageRecord(record)) {
+            RefPtr bufferToCacheInMemory = storeBlobInMemoryCache ? entry->buffer() : nullptr;
+            protectedThis->m_compressionDictionaryCache->add(*entry, WTF::move(bufferToCacheInMemory));
+        }
+    });
 
     return cacheEntry;
+}
+
+void Cache::ensureCompressionDictionaryCache(const String& partition, CompletionHandler<void()>&& completionHandler)
+{
+    if (m_compressionDictionaryCache->isInitialized(partition)) {
+        completionHandler();
+        return;
+    }
+    if (!m_compressionDictionaryCache->addPendingHandler(partition, WTF::move(completionHandler)))
+        return;
+
+    auto generation = m_compressionDictionaryCache->generation();
+    m_storage->traverse(compressionDictionaryType(), partition, { }, [protectedThis = Ref { *this }, partition, generation](const Storage::Record* record, const Storage::RecordInfo&) mutable {
+        if (record && generation == protectedThis->m_compressionDictionaryCache->generation()) {
+            if (auto entry = Entry::decodeStorageRecord(*record))
+                protectedThis->m_compressionDictionaryCache->add(*entry);
+            return;
+        }
+        if (record)
+            return;
+
+        auto handlers = protectedThis->m_compressionDictionaryCache->takePendingHandlers(partition);
+        if (generation != protectedThis->m_compressionDictionaryCache->generation()) {
+            for (auto& handler : handlers)
+                protectedThis->ensureCompressionDictionaryCache(partition, WTF::move(handler));
+            return;
+        }
+
+        protectedThis->m_compressionDictionaryCache->markInitialized(partition);
+        for (auto& handler : handlers)
+            handler();
+    });
+}
+
+void Cache::removeCompressionDictionaries(const String& partition, std::optional<WebCore::SecurityOriginData> origin, CompletionHandler<void()>&& completionHandler)
+{
+    ensureCompressionDictionaryCache(partition, [protectedThis = Ref { *this }, partition, origin = WTF::move(origin), completionHandler = WTF::move(completionHandler)]() mutable {
+        protectedThis->remove(protectedThis->m_compressionDictionaryCache->keysForOrigin(partition, origin), WTF::move(completionHandler));
+    });
 }
 
 void Cache::retrieveCompressionDictionaryBestMatchHash(WebCore::ResourceRequest&& request, WebCore::FetchOptionsDestination destination, Function<void(WebCore::ResourceRequest&&, std::optional<CompressionDictionaryMatch>&&)>&& completionHandler)
@@ -662,45 +975,9 @@ void Cache::retrieveCompressionDictionaryBestMatchHash(WebCore::ResourceRequest&
     LOG(NetworkCache, "(NetworkProcess) retrieving best compression dictionary for %s", request.url().string().latin1().data());
 
     auto partition = request.cachePartition();
-    m_storage->traverse(compressionDictionaryType(), partition, { }, [request = WTF::move(request), destination, bestMatchData = std::optional<Entry::CompressionDictionaryData> { }, bestMatchTimestamp = WallTime { }, completionHandler = WTF::move(completionHandler)](const Storage::Record* record, const Storage::RecordInfo&) mutable {
-        if (!record) {
-            ASSERT(completionHandler);
-            std::optional<CompressionDictionaryMatch> match;
-            if (bestMatchData)
-                match = CompressionDictionaryMatch { bestMatchData->hash, bestMatchData->id };
-            completionHandler(WTF::move(request), WTF::move(match));
-            return;
-        }
-        auto entry = Entry::decodeStorageRecord(*record);
-        if (!entry)
-            return;
-
-        // https://www.rfc-editor.org/info/rfc9842/#section-2.2.2
-        auto data = entry->compressionDictionaryData();
-        if (!data.matchDest.isEmpty() && !data.matchDest.contains(destination))
-            return;
-
-        auto dataURL = entry->response().url().string();
-        auto result = WebCore::URLPattern::createWithoutRegExpSupport(data.match, WTF::move(dataURL), { });
-        if (result.hasException())
-            return;
-        if (!result.returnValue()->testWithoutRegExp(request.url()))
-            return;
-
-        if (bestMatchData) {
-            // Multiple matches — pick the better one per RFC 9842 §2.2.3.
-            bool isBetterMatch = false;
-            if (data.matchDest.isEmpty() != bestMatchData->matchDest.isEmpty())
-                isBetterMatch = !data.matchDest.isEmpty();
-            else if (data.match.length() != bestMatchData->match.length())
-                isBetterMatch = data.match.length() > bestMatchData->match.length();
-            else
-                isBetterMatch = entry->timeStamp() > bestMatchTimestamp;
-            if (!isBetterMatch)
-                return;
-        }
-        bestMatchData = WTF::move(data);
-        bestMatchTimestamp = entry->timeStamp();
+    ensureCompressionDictionaryCache(partition, [protectedThis = Ref { *this }, request = WTF::move(request), partition, destination, completionHandler = WTF::move(completionHandler)]() mutable {
+        auto match = protectedThis->m_compressionDictionaryCache->bestMatch(partition, request.url(), destination);
+        completionHandler(WTF::move(request), WTF::move(match));
     });
 }
 
@@ -709,34 +986,36 @@ void Cache::retrieveCompressionDictionaryByHash(const String& partition, std::sp
     std::array<uint8_t, Entry::CompressionDictionaryData::hashSize> hash;
     ASSERT(hashSpan.size() == hash.size());
     std::copy(hashSpan.begin(), hashSpan.end(), hash.begin());
+    retrieveCompressionDictionaryByHash(partition, WTF::move(hash), WTF::move(completionHandler));
+}
 
-    m_storage->traverse(compressionDictionaryType(), partition, { },
-        [protectedThis = Ref { *this }, hash, matchedKey = std::optional<Key> { }, completionHandler = WTF::move(completionHandler)]
-        (const Storage::Record* record, const Storage::RecordInfo&) mutable {
-        if (!record) {
-            if (!matchedKey) {
-                completionHandler(nullptr);
-                return;
-            }
-            protectedThis->m_storage->retrieve(*matchedKey, 1, [completionHandler = WTF::move(completionHandler)](Storage::Record&& fullRecord, const Storage::Timings&) mutable {
-                if (fullRecord.isNull()) {
-                    completionHandler(nullptr);
-                    return false;
-                }
-                auto entry = Entry::decodeStorageRecord(fullRecord);
-                RefPtr<WebCore::SharedBuffer> buffer = entry && entry->buffer() ? entry->buffer()->makeContiguous().ptr() : nullptr;
-                completionHandler(WTF::move(buffer));
-                return true;
-            });
+void Cache::retrieveCompressionDictionaryByHash(const String& partition, std::array<uint8_t, Entry::CompressionDictionaryData::hashSize>&& hash, Function<void(RefPtr<WebCore::SharedBuffer>&&)>&& completionHandler)
+{
+    ensureCompressionDictionaryCache(partition, [protectedThis = Ref { *this }, partition, hash = WTF::move(hash), completionHandler = WTF::move(completionHandler)]() mutable {
+        auto data = protectedThis->m_compressionDictionaryCache->dataForHash(partition, hash);
+        if (!data) {
+            completionHandler(nullptr);
             return;
         }
-        if (matchedKey)
+        if (data->second) {
+            completionHandler(data->second->makeContiguous().ptr());
             return;
-        auto entry = Entry::decodeStorageRecord(*record);
-        if (!entry)
-            return;
-        if (entry->compressionDictionaryData().hash == hash)
-            matchedKey = entry->key();
+        }
+        auto key = WTF::move(data->first);
+        protectedThis->m_storage->retrieve(key, 1, [protectedThis, partition, hash = WTF::move(hash), key, completionHandler = WTF::move(completionHandler)](Storage::Record&& fullRecord, const Storage::Timings&) mutable {
+            if (!fullRecord.isNull()) {
+                if (auto entry = Entry::decodeStorageRecord(fullRecord)) {
+                    if (RefPtr buffer = entry->buffer()) {
+                        completionHandler(buffer->makeContiguous().ptr());
+                        return true;
+                    }
+                }
+            }
+
+            protectedThis->m_compressionDictionaryCache->remove(key);
+            protectedThis->retrieveCompressionDictionaryByHash(partition, WTF::move(hash), WTF::move(completionHandler));
+            return false;
+        });
     });
 }
 
@@ -758,6 +1037,8 @@ std::unique_ptr<Entry> Cache::update(const WebCore::ResourceRequest& originalReq
 
 void Cache::remove(const Key& key)
 {
+    if (key.type() == compressionDictionaryType())
+        m_compressionDictionaryCache->remove(key);
     m_storage->remove(key);
 }
 
@@ -768,6 +1049,10 @@ void Cache::remove(const WebCore::ResourceRequest& request)
 
 void Cache::remove(const Vector<Key>& keys, Function<void()>&& completionHandler)
 {
+    for (auto& key : keys) {
+        if (key.type() == compressionDictionaryType())
+            m_compressionDictionaryCache->remove(key);
+    }
     m_storage->remove(keys, WTF::move(completionHandler));
 }
 
@@ -920,8 +1205,13 @@ void Cache::clear(WallTime modifiedSince, Function<void()>&& completionHandler)
 {
     LOG(NetworkCache, "(NetworkProcess) clearing cache");
 
+    m_compressionDictionaryCache->clear();
     String anyType;
-    m_storage->clear(WTF::move(anyType), modifiedSince, WTF::move(completionHandler));
+    m_storage->clear(WTF::move(anyType), modifiedSince, [protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)]() mutable {
+        protectedThis->m_compressionDictionaryCache->clear();
+        if (completionHandler)
+            completionHandler();
+    });
 
     deleteDumpFile();
 }
