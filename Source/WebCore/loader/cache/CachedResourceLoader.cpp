@@ -526,6 +526,10 @@ bool CachedResourceLoader::allowedByContentSecurityPolicy(CachedResource::Type t
     if (options.loadedFromPluginElement == LoadedFromPluginElement::Yes)
         return contentSecurityPolicy->allowObjectFromSource(url, document->currentParserSourcePosition(), redirectResponseReceived, preRedirectURL);
 
+    // Compression dictionaries are governed by connect-src.
+    if (options.destination == FetchOptions::Destination::CompressionDictionary)
+        return contentSecurityPolicy->allowConnectToSource(url, document->currentParserSourcePosition(), redirectResponseReceived, preRedirectURL);
+
     switch (type) {
     case CachedResource::Type::JSON:
         if (!contentSecurityPolicy->allowConnectToSource(url, document->currentParserSourcePosition(), redirectResponseReceived, preRedirectURL))
