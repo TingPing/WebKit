@@ -475,7 +475,7 @@ void NetworkResourceLoader::startNetworkLoad(ResourceRequest&& request, FirstLoa
     CheckedPtr networkStorageSession = connectionToWebProcess().networkProcess().storageSession(sessionID());
     ASSERT(networkStorageSession);
     if (connectionToWebProcess().compressionDictionaryEnabled()
-        && canUseCache(request) && m_parameters.options.mode != FetchOptions::Mode::NoCors
+        && canUseCache(request)
         && !networkStorageSession->shouldBlockCookies(originalRequest().firstPartyForCookies(), originalRequest().url(), frameID(), pageID(), ShouldRelaxThirdPartyCookieBlocking::No, IsKnownCrossSiteTracker::No)
         && SecurityOrigin::isSecure(request.url())) {
         // 6. Let compressionDictionaryCache be the result of determining the compression-dictionary cache partition given request.
