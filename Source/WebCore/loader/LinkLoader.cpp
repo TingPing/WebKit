@@ -513,6 +513,7 @@ RefPtr<LinkPreloadResourceClient> LinkLoader::loadCompressionDictionaryIfNeeded(
     options.referrerPolicy = params.referrerPolicy;
     options.fetchPriority = params.fetchPriority;
     options.nonce = params.nonce;
+    options.destination = FetchOptions::Destination::CompressionDictionary;
 
     auto linkRequest = [&]() {
         options.mode = FetchOptions::Mode::Cors;
