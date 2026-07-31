@@ -1,0 +1,6 @@
+
+PASS Available-Dictionary header properly set when fetching a resource compressed with image-001.png as a dictionary.
+PASS Available-Dictionary header properly set when fetching a resource compressed with script-001.js as a dictionary.
+PASS Available-Dictionary header properly set when fetching a resource compressed with style-001.css as a dictionary.
+PASS Available-Dictionary header properly set when fetching a resource compressed with subframe-001.html as a dictionary.
+
