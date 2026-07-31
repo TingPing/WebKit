@@ -48,8 +48,8 @@
         document.body.appendChild(iframe);
       });
 
-      // Verify script in HTML page  was executed.
-      assert_true(window.iframeMessageReceived);
+      // Verify script in HTML page was executed.
+      await t.step_wait(_ => window.iframeMessageReceived, "iframe posted its ready message");
     }, `Loading ${config.subframe_compressed} using ${config.subframe_dictionary} as a dictionary works`);
   });
 });
