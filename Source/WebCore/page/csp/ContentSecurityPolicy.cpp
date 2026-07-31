@@ -1004,12 +1004,10 @@ void ContentSecurityPolicy::reportViolation(const String& effectiveViolatedDirec
 
     auto reportBody = CSPViolationReportBody::create(SecurityPolicyViolationEventInit { violationEventInit });
 
-    if (m_reportingClient)
+    if (usesReportTo && m_reportingClient) {
         m_reportingClient->notifyReportObservers(Report::create(reportBody->type(), info.documentURI, reportBody.copyRef()));
-
-    if (usesReportTo)
         endpointTokens = violatedDirectiveList.reportToTokens();
-    else
+    } else
         endpointURIs = violatedDirectiveList.reportURIs();
 
     if (m_client)
