@@ -58,6 +58,8 @@ private:
 #if PLATFORM(COCOA)
     bool NODELETE didInflateFinishAppleCompressionFramework(int);
     ExceptionOr<Ref<JSC::ArrayBuffer>> decompressAppleCompressionFramework(std::span<const uint8_t>);
+#elif USE(BROTLI)
+    ExceptionOr<Ref<JSC::ArrayBuffer>> decompressBrotli(std::span<const uint8_t>);
 #endif
 
     explicit DecompressionStreamDecoder(Formats::CompressionFormat format)

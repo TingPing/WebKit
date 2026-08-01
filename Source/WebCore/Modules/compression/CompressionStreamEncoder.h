@@ -41,7 +41,7 @@ public:
     static ExceptionOr<Ref<CompressionStreamEncoder>> create(unsigned char formatChar)
     {
         auto format = static_cast<Formats::CompressionFormat>(formatChar);
-#if !PLATFORM(COCOA)
+#if !PLATFORM(COCOA) && !USE(BROTLI)
         if (format == Formats::CompressionFormat::Brotli)
             return Exception { ExceptionCode::NotSupportedError, "Unsupported algorithm"_s };
 #endif
@@ -59,6 +59,9 @@ private:
 #if PLATFORM(COCOA)
     bool NODELETE didDeflateFinishAppleCompressionFramework(int);
     ExceptionOr<Ref<JSC::ArrayBuffer>> compressAppleCompressionFramework(std::span<const uint8_t>);
+#elif USE(BROTLI)
+    bool NODELETE didDeflateFinishBrotli(size_t availableIn) const;
+    ExceptionOr<Ref<JSC::ArrayBuffer>> compressBrotli(std::span<const uint8_t>);
 #endif
 
     explicit CompressionStreamEncoder(Formats::CompressionFormat format)

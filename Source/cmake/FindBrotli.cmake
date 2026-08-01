@@ -36,6 +36,9 @@ Imported Targets
 ``Brotli::dec``
   The Brotli dec library, if found.
 
+``Brotli::enc``
+  The Brotli enc library, if found.
+
 Result Variables
 ^^^^^^^^^^^^^^^^
 
@@ -88,7 +91,7 @@ endif ()
 if ("dec" IN_LIST Brotli_FIND_COMPONENTS)
     pkg_check_modules(PC_Brotli_DEC QUIET brotlidec)
 
-    find_path(Brotli_INCLUDE_DIR
+    find_path(Brotli_DEC_INCLUDE_DIR
         NAMES brotli/decode.h
         HINTS ${PC_Brotli_DEC_INCLUDEDIR} ${PC_Brotli_DEC_INCLUDE_DIRS}
     )
@@ -110,6 +113,35 @@ if ("dec" IN_LIST Brotli_FIND_COMPONENTS)
             list(APPEND Brotli_LIBS_NOT_FOUND "dec (required)")
         else ()
             list(APPEND Brotli_LIBS_NOT_FOUND "dec (optional)")
+        endif ()
+    endif ()
+endif ()
+
+if ("enc" IN_LIST Brotli_FIND_COMPONENTS)
+    pkg_check_modules(PC_Brotli_ENC QUIET brotlienc)
+
+    find_path(Brotli_ENC_INCLUDE_DIR
+        NAMES brotli/encode.h
+        HINTS ${PC_Brotli_ENC_INCLUDEDIR} ${PC_Brotli_ENC_INCLUDE_DIRS}
+    )
+
+    find_library(Brotli_ENC_LIBRARY
+        NAMES ${Brotli_ENC_NAMES} brotlienc
+        HINTS ${PC_Brotli_ENC_LIBDIR} ${PC_Brotli_ENC_LIBRARY_DIRS}
+    )
+
+    if (Brotli_ENC_LIBRARY)
+        if (Brotli_FIND_REQUIRED_enc)
+            list(APPEND Brotli_LIBS_FOUND "enc (required): ${Brotli_ENC_LIBRARY}")
+        else ()
+            list(APPEND Brotli_LIBS_FOUND "enc (optional): ${Brotli_ENC_LIBRARY}")
+        endif ()
+    else ()
+        if (Brotli_FIND_REQUIRED_enc)
+            set(_Brotli_REQUIRED_LIBS_FOUND OFF)
+            list(APPEND Brotli_LIBS_NOT_FOUND "enc (required)")
+        else ()
+            list(APPEND Brotli_LIBS_NOT_FOUND "enc (optional)")
         endif ()
     endif ()
 endif ()
@@ -153,13 +185,24 @@ if (Brotli_DEC_LIBRARY AND NOT TARGET Brotli::dec)
     )
 endif ()
 
+if (Brotli_ENC_LIBRARY AND NOT TARGET Brotli::enc)
+    add_library(Brotli::enc UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(Brotli::enc PROPERTIES
+        IMPORTED_LOCATION "${Brotli_ENC_LIBRARY}"
+        INTERFACE_COMPILE_OPTIONS "${Brotli_COMPILE_OPTIONS}"
+        INTERFACE_INCLUDE_DIRECTORIES "${Brotli_ENC_INCLUDE_DIR}"
+    )
+endif ()
+
 mark_as_advanced(
     Brotli_LIBRARY
     Brotli_DEC_INCLUDE_DIR
     Brotli_DEC_LIBRARY
+    Brotli_ENC_INCLUDE_DIR
+    Brotli_ENC_LIBRARY
 )
 
 if (Brotli_FOUND)
-    set(Brotli_LIBRARIES ${Brotli_LIBRARY} ${Brotli_DEC_LIBRARY})
-    set(Brotli_INCLUDE_DIRS ${Brotli_INCLUDE_DIR})
+    set(Brotli_LIBRARIES ${Brotli_LIBRARY} ${Brotli_DEC_LIBRARY} ${Brotli_ENC_LIBRARY})
+    set(Brotli_INCLUDE_DIRS ${Brotli_DEC_INCLUDE_DIR} ${Brotli_ENC_INCLUDE_DIR})
 endif ()

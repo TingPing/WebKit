@@ -36,7 +36,7 @@ namespace WebCore {
 ExceptionOr<Ref<DecompressionStreamDecoder>> DecompressionStreamDecoder::create(unsigned char formatChar)
 {
     auto format = static_cast<Formats::CompressionFormat>(formatChar);
-#if !PLATFORM(COCOA)
+#if !PLATFORM(COCOA) && !USE(BROTLI)
     if (format == Formats::CompressionFormat::Brotli)
         return Exception { ExceptionCode::NotSupportedError, "Unsupported algorithm"_s };
 #endif
@@ -76,6 +76,9 @@ ExceptionOr<Ref<JSC::ArrayBuffer>> DecompressionStreamDecoder::decompress(std::s
 #if PLATFORM(COCOA)
     if (m_format == Formats::CompressionFormat::Brotli)
         return decompressAppleCompressionFramework(input);
+#elif USE(BROTLI)
+    if (m_format == Formats::CompressionFormat::Brotli)
+        return decompressBrotli(input);
 #endif
     return decompressZlib(input);
 }

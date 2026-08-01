@@ -84,6 +84,9 @@ ExceptionOr<Ref<JSC::ArrayBuffer>> CompressionStreamEncoder::compress(std::span<
 #if PLATFORM(COCOA)
     if (m_format == Formats::CompressionFormat::Brotli)
         return compressAppleCompressionFramework(input);
+#elif USE(BROTLI)
+    if (m_format == Formats::CompressionFormat::Brotli)
+        return compressBrotli(input);
 #endif
     return compressZlib(input);
 }

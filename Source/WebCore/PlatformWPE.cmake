@@ -73,6 +73,13 @@ list(APPEND WebCore_PRIVATE_LIBRARIES
     Tasn1::Tasn1
 )
 
+if (USE_BROTLI)
+    list(APPEND WebCore_PRIVATE_LIBRARIES
+        Brotli::dec
+        Brotli::enc
+    )
+endif ()
+
 list(APPEND WebCore_LIBRARIES
     GLib::Module
     ${UPOWERGLIB_LIBRARIES}

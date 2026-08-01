@@ -41,6 +41,11 @@ CompressionStream::~CompressionStream()
 #if PLATFORM(COCOA)
     if (m_isInitialized)
         compression_stream_destroy(&m_stream);
+#elif USE(BROTLI)
+    if (m_brotliEncoderState)
+        BrotliEncoderDestroyInstance(m_brotliEncoderState);
+    if (m_brotliDecoderState)
+        BrotliDecoderDestroyInstance(m_brotliDecoderState);
 #endif
 }
 
@@ -54,6 +59,20 @@ bool CompressionStream::initializeIfNecessary(Algorithm algorithm, Operation ope
         auto result = compression_stream_init(&m_stream, operation == Operation::Compression ? COMPRESSION_STREAM_ENCODE : COMPRESSION_STREAM_DECODE, COMPRESSION_BROTLI);
         if (result != COMPRESSION_STATUS_OK)
             return false;
+        break;
+    }
+#elif USE(BROTLI)
+    switch (algorithm) {
+    case Algorithm::Brotli:
+        if (operation == Operation::Compression) {
+            m_brotliEncoderState = BrotliEncoderCreateInstance(nullptr, nullptr, nullptr);
+            if (!m_brotliEncoderState)
+                return false;
+        } else {
+            m_brotliDecoderState = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+            if (!m_brotliDecoderState)
+                return false;
+        }
         break;
     }
 #else

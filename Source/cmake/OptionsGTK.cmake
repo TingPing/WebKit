@@ -55,6 +55,7 @@ WEBKIT_OPTION_DEFINE(ENABLE_JOURNALD_LOG "Whether to enable journald logging" PU
 WEBKIT_OPTION_DEFINE(ENABLE_QUARTZ_TARGET "Whether to enable support for the Quartz windowing target." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(ENABLE_WAYLAND_TARGET "Whether to enable support for the Wayland windowing target." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(ENABLE_X11_TARGET "Whether to enable support for the X11 windowing target." PUBLIC ON)
+WEBKIT_OPTION_DEFINE(USE_BROTLI "Whether to enable Brotli support in the Compression Streams API." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_FLITE "Whether to enable usage of Flite for speech synthesis." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_GBM "Whether to enable usage of GBM." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_GTK4 "Whether to enable usage of GTK4 instead of GTK3." PUBLIC ON)
@@ -265,6 +266,13 @@ endif ()
 
 if (ENABLE_XSLT)
     find_package(LibXslt 1.1.13 REQUIRED)
+endif ()
+
+if (USE_BROTLI)
+    find_package(Brotli COMPONENTS dec enc)
+    if (NOT Brotli_FOUND)
+        message(FATAL_ERROR "libbrotlidec and libbrotlienc are needed for USE_BROTLI")
+    endif ()
 endif ()
 
 if (USE_LIBSECRET)

@@ -26,6 +26,9 @@
 
 #if PLATFORM(COCOA)
 #include <compression.h>
+#elif USE(BROTLI)
+#include <brotli/decode.h>
+#include <brotli/encode.h>
 #endif
 
 namespace WebCore {
@@ -46,11 +49,26 @@ public:
         ASSERT(m_isInitialized);
         return m_stream;
     }
+#elif USE(BROTLI)
+    BrotliEncoderState* brotliEncoderState() const
+    {
+        ASSERT(m_isInitialized);
+        return m_brotliEncoderState;
+    }
+
+    BrotliDecoderState* brotliDecoderState() const
+    {
+        ASSERT(m_isInitialized);
+        return m_brotliDecoderState;
+    }
 #endif
 
 private:
 #if PLATFORM(COCOA)
     compression_stream m_stream;
+#elif USE(BROTLI)
+    BrotliEncoderState* m_brotliEncoderState { nullptr };
+    BrotliDecoderState* m_brotliDecoderState { nullptr };
 #endif
     bool m_isInitialized { false };
 };
