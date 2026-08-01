@@ -965,11 +965,6 @@ void NetworkResourceLoader::processClearSiteDataHeader(const WebCore::ResourceRe
 
 void NetworkResourceLoader::processUseAsDictionaryHeader(const WebCore::ResourceResponse& response)
 {
-    // From https://www.rfc-editor.org/info/rfc9842/#section-8
-    // TODO: should we actually do a stricter url.protocol() != "https"_s? The fetch spec does not say much...
-    if (!SecurityOrigin::isSecure(response.url()))
-        return;
-
     // https://fetch.spec.whatwg.org/#http-network-or-cache-fetch
     // 19. If request’s response tainting is not "opaque", request’s client is a secure context, and response’s header list contains `Use-As-Dictionary`:
     // 19.1 Let dictionaryValue be the result of getting a structured field value given `Use-As-Dictionary`, "dictionary", and response’s header list.
