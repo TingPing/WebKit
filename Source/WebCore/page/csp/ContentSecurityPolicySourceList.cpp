@@ -504,6 +504,9 @@ template<typename CharacterType> std::optional<ContentSecurityPolicySourceList::
 
         if (!skipExactly(buffer, '.'))
             return std::nullopt;
+
+        if (buffer.atEnd())
+            return std::nullopt;
     }
 
     auto hostBegin = buffer.span();
