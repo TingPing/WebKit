@@ -186,6 +186,7 @@
 #include "LayoutDisallowedScope.h"
 #include "LazyLoadImageObserver.h"
 #include "LegacySchemeRegistry.h"
+#include "LinkLoader.h"
 #include "LoadableSpeculationRules.h"
 #include "LoaderStrategy.h"
 #include "LocalDOMWindow.h"
@@ -4380,6 +4381,22 @@ void Document::implicitClose()
         return;
     }
 
+    // The load event has been dispatched above, so the dictionary fetches held back until now can
+    // go ahead: those from <link> elements, and those named by this document's own Link headers,
+    // which are only looked at for dictionaries here. See queueCompressionDictionaryLoad().
+    if (settings().compressionDictionaryEnabled()) {
+        if (RefPtr documentLoader = loader()) {
+            auto linkHeader = documentLoader->response().httpHeaderField(HTTPHeaderName::Link);
+            if (!linkHeader.isEmpty()) {
+                m_pendingCompressionDictionaryLoads.append([document = Ref { *this }, linkHeader = WTF::move(linkHeader)] {
+                    LinkLoader::loadCompressionDictionariesFromHeader(linkHeader, document->url(), document);
+                });
+            }
+        }
+        for (auto& load : std::exchange(m_pendingCompressionDictionaryLoads, { }))
+            eventLoop().queueTask(TaskSource::Networking, WTF::move(load));
+    }
+
     frame->loader().checkCallImplicitClose();
 
     // We used to force a synchronous display and flush here. This really isn't
@@ -8231,6 +8248,15 @@ Ref<HTMLCollection> Document::documentNamedItems(const AtomString& name)
 Ref<NodeList> Document::getElementsByName(const AtomString& elementName)
 {
     return ensureRareData().ensureNodeLists().addCacheWithAtomName<NameNodeList>(*this, elementName);
+}
+
+void Document::queueCompressionDictionaryLoad(Function<void()>&& load)
+{
+    if (!m_loadEventFinished) {
+        m_pendingCompressionDictionaryLoads.append(WTF::move(load));
+        return;
+    }
+    eventLoop().queueTask(TaskSource::Networking, WTF::move(load));
 }
 
 void Document::finishedParsing()

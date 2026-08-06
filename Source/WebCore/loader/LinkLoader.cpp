@@ -145,9 +145,32 @@ void LinkLoader::loadLinksFromHeader(const String& headerValue, const URL& baseU
 
         preconnectIfNeeded(params, document);
         preloadIfNeeded(params, document, nullptr);
+    }
+}
 
-        if (relAttribute.isCompressionDictionary)
-            loadCompressionDictionaryIfNeeded(params, document, nullptr);
+void LinkLoader::loadCompressionDictionariesFromHeader(const String& headerValue, const URL& baseURL, Document& document)
+{
+    if (headerValue.isEmpty())
+        return;
+    LinkHeaderSet headerSet(headerValue);
+    for (auto& header : headerSet) {
+        if (!header.valid() || header.url().isEmpty() || header.rel().isEmpty())
+            continue;
+
+        LinkRelAttribute relAttribute(document, header.rel());
+        if (!relAttribute.isCompressionDictionary)
+            continue;
+
+        URL url(baseURL, header.url());
+        // Sanity check to avoid re-entrancy here.
+        if (equalIgnoringFragmentIdentifier(url, baseURL))
+            continue;
+
+        auto fetchPriority = parseEnumerationFromString<RequestPriority>(header.fetchPriority()).value_or(RequestPriority::Auto);
+        LinkLoadParameters params { relAttribute, url, header.as(), header.media(), header.mimeType(), header.crossOrigin(), header.imageSrcSet(), header.imageSizes(), header.nonce(),
+            parseReferrerPolicy(header.referrerPolicy(), ReferrerPolicySource::ReferrerPolicyAttribute).value_or(ReferrerPolicy::EmptyString), fetchPriority };
+
+        loadCompressionDictionaryIfNeeded(params, document, nullptr);
     }
 }
 
@@ -545,13 +568,17 @@ RefPtr<LinkPreloadResourceClient> LinkLoader::loadCompressionDictionaryIfNeeded(
 
 void LinkLoader::loadCompressionDictionaryLink(const LinkLoadParameters& params, Document& document)
 {
-    if (RefPtr client = m_client.get(); client && client->shouldLoadLink()) {
-        auto resourceClient = loadCompressionDictionaryIfNeeded(params, document, this);
-        if (RefPtr client = m_compressionDictionaryLoadResourceClient)
-            client->clear();
+    RefPtr client = m_client.get();
+    if (!client || !client->shouldLoadLink())
+        return;
+
+    document.queueCompressionDictionaryLoad([protectedThis = Ref { *this }, params, document = Ref { document }] {
+        auto resourceClient = loadCompressionDictionaryIfNeeded(params, document, protectedThis.ptr());
+        if (RefPtr existingClient = protectedThis->m_compressionDictionaryLoadResourceClient)
+            existingClient->clear();
         if (resourceClient)
-            m_compressionDictionaryLoadResourceClient = WTF::move(resourceClient);
-    }
+            protectedThis->m_compressionDictionaryLoadResourceClient = WTF::move(resourceClient);
+    });
 }
 
 }

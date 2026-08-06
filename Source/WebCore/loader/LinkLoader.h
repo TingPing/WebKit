@@ -70,6 +70,7 @@ public:
 
     enum class MediaAttributeCheck { MediaAttributeEmpty, MediaAttributeNotEmpty, SkipMediaAttributeCheck };
     static void loadLinksFromHeader(const String& headerValue, const URL& baseURL, Document&, MediaAttributeCheck);
+    static void loadCompressionDictionariesFromHeader(const String& headerValue, const URL& baseURL, Document&);
     static bool isSupportedType(CachedResource::Type, const String& mimeType, Document&);
 
     void triggerEvents(const CachedResource&);
