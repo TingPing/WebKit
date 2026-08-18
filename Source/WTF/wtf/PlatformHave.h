@@ -1357,7 +1357,8 @@
 #define HAVE_JPEGXL 1
 #endif
 
-#if PLATFORM(COCOA)
+// This can't use USE(GLYCIN) because this comes before PlatformUse.h.
+#if PLATFORM(COCOA) || (defined(USE_GLYCIN) && USE_GLYCIN)
 #define HAVE_HEIC 1
 #endif
 

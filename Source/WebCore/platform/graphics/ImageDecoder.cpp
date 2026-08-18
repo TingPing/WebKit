@@ -28,12 +28,19 @@
 
 #include "AsyncImageDecoder.h"
 #include "ImageFrame.h"
-#include "ScalableImageDecoder.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/TZoneMallocInlines.h>
 
+#if !USE(GLYCIN)
+#include "ScalableImageDecoder.h"
+#endif
+
 #if USE(CG)
 #include "ImageDecoderCG.h"
+#endif
+
+#if USE(GLYCIN)
+#include "ImageDecoderGlycin.h"
 #endif
 
 #if HAVE(AVASSETREADER)
@@ -130,6 +137,8 @@ RefPtr<ImageDecoder> ImageDecoder::create(FragmentedSharedBuffer& data, const St
     if (auto imageDecoder = ScalableImageDecoder::create(data, alphaOption, gammaAndColorProfileOption))
         return imageDecoder;
     return ImageDecoderCG::create(data, alphaOption, gammaAndColorProfileOption);
+#elif USE(GLYCIN)
+    return ImageDecoderGlycin::create(data, mimeType, alphaOption, gammaAndColorProfileOption);
 #else
     return ScalableImageDecoder::create(data, alphaOption, gammaAndColorProfileOption);
 #endif
@@ -143,6 +152,9 @@ bool ImageDecoder::supportsMediaType(MediaType type)
 {
 #if USE(CG)
     if (ImageDecoderCG::supportsMediaType(type))
+        return true;
+#elif USE(GLYCIN)
+    if (ImageDecoderGlycin::supportsMediaType(type))
         return true;
 #else
     if (ScalableImageDecoder::supportsMediaType(type))

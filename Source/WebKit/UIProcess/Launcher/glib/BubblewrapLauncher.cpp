@@ -841,6 +841,12 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
 #endif
 
         "--ro-bind-try", PKGLIBEXECDIR, PKGLIBEXECDIR,
+
+#if USE(GLYCIN)
+        // Image decoding runs glycin loaders, which are installed in libexec.
+        "--ro-bind-try", "/usr/libexec", "/usr/libexec",
+        "--ro-bind-try", "/usr/local/libexec", "/usr/local/libexec",
+#endif
     };
 
     if (enableDebugPermissions()) {
