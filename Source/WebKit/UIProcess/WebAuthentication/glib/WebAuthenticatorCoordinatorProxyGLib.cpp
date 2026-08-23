@@ -28,6 +28,7 @@
 
 #if ENABLE(WEB_AUTHN)
 
+#include "Logging.h"
 #include "WebAuthenticationRequestData.h"
 #include <WebCore/AuthenticatorAttachment.h>
 #include <WebCore/AuthenticatorResponseData.h>
@@ -41,7 +42,6 @@
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/text/Base64.h>
-#include <wtf/text/MakeString.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -372,21 +372,21 @@ static std::optional<AuthenticatorResponseData> parseAuthenticationResponse(cons
 
 static ExceptionData exceptionFromCredentialsError(const String& error)
 {
-    static constexpr std::pair<ASCIILiteral, ExceptionCode> errorCodes[] = {
-        { "AbortError"_s, ExceptionCode::AbortError },
-        { "ConstraintError"_s, ExceptionCode::ConstraintError },
-        { "InvalidStateError"_s, ExceptionCode::InvalidStateError },
-        { "NotSupportedError"_s, ExceptionCode::NotSupportedError },
-        { "SecurityError"_s, ExceptionCode::SecurityError },
-        { "TypeError"_s, ExceptionCode::TypeError },
+    RELEASE_LOG_ERROR(WebAuthn, "Credentials request failed: %s", error.utf8().data());
+
+    static constexpr std::tuple<ASCIILiteral, ExceptionCode, ASCIILiteral> errorCodes[] = {
+        { "AbortError"_s, ExceptionCode::AbortError, "This request has been aborted."_s },
+        { "ConstraintError"_s, ExceptionCode::ConstraintError, "The operation failed due to an unsatisfiable constraint."_s },
+        { "InvalidStateError"_s, ExceptionCode::InvalidStateError, "The authenticator already contains one of the requested credentials."_s },
+        { "NotSupportedError"_s, ExceptionCode::NotSupportedError, "The requested option is not supported."_s },
+        { "SecurityError"_s, ExceptionCode::SecurityError, "The security requirements of the request were not met."_s },
+        { "TypeError"_s, ExceptionCode::TypeError, "The request is invalid."_s },
     };
-    if (!error.isEmpty()) {
-        for (const auto& [name, code] : errorCodes) {
-            if (error.contains(name))
-                return { code, error };
-        }
+    for (const auto& [name, code, message] : errorCodes) {
+        if (error.contains(name))
+            return { code, message };
     }
-    return { ExceptionCode::NotAllowedError, error.isEmpty() ? "Operation failed."_s : error };
+    return { ExceptionCode::NotAllowedError, "The request is not allowed."_s };
 }
 
 struct CredentialRequestContext {
@@ -409,7 +409,8 @@ static void credentialCallReadyCallback(GObject* source, GAsyncResult* result, g
             context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::AbortError, "This request has been aborted."_s });
             return;
         }
-        context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, makeString("Failed to complete the credentials request: "_s, String::fromUTF8(error->message)) });
+        RELEASE_LOG_ERROR(WebAuthn, "Failed to complete the credentials request: %s", error->message);
+        context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "The request is not allowed."_s });
         return;
     }
 
@@ -459,7 +460,8 @@ static void credentialsBusGotCallback(GObject*, GAsyncResult* result, gpointer u
     GUniqueOutPtr<GError> error;
     GRefPtr<GDBusConnection> connection = adoptGRef(g_bus_get_finish(result, &error.outPtr()));
     if (!connection) {
-        context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, makeString("Failed to connect to the session bus: "_s, String::fromUTF8(error->message)) });
+        RELEASE_LOG_ERROR(WebAuthn, "Failed to connect to the session bus: %s", error->message);
+        context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "The request is not allowed."_s });
         return;
     }
 
@@ -535,16 +537,17 @@ void WebAuthenticatorCoordinatorProxy::isConditionalMediationAvailable(const Sec
 
 void WebAuthenticatorCoordinatorProxy::getClientCapabilities(const SecurityOriginData&, CapabilitiesCompletionHandler&& handler)
 {
+    // Keys must be sorted in lexicographic order.
     Vector<KeyValuePair<String, bool>> capabilities;
     capabilities.append({ "conditionalCreate"_s, false });
     capabilities.append({ "conditionalGet"_s, false });
     capabilities.append({ "hybridTransport"_s, true });
     capabilities.append({ "passkeyPlatformAuthenticator"_s, true });
-    capabilities.append({ "userVerifyingPlatformAuthenticator"_s, false });
     capabilities.append({ "relatedOrigins"_s, true });
     capabilities.append({ "signalAllAcceptedCredentials"_s, false });
     capabilities.append({ "signalCurrentUserDetails"_s, false });
     capabilities.append({ "signalUnknownCredential"_s, false });
+    capabilities.append({ "userVerifyingPlatformAuthenticator"_s, false });
     handler(WTF::move(capabilities));
 }
 

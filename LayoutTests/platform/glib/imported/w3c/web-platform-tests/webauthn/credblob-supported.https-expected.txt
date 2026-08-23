@@ -1,0 +1,4 @@
+
+FAIL assertion without credBlob promise_test: Unhandled rejection with value: object "Error: add_virtual_authenticator() is not implemented by testdriver-vendor.js"
+FAIL assertion with credBlob promise_test: Unhandled rejection with value: object "Error: add_virtual_authenticator() is not implemented by testdriver-vendor.js"
+
