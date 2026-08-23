@@ -86,11 +86,6 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
     ${UPOWERGLIB_INCLUDE_DIRS}
 )
 
-list(APPEND WebCore_SOURCES
-    Modules/webauthn/AuthenticationExtensionsClientInputs.cpp
-    Modules/webauthn/AuthenticationExtensionsClientOutputs.cpp
-)
-
 if (USE_OPENXR)
     list(APPEND WebCore_LIBRARIES ${OPENXR_LIBRARIES})
     list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES ${OPENXR_INCLUDE_DIRS})

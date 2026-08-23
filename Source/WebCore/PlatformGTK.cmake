@@ -102,9 +102,6 @@ endif ()
 # We don't build most Cairo sources, but since Cairo is still needed in the
 # UI process API we need to include here the Cairo sources required.
 list(APPEND WebCore_SOURCES
-    Modules/webauthn/AuthenticationExtensionsClientInputs.cpp
-    Modules/webauthn/AuthenticationExtensionsClientOutputs.cpp
-
     platform/graphics/cairo/IntRectCairo.cpp
     platform/graphics/cairo/RefPtrCairo.cpp
 
