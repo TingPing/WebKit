@@ -38,6 +38,10 @@
 #include <wtf/Noncopyable.h>
 #include <wtf/TZoneMalloc.h>
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#include <wtf/glib/GRefPtr.h>
+#endif
+
 #if HAVE(WEB_AUTHN_AS_MODERN)
 OBJC_CLASS _WKASDelegate;
 OBJC_CLASS NSArray;
@@ -158,6 +162,9 @@ private:
     RetainPtr<ASCAuthorizationRemotePresenter> m_presenter;
     RetainPtr<ASCAgentProxy> m_proxy;
 #endif // HAVE(UNIFIED_ASC_AUTH_UI)
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    GRefPtr<GCancellable> m_cancellable;
+#endif
     CompletionHandler<void()> m_cancelHandler;
 };
 
