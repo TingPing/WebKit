@@ -37,11 +37,14 @@
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/WebAuthenticationUtils.h>
 #include <gio/gio.h>
+#include <wtf/CryptographicallyRandomNumber.h>
+#include <wtf/HexNumber.h>
 #include <wtf/JSONValues.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/text/Base64.h>
+#include <wtf/text/MakeString.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -54,6 +57,12 @@ static const char credentialsServiceName[] = "xyz.iinuwa.credentialsd.Credential
 static const char credentialsObjectPath[] = "/org/freedesktop/portal/desktop";
 static const char credentialsInterfaceName[] = "org.freedesktop.handler.portal.experimental.Credential";
 static const int credentialsCallTimeout = 300000;
+
+static const char portalServiceName[] = "org.freedesktop.portal.Desktop";
+static const char portalObjectPath[] = "/org/freedesktop/portal/desktop";
+static const char portalCredentialInterfaceName[] = "org.freedesktop.portal.experimental.Credential";
+static const char portalRequestInterfaceName[] = "org.freedesktop.portal.Request";
+static const char portalHostRegistryInterfaceName[] = "org.freedesktop.host.portal.Registry";
 
 static const char* webAuthnApplicationID()
 {
@@ -395,41 +404,46 @@ struct CredentialRequestContext {
     WTF_MAKE_STRUCT_TZONE_ALLOCATED(CredentialRequestContext);
 
     bool isGetAssertion { false };
-    GRefPtr<GVariant> parameters;
+    String origin;
+    String topOrigin;
+    String requestJSON;
+    GRefPtr<GDBusConnection> connection;
     GRefPtr<GCancellable> cancellable;
+    CString requestPath;
+    unsigned responseSubscription { 0 };
+    unsigned timeoutID { 0 };
+    gulong cancelledID { 0 };
     RequestCompletionHandler handler;
 };
 
-static void credentialCallReadyCallback(GObject* source, GAsyncResult* result, gpointer userData)
+static void completeCredentialRequest(CredentialRequestContext* rawContext, const AuthenticatorResponseData& data, AuthenticatorAttachment attachment, const ExceptionData& exception)
 {
-    auto context = std::unique_ptr<CredentialRequestContext>(static_cast<CredentialRequestContext*>(userData));
+    auto context = std::unique_ptr<CredentialRequestContext>(rawContext);
+    if (context->responseSubscription)
+        g_dbus_connection_signal_unsubscribe(context->connection.get(), std::exchange(context->responseSubscription, 0));
+    if (context->timeoutID)
+        g_source_remove(std::exchange(context->timeoutID, 0));
+    if (context->cancelledID)
+        g_signal_handler_disconnect(context->cancellable.get(), std::exchange(context->cancelledID, 0));
+    context->handler(data, attachment, exception);
+}
 
-    GUniqueOutPtr<GError> error;
-    GRefPtr<GVariant> reply = adoptGRef(g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error.outPtr()));
-    if (!reply) {
-        if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
-            context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::AbortError, "This request has been aborted."_s });
-            return;
-        }
-        RELEASE_LOG_ERROR(WebAuthn, "Failed to complete the credentials request: %s", error->message);
-        context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "The request is not allowed."_s });
+static void handleCredentialResponse(CredentialRequestContext* context, unsigned responseCode, GVariant* results)
+{
+    if (responseCode == 1) {
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "This request has been cancelled by the user."_s });
         return;
     }
 
-    guint32 responseCode;
-    GVariant* rawResults = nullptr;
-    g_variant_get(reply.get(), "(u@a{sv})", &responseCode, &rawResults);
-    GRefPtr<GVariant> results = adoptGRef(rawResults);
-
     if (responseCode) {
         const char* errorMessage = nullptr;
-        g_variant_lookup(results.get(), "error", "&s", &errorMessage);
-        context->handler({ }, AuthenticatorAttachment::CrossPlatform, exceptionFromCredentialsError(String::fromUTF8(errorMessage)));
+        g_variant_lookup(results, "error", "&s", &errorMessage);
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, exceptionFromCredentialsError(String::fromUTF8(errorMessage)));
         return;
     }
 
     GVariant* rawPublicKey = nullptr;
-    g_variant_lookup(results.get(), "public_key", "@a{sv}", &rawPublicKey);
+    g_variant_lookup(results, "public_key", "@a{sv}", &rawPublicKey);
     GRefPtr<GVariant> publicKey = adoptGRef(rawPublicKey);
 
     const char* responseJSON = nullptr;
@@ -442,36 +456,201 @@ static void credentialCallReadyCallback(GObject* source, GAsyncResult* result, g
             responseObject = value->asObject();
     }
     if (!responseObject) {
-        context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "Received an invalid response from the credentials service."_s });
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "Received an invalid response from the credentials service."_s });
         return;
     }
 
     auto data = context->isGetAssertion ? parseAuthenticationResponse(*responseObject) : parseRegistrationResponse(*responseObject);
     if (!data) {
-        context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "Received an invalid response from the credentials service."_s });
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "Received an invalid response from the credentials service."_s });
         return;
     }
 
-    context->handler(*data, authenticatorAttachmentFromJSON(*responseObject), { });
+    completeCredentialRequest(context, *data, authenticatorAttachmentFromJSON(*responseObject), { });
+}
+
+// Returns a floating reference, consumed by g_variant_new() at the call sites.
+static GVariant* credentialRequestOptions(CredentialRequestContext* context, const String* handleToken = nullptr)
+{
+    GVariantBuilder options;
+    g_variant_builder_init(&options, G_VARIANT_TYPE("a{sv}"));
+    if (handleToken)
+        g_variant_builder_add(&options, "{sv}", "handle_token", g_variant_new_string(handleToken->utf8().data()));
+    g_variant_builder_add(&options, "{sv}", "public_key", g_variant_new_string(context->requestJSON.utf8().data()));
+    if (!context->topOrigin.isNull())
+        g_variant_builder_add(&options, "{sv}", "top_origin", g_variant_new_string(context->topOrigin.utf8().data()));
+    return g_variant_builder_end(&options);
+}
+
+// Development builds of credentialsd can be configured to accept direct calls
+// on its gateway interface with the CREDSD_TRUSTED_CALLERS and
+// CREDSD_TRUSTED_APP_IDS environment variables, which allows testing without
+// a Credential portal.
+static void credentialsServiceCallReadyCallback(GObject* source, GAsyncResult* result, gpointer userData)
+{
+    auto* context = static_cast<CredentialRequestContext*>(userData);
+
+    GUniqueOutPtr<GError> error;
+    GRefPtr<GVariant> reply = adoptGRef(g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error.outPtr()));
+    if (!reply) {
+        if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+            completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::AbortError, "This request has been aborted."_s });
+            return;
+        }
+        RELEASE_LOG_ERROR(WebAuthn, "Failed to complete the credentials request: %s", error->message);
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "The request is not allowed."_s });
+        return;
+    }
+
+    guint32 responseCode;
+    GVariant* rawResults = nullptr;
+    g_variant_get(reply.get(), "(u@a{sv})", &responseCode, &rawResults);
+    GRefPtr<GVariant> results = adoptGRef(rawResults);
+    handleCredentialResponse(context, responseCode, results.get());
+}
+
+static void callCredentialsService(CredentialRequestContext* context)
+{
+    GRefPtr<GVariant> parameters;
+    if (context->isGetAssertion)
+        parameters = g_variant_new("(ss@a{sv}s)", "", context->origin.utf8().data(), credentialRequestOptions(context), webAuthnApplicationID());
+    else
+        parameters = g_variant_new("(sss@a{sv}s)", "", context->origin.utf8().data(), "publicKey", credentialRequestOptions(context), webAuthnApplicationID());
+
+    g_dbus_connection_call(context->connection.get(), credentialsServiceName, credentialsObjectPath, credentialsInterfaceName,
+        context->isGetAssertion ? "GetCredential" : "CreateCredential", parameters.get(),
+        G_VARIANT_TYPE("(ua{sv})"), G_DBUS_CALL_FLAGS_NONE, credentialsCallTimeout, context->cancellable.get(),
+        credentialsServiceCallReadyCallback, context);
+}
+
+static void closePortalRequest(CredentialRequestContext* context)
+{
+    g_dbus_connection_call(context->connection.get(), portalServiceName, context->requestPath.data(), portalRequestInterfaceName,
+        "Close", nullptr, nullptr, G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+}
+
+static void portalResponseCallback(GDBusConnection*, const char*, const char*, const char*, const char*, GVariant* parameters, gpointer userData)
+{
+    auto* context = static_cast<CredentialRequestContext*>(userData);
+
+    guint32 responseCode;
+    GVariant* rawResults = nullptr;
+    g_variant_get(parameters, "(u@a{sv})", &responseCode, &rawResults);
+    GRefPtr<GVariant> results = adoptGRef(rawResults);
+    handleCredentialResponse(context, responseCode, results.get());
+}
+
+static void portalCallReadyCallback(GObject* source, GAsyncResult* result, gpointer userData)
+{
+    auto* context = static_cast<CredentialRequestContext*>(userData);
+
+    GUniqueOutPtr<GError> error;
+    GRefPtr<GVariant> reply = adoptGRef(g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error.outPtr()));
+    if (!reply) {
+        if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+            completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::AbortError, "This request has been aborted."_s });
+            return;
+        }
+        if (g_error_matches(error.get(), G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD)
+            || g_error_matches(error.get(), G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_INTERFACE)
+            || g_error_matches(error.get(), G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_OBJECT)
+            || g_error_matches(error.get(), G_DBUS_ERROR, G_DBUS_ERROR_SERVICE_UNKNOWN)) {
+            RELEASE_LOG(WebAuthn, "Credential portal is not available, calling the credentials service directly: %s", error->message);
+            if (context->responseSubscription)
+                g_dbus_connection_signal_unsubscribe(context->connection.get(), std::exchange(context->responseSubscription, 0));
+            callCredentialsService(context);
+            return;
+        }
+        RELEASE_LOG_ERROR(WebAuthn, "Failed to complete the credential portal request: %s", error->message);
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "The request is not allowed."_s });
+        return;
+    }
+
+    const char* handle = nullptr;
+    g_variant_get(reply.get(), "(&o)", &handle);
+    if (context->requestPath != handle) {
+        g_dbus_connection_signal_unsubscribe(context->connection.get(), std::exchange(context->responseSubscription, 0));
+        context->requestPath = handle;
+        context->responseSubscription = g_dbus_connection_signal_subscribe(context->connection.get(), portalServiceName,
+            portalRequestInterfaceName, "Response", context->requestPath.data(), nullptr, G_DBUS_SIGNAL_FLAGS_NONE,
+            portalResponseCallback, context, nullptr);
+    }
+
+    context->timeoutID = g_timeout_add_seconds(credentialsCallTimeout / 1000, [](gpointer userData) -> gboolean {
+        auto* context = static_cast<CredentialRequestContext*>(userData);
+        context->timeoutID = 0;
+        closePortalRequest(context);
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "Operation timed out."_s });
+        return G_SOURCE_REMOVE;
+    }, context);
+
+    context->cancelledID = g_cancellable_connect(context->cancellable.get(), G_CALLBACK(+[](GCancellable*, gpointer userData) {
+        auto* context = static_cast<CredentialRequestContext*>(userData);
+        context->cancelledID = 0;
+        closePortalRequest(context);
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::AbortError, "This request has been aborted."_s });
+    }), context, nullptr);
+}
+
+static void registerHostApplication(GDBusConnection* connection)
+{
+    static bool alreadyRegistered = false;
+    if (alreadyRegistered)
+        return;
+    alreadyRegistered = true;
+
+    // Host applications have to register their application ID for the portal
+    // to forward it; sandboxed applications get theirs from the sandbox.
+    GVariantBuilder options;
+    g_variant_builder_init(&options, G_VARIANT_TYPE("a{sv}"));
+    g_dbus_connection_call(connection, portalServiceName, portalObjectPath, portalHostRegistryInterfaceName, "Register",
+        g_variant_new("(sa{sv})", webAuthnApplicationID(), &options), nullptr, G_DBUS_CALL_FLAGS_NONE, -1, nullptr,
+        [](GObject* source, GAsyncResult* result, gpointer) {
+            GUniqueOutPtr<GError> error;
+            GRefPtr<GVariant> reply = adoptGRef(g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error.outPtr()));
+            if (!reply)
+                RELEASE_LOG(WebAuthn, "Failed to register with the host portal registry: %s", error->message);
+        }, nullptr);
+}
+
+static void callCredentialPortal(CredentialRequestContext* context)
+{
+    registerHostApplication(context->connection.get());
+
+    auto token = makeString("webkit"_s, hex(cryptographicallyRandomNumber<uint64_t>()));
+    auto sender = String::fromLatin1(g_dbus_connection_get_unique_name(context->connection.get()));
+    context->requestPath = makeString("/org/freedesktop/portal/desktop/request/"_s, makeStringByReplacingAll(sender.substring(1), '.', '_'), '/', token).utf8();
+
+    context->responseSubscription = g_dbus_connection_signal_subscribe(context->connection.get(), portalServiceName,
+        portalRequestInterfaceName, "Response", context->requestPath.data(), nullptr, G_DBUS_SIGNAL_FLAGS_NONE,
+        portalResponseCallback, context, nullptr);
+
+    GRefPtr<GVariant> parameters;
+    if (context->isGetAssertion)
+        parameters = g_variant_new("(ss@a{sv})", "", context->origin.utf8().data(), credentialRequestOptions(context, &token));
+    else
+        parameters = g_variant_new("(sss@a{sv})", "", context->origin.utf8().data(), "publicKey", credentialRequestOptions(context, &token));
+
+    g_dbus_connection_call(context->connection.get(), portalServiceName, portalObjectPath, portalCredentialInterfaceName,
+        context->isGetAssertion ? "GetCredential" : "CreateCredential", parameters.get(),
+        G_VARIANT_TYPE("(o)"), G_DBUS_CALL_FLAGS_NONE, -1, context->cancellable.get(),
+        portalCallReadyCallback, context);
 }
 
 static void credentialsBusGotCallback(GObject*, GAsyncResult* result, gpointer userData)
 {
-    auto context = std::unique_ptr<CredentialRequestContext>(static_cast<CredentialRequestContext*>(userData));
+    auto* context = static_cast<CredentialRequestContext*>(userData);
 
     GUniqueOutPtr<GError> error;
     GRefPtr<GDBusConnection> connection = adoptGRef(g_bus_get_finish(result, &error.outPtr()));
     if (!connection) {
         RELEASE_LOG_ERROR(WebAuthn, "Failed to connect to the session bus: %s", error->message);
-        context->handler({ }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "The request is not allowed."_s });
+        completeCredentialRequest(context, { }, AuthenticatorAttachment::CrossPlatform, ExceptionData { ExceptionCode::NotAllowedError, "The request is not allowed."_s });
         return;
     }
 
-    auto* rawContext = context.release();
-    g_dbus_connection_call(connection.get(), credentialsServiceName, credentialsObjectPath, credentialsInterfaceName,
-        rawContext->isGetAssertion ? "GetCredential" : "CreateCredential", rawContext->parameters.get(),
-        G_VARIANT_TYPE("(ua{sv})"), G_DBUS_CALL_FLAGS_NONE, credentialsCallTimeout, rawContext->cancellable.get(),
-        credentialCallReadyCallback, rawContext);
+    context->connection = WTF::move(connection);
+    callCredentialPortal(context);
 }
 
 void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestData&& requestData, RequestCompletionHandler&& handler)
@@ -486,35 +665,18 @@ void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestDa
         return;
     }
 
-    auto origin = requestData.frameInfo->securityOrigin.toString();
-    String topOrigin;
-    if (requestData.parentOrigin)
-        topOrigin = requestData.parentOrigin->toString();
+    m_cancellable = adoptGRef(g_cancellable_new());
 
-    bool isGetAssertion = std::holds_alternative<PublicKeyCredentialRequestOptions>(requestData.options);
-    auto requestJSON = WTF::switchOn(requestData.options, [](const PublicKeyCredentialCreationOptions& options) {
+    auto context = makeUnique<CredentialRequestContext>();
+    context->isGetAssertion = std::holds_alternative<PublicKeyCredentialRequestOptions>(requestData.options);
+    context->origin = requestData.frameInfo->securityOrigin.toString();
+    if (requestData.parentOrigin)
+        context->topOrigin = requestData.parentOrigin->toString();
+    context->requestJSON = WTF::switchOn(requestData.options, [](const PublicKeyCredentialCreationOptions& options) {
         return serializeMakeCredentialOptions(options);
     }, [](const PublicKeyCredentialRequestOptions& options) {
         return serializeGetAssertionOptions(options);
     });
-
-    GVariantBuilder options;
-    g_variant_builder_init(&options, G_VARIANT_TYPE("a{sv}"));
-    g_variant_builder_add(&options, "{sv}", "public_key", g_variant_new_string(requestJSON.utf8().data()));
-    if (!topOrigin.isNull())
-        g_variant_builder_add(&options, "{sv}", "top_origin", g_variant_new_string(topOrigin.utf8().data()));
-
-    GRefPtr<GVariant> parameters;
-    if (isGetAssertion)
-        parameters = g_variant_new("(ss@a{sv}s)", "", origin.utf8().data(), g_variant_builder_end(&options), webAuthnApplicationID());
-    else
-        parameters = g_variant_new("(sss@a{sv}s)", "", origin.utf8().data(), "publicKey", g_variant_builder_end(&options), webAuthnApplicationID());
-
-    m_cancellable = adoptGRef(g_cancellable_new());
-
-    auto context = makeUnique<CredentialRequestContext>();
-    context->isGetAssertion = isGetAssertion;
-    context->parameters = WTF::move(parameters);
     context->cancellable = m_cancellable;
     context->handler = WTF::move(handler);
     g_bus_get(G_BUS_TYPE_SESSION, m_cancellable.get(), credentialsBusGotCallback, context.release());
