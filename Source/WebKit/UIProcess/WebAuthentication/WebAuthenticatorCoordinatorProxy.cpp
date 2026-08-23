@@ -30,7 +30,9 @@
 
 #include "APIUIClient.h"
 #include "AuthenticatorManager.h"
+#if PLATFORM(COCOA)
 #include "LocalService.h"
+#endif
 #include "Logging.h"
 #include "WebAuthenticationFlags.h"
 #include "WebAuthenticatorCoordinatorProxyMessages.h"
@@ -174,6 +176,11 @@ void WebAuthenticatorCoordinatorProxy::handleRequest(WebAuthenticationRequestDat
                 protectedThis->performRequest(WTF::move(data), WTF::move(handler));
                 return;
             }
+#elif PLATFORM(GTK) || PLATFORM(WPE)
+            if (!authenticatorManager->isMock() && !authenticatorManager->isVirtual()) {
+                protectedThis->performRequest(WTF::move(data), WTF::move(handler));
+                return;
+            }
 #else
             if (data.parentOrigin && !authenticatorManager->isMock() && !authenticatorManager->isVirtual()) {
                 handler({ }, (AuthenticatorAttachment)0, ExceptionData { ExceptionCode::NotAllowedError, "The origin of the document is not the same as its ancestors."_s });
@@ -228,7 +235,7 @@ void WebAuthenticatorCoordinatorProxy::handleRequest(WebAuthenticationRequestDat
 }
 
 
-#if !HAVE(UNIFIED_ASC_AUTH_UI) && !HAVE(WEB_AUTHN_AS_MODERN)
+#if !HAVE(UNIFIED_ASC_AUTH_UI) && !HAVE(WEB_AUTHN_AS_MODERN) && !PLATFORM(GTK) && !PLATFORM(WPE)
 void WebAuthenticatorCoordinatorProxy::cancel(CompletionHandler<void()>&& completionHandler)
 {
     completionHandler();
@@ -243,7 +250,7 @@ void WebAuthenticatorCoordinatorProxy::isConditionalMediationAvailable(const Sec
 {
     handler(false);
 }
-#endif // !HAVE(UNIFIED_ASC_AUTH_UI) && !HAVE(WEB_AUTHN_AS_MODERN)
+#endif // !HAVE(UNIFIED_ASC_AUTH_UI) && !HAVE(WEB_AUTHN_AS_MODERN) && !PLATFORM(GTK) && !PLATFORM(WPE)
 
 #if HAVE(WEB_AUTHN_AS_MODERN)
 

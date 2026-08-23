@@ -29,7 +29,9 @@
 #if ENABLE(WEB_AUTHN)
 
 #include "CtapDriver.h"
+#if PLATFORM(COCOA)
 #include "CtapHidDriver.h"
+#endif
 #include "Logging.h"
 #include "U2fAuthenticator.h"
 #include <WebCore/AuthenticationExtensionsClientOutputs.h>
