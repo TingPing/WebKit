@@ -3626,6 +3626,7 @@ imported/w3c/web-platform-tests/webauthn/signal-all-accepted-credentials.https.h
 imported/w3c/web-platform-tests/webauthn/signal-current-user-details.https.html [ Pass ]
 imported/w3c/web-platform-tests/webauthn/signal-unknown-credential.https.html [ Pass ]
 imported/w3c/web-platform-tests/webauthn/storecredential.https.html [ Pass ]
+imported/w3c/web-platform-tests/webauthn/webauthn-testdriver-basic.https.html [ Pass ]
 http/wpt/webauthn/public-key-credential-abort-reason.https.html [ Pass ]
 http/wpt/webauthn/public-key-credential-create-with-invalid-parameters.https.html [ Pass ]
 http/wpt/webauthn/public-key-credential-get-with-invalid-parameters.https.html [ Pass ]

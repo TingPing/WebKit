@@ -1,4 +1,4 @@
 
-FAIL create() with remoteDesktopClientOverride promise_test: Unhandled rejection with value: object "Error: add_virtual_authenticator() is not implemented by testdriver-vendor.js"
-FAIL get() with remoteDesktopClientOverride on an unauthorized site promise_test: Unhandled rejection with value: object "Error: add_virtual_authenticator() is not implemented by testdriver-vendor.js"
+PASS create() with remoteDesktopClientOverride
+FAIL get() with remoteDesktopClientOverride on an unauthorized site promise_test: Unhandled rejection with value: object "NotAllowedError: The request is not allowed."
 

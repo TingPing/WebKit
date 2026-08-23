@@ -374,12 +374,14 @@ static ExceptionData exceptionFromCredentialsError(const String& error)
 {
     RELEASE_LOG_ERROR(WebAuthn, "Credentials request failed: %s", error.utf8().data());
 
+    // SecurityError is deliberately not mapped: the service raises it for
+    // caller trust failures, and reporting those the same as any other
+    // disallowed request avoids leaking the distinction to web content.
     static constexpr std::tuple<ASCIILiteral, ExceptionCode, ASCIILiteral> errorCodes[] = {
         { "AbortError"_s, ExceptionCode::AbortError, "This request has been aborted."_s },
         { "ConstraintError"_s, ExceptionCode::ConstraintError, "The operation failed due to an unsatisfiable constraint."_s },
         { "InvalidStateError"_s, ExceptionCode::InvalidStateError, "The authenticator already contains one of the requested credentials."_s },
         { "NotSupportedError"_s, ExceptionCode::NotSupportedError, "The requested option is not supported."_s },
-        { "SecurityError"_s, ExceptionCode::SecurityError, "The security requirements of the request were not met."_s },
         { "TypeError"_s, ExceptionCode::TypeError, "The request is invalid."_s },
     };
     for (const auto& [name, code, message] : errorCodes) {
