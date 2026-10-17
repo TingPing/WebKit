@@ -29,6 +29,7 @@
 #include "ImageFrameWorkQueue.h"
 #include "ImageSource.h"
 #include <wtf/CheckedPtr.h>
+#include <wtf/HashMap.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -151,6 +152,7 @@ private:
     std::expected<Ref<NativeImage>, DecodingStatus> nativeImageAtIndexCacheIfNeeded(unsigned index, SubsamplingLevel = SubsamplingLevel::Default, const DecodingOptions& = { });
     std::expected<Ref<NativeImage>, DecodingStatus> nativeImageAtIndexRequestIfNeeded(unsigned index, SubsamplingLevel, const DecodingOptions&);
     std::expected<Ref<NativeImage>, DecodingStatus> nativeImageAtIndexForDrawing(unsigned index, SubsamplingLevel, const DecodingOptions&);
+    std::expected<Ref<NativeImage>, DecodingStatus> nativeImageAtIndexFromAsynchronousDecoder(unsigned index, SubsamplingLevel, const DecodingOptions&);
 
     std::expected<Ref<NativeImage>, DecodingStatus> currentNativeImageForDrawing(SubsamplingLevel, const DecodingOptions&) final;
 
@@ -230,6 +232,11 @@ private:
     Vector<ImageFrame> m_frames;
     unsigned m_decodedSize { 0 };
     unsigned m_decodedPropertiesSize { 0 };
+
+    // For an asynchronous decoder: how much encoded data each frame's last decode request
+    // saw, so a partially decoded frame is only decoded again once more data has arrived.
+    unsigned m_encodedDataGeneration { 0 };
+    HashMap<unsigned, unsigned, DefaultHash<unsigned>, WTF::UnsignedWithZeroKeyHashTraits<unsigned>> m_encodedDataGenerationOfLastDecodeRequest;
 
     // Testing support
     unsigned m_decodeCountForTesting { 0 };

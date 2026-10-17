@@ -270,6 +270,12 @@ void JPEGXLImageDecoder::decode(Query query, size_t frameIndex, bool allDataRece
         return;
     }
 
+    // Render what the data received so far allows (for a progressive image, a lower
+    // resolution or lower quality pass) into the frame that is being decoded. This fails
+    // harmlessly when there isn't enough data yet.
+    if (query == Query::DecodedImage && status == JXL_DEC_NEED_MORE_INPUT && m_currentFrame < m_frameBufferCache.size() && !m_frameBufferCache[m_currentFrame].isInvalid())
+        JxlDecoderFlushImage(m_decoder.get());
+
     if (query == Query::DecodedImage && status == JXL_DEC_FULL_IMAGE && m_isLastFrameHeaderReceived && m_currentFrame == m_frameCount) {
         // We free the decoder and LCMS data when the last frame is decoded.
         clear();

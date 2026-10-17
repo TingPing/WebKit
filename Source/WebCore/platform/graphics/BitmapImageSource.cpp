@@ -167,6 +167,7 @@ void BitmapImageSource::destroyDecodedFrames(bool destroyAll)
 void BitmapImageSource::destroyDecodedData(bool destroyAll)
 {
     destroyDecodedFrames(destroyAll);
+    m_encodedDataGenerationOfLastDecodeRequest.clear();
 
     // There's no need to throw away the decoder unless we're explicitly asked
     // to destroy all of the frames.
@@ -274,6 +275,7 @@ EncodedDataStatus BitmapImageSource::setData(FragmentedSharedBuffer* data, bool 
 
     decoder->setData(*data, allDataReceived);
     m_allDataReceived = allDataReceived;
+    ++m_encodedDataGeneration;
     return encodedDataStatus();
 }
 
@@ -446,6 +448,17 @@ void BitmapImageSource::decodeForCallbacks()
         }
     }
 
+    // A frame from an asynchronous decoder that is already decoded as far as the encoded
+    // data received so far allows can't get any more complete yet.
+    if (!compatibleDecodingDestination && decodesAsynchronously()) {
+        auto lastRequest = m_encodedDataGenerationOfLastDecodeRequest.find(index);
+        if (lastRequest != m_encodedDataGenerationOfLastDecodeRequest.end() && lastRequest->value == m_encodedDataGeneration) {
+            callDecodeCallbacks(frameDecodingStatusAtIndex(index));
+            return;
+        }
+        m_encodedDataGenerationOfLastDecodeRequest.set(index, m_encodedDataGeneration);
+    }
+
     if (!compatibleDecodingDestination) {
         LOG(Images, "BitmapImageSource::%s - %p - url: %s. Decoding for frame at index = %d will be requested.", __FUNCTION__, this, sourceUTF8(), index);
         requestNativeImageAtIndex(index, SubsamplingLevel::Default, ImageAnimatingState::No, { DecodingMode::Asynchronous, preferredDecodingDestination });
@@ -601,7 +614,10 @@ const ImageFrame& BitmapImageSource::frameAtIndexCacheIfNeeded(unsigned index, c
     if (frame.isComplete() && subsamplingLevelValue == frame.subsamplingLevel())
         return frame;
 
-    destroyNativeImageAtIndex(index);
+    // An asynchronous decoder can't decode an incomplete frame again on demand; its
+    // partially decoded image stays until a more complete decode replaces it.
+    if (!decodesAsynchronously())
+        destroyNativeImageAtIndex(index);
 
     // Retrieve the metadata from ImageDecoder if the ImageFrame isn't complete.
     cacheMetadataAtIndex(index, subsamplingLevelValue, { });
@@ -711,14 +727,42 @@ std::expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAt
 
 std::expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAtIndexForDrawing(unsigned index, SubsamplingLevel subsamplingLevel, const DecodingOptions& options)
 {
+    if (decodesAsynchronously())
+        return nativeImageAtIndexFromAsynchronousDecoder(index, subsamplingLevel, options);
+
     // If this is an animated image and the frame is not available, we have no
     // choice but to decode it synchronously. Otherwise, a flicker will happen.
-    // An asynchronously decoding image (e.g. one whose decoder lives in another
-    // process) can never be decoded on the calling (main) thread; always request
-    // its frames asynchronously.
-    if ((options.decodingMode() == DecodingMode::Asynchronous || decodesAsynchronously()) && !isAnimated())
+    if (options.decodingMode() == DecodingMode::Asynchronous && !isAnimated())
         return nativeImageAtIndexRequestIfNeeded(index, subsamplingLevel, options);
     return nativeImageAtIndexCacheIfNeeded(index, subsamplingLevel, options);
+}
+
+std::expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAtIndexFromAsynchronousDecoder(unsigned index, SubsamplingLevel subsamplingLevel, const DecodingOptions& options)
+{
+    // An asynchronous decoder (e.g. one in another process) can never decode on this
+    // thread. Present the frame as decoded so far: a frame decoded from partial data
+    // (for instance a progressive pass) stays up until a more complete decode replaces
+    // it, which is requested whenever more encoded data has arrived since the last one.
+    if (index >= m_frames.size())
+        return makeUnexpected(DecodingStatus::Invalid);
+
+    bool isPending = isPendingDecodingAtIndex(index, subsamplingLevel, options);
+    auto compatibleDecodingDestination = compatibleDecodingDestinationWithOptionsAtIndex(index, subsamplingLevel, options);
+    if (!compatibleDecodingDestination && !isPending) {
+        auto lastRequest = m_encodedDataGenerationOfLastDecodeRequest.find(index);
+        if (lastRequest == m_encodedDataGenerationOfLastDecodeRequest.end() || lastRequest->value != m_encodedDataGeneration) {
+            m_encodedDataGenerationOfLastDecodeRequest.set(index, m_encodedDataGeneration);
+            requestNativeImageAtIndex(index, subsamplingLevel, ImageAnimatingState::No, options);
+            isPending = true;
+        }
+    }
+
+    if (RefPtr nativeImage = frameAtIndex(index).nativeImage(compatibleDecodingDestination.value_or(options.decodingDestination())))
+        return nativeImage.releaseNonNull();
+
+    if (isPending)
+        ++m_blankDrawCountForTesting;
+    return makeUnexpected(isPending ? DecodingStatus::Decoding : DecodingStatus::Invalid);
 }
 
 std::expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::currentNativeImageForDrawing(SubsamplingLevel subsamplingLevel, const DecodingOptions& options)
