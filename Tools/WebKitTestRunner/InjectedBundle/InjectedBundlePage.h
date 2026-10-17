@@ -128,6 +128,7 @@ private:
     WKBundleFrameRef m_topLoadingFrame { nullptr };
     WKRetainPtr<WKBundleScriptWorldRef> m_world;
     bool m_didCommitMainFrameLoad { false };
+    bool m_isWaitingForAsynchronousImageDecodes { false };
 };
 
 } // namespace WTR

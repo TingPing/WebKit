@@ -50,6 +50,7 @@ class AuxiliaryProcessMainBase : public AuxiliaryProcessMainCommon {
 public:
     virtual bool platformInitialize() { return true; }
     virtual void platformFinalize() { }
+    virtual void initializeWebKit() { InitializeWebKit2(); }
 
     virtual void initializeAuxiliaryProcess(AuxiliaryProcessInitializationParameters&& parameters)
     {
@@ -70,7 +71,7 @@ public:
         if (!parseCommandLine(argc, argv))
             return EXIT_FAILURE;
 
-        InitializeWebKit2();
+        initializeWebKit();
 
         initializeAuxiliaryProcess(WTF::move(m_parameters));
         RunLoop::run();

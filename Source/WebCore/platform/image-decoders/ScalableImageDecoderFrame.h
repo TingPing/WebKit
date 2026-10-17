@@ -50,6 +50,11 @@ public:
     bool initialize(const ImageBackingStore&);
     bool initialize(const IntSize&, bool premultiplyAlpha);
 
+    // Wraps externally provided memory (e.g. memory shared with another process) as the
+    // frame's backing store. Used by out-of-process image decoding to write decoded
+    // pixels directly into a caller-provided destination. The memory is not cleared.
+    bool initialize(const IntSize&, Ref<FragmentedSharedBuffer::DataSegment>&&, bool premultiplyAlpha);
+
     void LEGACY_NODELETE setDecodingStatus(DecodingStatus);
     DecodingStatus LEGACY_NODELETE decodingStatus() const;
 

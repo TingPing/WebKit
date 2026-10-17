@@ -122,6 +122,10 @@ ASCIILiteral processTypeDescription(std::optional<AuxiliaryProcessType> type)
     case AuxiliaryProcessType::Model:
         return "Model"_s;
 #endif
+#if ENABLE(IMAGE_PROCESS)
+    case AuxiliaryProcessType::Image:
+        return "Image"_s;
+#endif
     }
     return "Unknown"_s;
 }

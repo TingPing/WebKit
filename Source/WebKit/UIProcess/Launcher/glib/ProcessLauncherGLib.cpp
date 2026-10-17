@@ -183,6 +183,11 @@ void ProcessLauncher::launchProcess()
         executablePath = executablePathOfGPUProcess();
         break;
 #endif
+#if ENABLE(IMAGE_PROCESS)
+    case ProcessLauncher::ProcessType::Image:
+        executablePath = executablePathOfImageProcess();
+        break;
+#endif
     default:
         ASSERT_NOT_REACHED();
         return;

@@ -88,6 +88,15 @@ bool ScalableImageDecoderFrame::initialize(const IntSize& size, bool premultiply
     return m_backingStore != nullptr;
 }
 
+bool ScalableImageDecoderFrame::initialize(const IntSize& size, Ref<FragmentedSharedBuffer::DataSegment>&& externalDataSegment, bool premultiplyAlpha)
+{
+    if (size.isEmpty())
+        return false;
+
+    m_backingStore = ImageBackingStore::create(size, WTF::move(externalDataSegment), premultiplyAlpha);
+    return m_backingStore != nullptr;
+}
+
 IntSize ScalableImageDecoderFrame::size() const
 {
     if (hasBackingStore())

@@ -30,6 +30,11 @@ GPUProcess/media/RemoteAudioDestinationManager.cpp
 
 GPUProcess/media/gstreamer/RemoteMediaPlayerProxyGStreamer.cpp
 
+ImageProcess/ImageConnectionToWebProcess.cpp
+ImageProcess/ImageDecodingQueue.cpp
+ImageProcess/ImageProcess.cpp
+ImageProcess/glib/ImageProcessMainGLib.cpp
+
 NetworkProcess/Classifier/WebResourceLoadStatisticsStore.cpp @cost:7
 
 NetworkProcess/Cookies/soup/CookieStorageSoup.cpp
@@ -113,6 +118,9 @@ Shared/soup/WebErrorsSoup.cpp
 Shared/unix/AuxiliaryProcessMain.cpp
 
 UIProcess/DefaultUndoController.cpp
+
+UIProcess/Image/ImageProcessProxy.cpp
+
 UIProcess/LegacySessionStateCodingNone.cpp
 UIProcess/ViewGestureController.cpp
 UIProcess/ViewSnapshotStore.cpp
@@ -333,6 +341,10 @@ UIProcess/XR/openxr/PlatformXRSystemOpenXR.cpp
 WebProcess/GPU/graphics/gbm/RemoteGraphicsContextGLProxyGBM.cpp
 
 WebProcess/GPU/media/gstreamer/VideoLayerRemoteGStreamer.cpp
+
+WebProcess/Image/ImageProcessConnection.cpp
+WebProcess/Image/RemoteImageDecoder.cpp
+WebProcess/Image/RemoteImageDecoderManager.cpp
 
 WebProcess/InjectedBundle/API/glib/WebKitConsoleMessage.cpp @no-unify
 WebProcess/InjectedBundle/API/glib/WebKitFrame.cpp @no-unify

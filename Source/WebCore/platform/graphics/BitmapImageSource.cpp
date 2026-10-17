@@ -52,6 +52,12 @@ BitmapImageSource::BitmapImageSource(BitmapImage& bitmapImage, AlphaOption alpha
 
 BitmapImageSource::~BitmapImageSource() = default;
 
+bool BitmapImageSource::decodesAsynchronously() const
+{
+    RefPtr decoder = decoderIfExists();
+    return decoder && decoder->isDecodingAsynchronous();
+}
+
 ImageDecoder* BitmapImageSource::decoder(FragmentedSharedBuffer* data) const
 {
     if (m_decoder)
@@ -105,11 +111,22 @@ void BitmapImageSource::encodedDataStatusChanged(EncodedDataStatus status)
 {
     ASSERT(m_decoder);
 
+    // An asynchronous decoder reports its metadata (e.g. the frame count) here rather than
+    // from setData(), so drop what was cached before it arrived.
+    m_descriptor.clear();
+
     if (status >= EncodedDataStatus::SizeAvailable)
         m_frames.resizeToFit(protect(m_decoder)->frameCount());
 
     if (auto imageObserver = this->imageObserver())
         imageObserver->encodedDataStatusChanged(protect(*m_bitmapImage), status);
+
+    // decode() callbacks can be parked waiting for the frame metadata of an
+    // asynchronously decoding image to be resolved. Now that the frames have
+    // been sized, request the frame decode; the callbacks will be called when
+    // it finishes.
+    if (!m_decodeCallbacks.isEmpty() && status >= EncodedDataStatus::SizeAvailable)
+        decodeForCallbacks();
 }
 
 EncodedDataStatus BitmapImageSource::dataChanged(FragmentedSharedBuffer* data, bool allDataReceived)
@@ -291,6 +308,11 @@ bool BitmapImageSource::startAnimation(SubsamplingLevel subsamplingLevel, const 
     if (!frameAnimator)
         return false;
 
+    // An asynchronous decoder can't decode the next frame on demand when it's due, so the
+    // animator has to request it ahead of time and only advance once it's decoded.
+    if (decodesAsynchronously() && options.decodingMode() != DecodingMode::Asynchronous)
+        return frameAnimator->startAnimation(subsamplingLevel, { DecodingMode::Asynchronous, options.decodingDestination(), options.sizeForDrawing() });
+
     return frameAnimator->startAnimation(subsamplingLevel, options);
 }
 
@@ -386,7 +408,24 @@ std::optional<DecodingDestination> BitmapImageSource::compatibleDecodingDestinat
 void BitmapImageSource::decode(Function<void(DecodingStatus)>&& decodeCallback)
 {
     m_decodeCallbacks.append(WTF::move(decodeCallback));
+    decodeForCallbacks();
+}
+
+void BitmapImageSource::decodeForCallbacks()
+{
     unsigned index = currentFrameIndex();
+
+    // For an asynchronously decoding image (e.g. one whose decoder lives in another
+    // process), the frame metadata may not have been resolved yet and the frames may
+    // not have been sized. Park the callbacks; they will be called from
+    // encodedDataStatusChanged() once the metadata arrives and a frame decode is
+    // requested.
+    if (index >= m_frames.size()) {
+        if (decodesAsynchronously())
+            return;
+        callDecodeCallbacks(DecodingStatus::Invalid);
+        return;
+    }
 
     if (isPendingDecodingAtIndex(index, SubsamplingLevel::Default, DecodingMode::Asynchronous)) {
         LOG(Images, "BitmapImageSource::%s - %p - url: %s. Frame at index = %d is being decoded.", __FUNCTION__, this, sourceUTF8(), index);
@@ -624,6 +663,15 @@ std::expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAt
     if (auto compatibleDecodingDestination = compatibleDecodingDestinationWithOptionsAtIndex(index, subsamplingLevel, options))
         decodingDestination = *compatibleDecodingDestination;
     else {
+        // An asynchronously decoding image (e.g. one whose decoder lives in another
+        // process) can't be decoded on the calling (main) thread. Request an
+        // asynchronous decode instead; the frame will be available to a subsequent
+        // draw once decoding finishes.
+        if (decodesAsynchronously()) {
+            requestNativeImageAtIndex(index, subsamplingLevel, ImageAnimatingState::No, { DecodingMode::Asynchronous, decodingDestination, options.sizeForDrawing() });
+            return makeUnexpected(DecodingStatus::Decoding);
+        }
+
         auto decodingOptions = DecodingOptions { DecodingMode::Synchronous, decodingDestination };
 
         auto result = protect(m_decoder)->createNativeImageAtIndex(index, subsamplingLevel, decodingOptions);
@@ -665,7 +713,10 @@ std::expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAt
 {
     // If this is an animated image and the frame is not available, we have no
     // choice but to decode it synchronously. Otherwise, a flicker will happen.
-    if (options.decodingMode() == DecodingMode::Asynchronous && !isAnimated())
+    // An asynchronously decoding image (e.g. one whose decoder lives in another
+    // process) can never be decoded on the calling (main) thread; always request
+    // its frames asynchronously.
+    if ((options.decodingMode() == DecodingMode::Asynchronous || decodesAsynchronously()) && !isAnimated())
         return nativeImageAtIndexRequestIfNeeded(index, subsamplingLevel, options);
     return nativeImageAtIndexCacheIfNeeded(index, subsamplingLevel, options);
 }

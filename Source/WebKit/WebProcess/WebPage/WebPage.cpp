@@ -470,6 +470,10 @@
 #endif
 #endif
 
+#if ENABLE(IMAGE_PROCESS)
+#include "RemoteImageDecoderManager.h"
+#endif
+
 #if ENABLE(IMAGE_ANALYSIS)
 #include <WebCore/TextRecognitionResult.h>
 #endif
@@ -5666,6 +5670,10 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     WebProcess::singleton().setUseGPUProcessForWebGL(m_shouldRenderWebGLInGPUProcess);
 #endif
 #endif // ENABLE(GPU_PROCESS)
+
+#if ENABLE(IMAGE_PROCESS)
+    protect(WebProcess::singleton().remoteImageDecoderManager())->setImageProcessEnabled(store.getBoolValueForKey(WebPreferencesKey::imageProcessDecodingEnabledKey()));
+#endif
 
 #if ENABLE(IPC_TESTING_API)
     m_ipcTestingAPIEnabled = store.getBoolValueForKey(WebPreferencesKey::ipcTestingAPIEnabledKey());

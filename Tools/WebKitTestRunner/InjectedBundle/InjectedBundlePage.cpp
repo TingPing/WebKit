@@ -527,6 +527,27 @@ void InjectedBundlePage::dump()
         // does this at a slightly different time.) See <http://webkit.org/b/55469> for details.
         WKBundlePageForceRepaint(m_page);
     }
+
+    // Images whose decoder can't decode synchronously (e.g. it decodes in another process) would paint
+    // blank in the snapshot; decode them up front and wait so the results include the decoded pixels.
+    WKBundlePageRequestAsynchronousImageDecodes(m_page);
+    if (WKBundlePageHasPendingAsynchronousImageDecodes(m_page)) {
+        if (m_isWaitingForAsynchronousImageDecodes)
+            return;
+        m_isWaitingForAsynchronousImageDecodes = true;
+        WKRetain(m_page);
+        RunLoop::currentSingleton().dispatchAfter(1_ms, [page = m_page] {
+            auto& bundle = InjectedBundle::singleton();
+            if (auto currentPage = bundle.page(); currentPage && currentPage->page() == page) {
+                currentPage->m_isWaitingForAsynchronousImageDecodes = false;
+                if (bundle.testRunner())
+                    currentPage->dump();
+            }
+            WKRelease(page);
+        });
+        return;
+    }
+
     WKBundlePageFlushPendingEditorStateUpdate(m_page);
 
     ALLOW_DEPRECATED_DECLARATIONS_BEGIN

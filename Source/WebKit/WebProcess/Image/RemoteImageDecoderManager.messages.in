@@ -1,0 +1,43 @@
+# Copyright (C) 2026 Igalia S.L.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1.  Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+# 2.  Redistributions in binary form must reproduce the above copyright
+#     notice, this list of conditions and the following disclaimer in the
+#     documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS BE LIABLE FOR
+# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#if ENABLE(IMAGE_PROCESS)
+
+[
+    DispatchedFrom=Image,
+    DispatchedTo=WebContent
+]
+messages -> RemoteImageDecoderManager {
+    # Reports the encoded data status of a decoder after more of its encoded
+    # data arrived. All fields mirror the state of the decoder in the Image
+    # process; there is one frame info per frame.
+    EncodedDataStatusChanged(WebCore::ImageDecoderIdentifier identifier, bool isFailed, bool isAllDataReceived, WebCore::IntSize size, int32_t repetitionCount, Vector<WebCore::ImageDecoderFrameInfo> frameInfos)
+
+    # The frame's shared buffer is ready to be presented. `buffer` is sent
+    # with the first result for a frame, and again whenever the Image process
+    # replaces the buffer; otherwise the frame's existing buffer was updated in
+    # place. A frame that isn't complete yet holds the pixels decoded so far.
+    # The frame's duration is only known once it's decoded, so it comes here.
+    FrameDecoded(WebCore::ImageDecoderIdentifier identifier, uint64_t index, std::optional<WebCore::ShareableBitmapHandle> buffer, bool succeeded, bool isComplete, WebCore::ImageDecoderFrameInfo frameInfo)
+}
+
+#endif // ENABLE(IMAGE_PROCESS)

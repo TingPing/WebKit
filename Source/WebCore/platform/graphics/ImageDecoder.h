@@ -33,6 +33,7 @@
 #include <WebCore/IntPoint.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/PlatformImage.h>
+#include <wtf/CompletionHandler.h>
 #include <wtf/Seconds.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
@@ -67,6 +68,14 @@ public:
     };
 
     static bool supportsMediaType(MediaType);
+
+    // True if this decoder resolves its encoded data status and decodes frames
+    // asynchronously (e.g. because decoding happens in another process). When
+    // true, callers must not expect setData() or createFrameImageAtIndex() to
+    // have produced results synchronously; results are reported through
+    // setEncodedDataStatusChangeCallback() and the asynchronous frame decoding
+    // machinery instead.
+    virtual bool isDecodingAsynchronous() const { return false; }
 
     virtual size_t bytesDecodedToDetermineProperties() const = 0;
 
@@ -113,6 +122,11 @@ public:
     virtual PlatformImagePtr createFrameImageAtIndex(size_t, SubsamplingLevel = SubsamplingLevel::Default, const DecodingOptions& = DecodingOptions(DecodingMode::Synchronous)) = 0;
 
     std::optional<std::tuple<Ref<NativeImage>, DecodingDestination>> createNativeImageAtIndex(size_t, SubsamplingLevel, const DecodingOptions&);
+
+    // Asynchronous decoders (isDecodingAsynchronous()) produce frames through this instead of
+    // createFrameImageAtIndex(). The completion handler is called on the main run loop with the frame,
+    // which may be partial (see frameIsCompleteAtIndex()), or with null if decoding failed.
+    WEBCORE_EXPORT virtual void decodeFrameAsynchronously(size_t, SubsamplingLevel, const DecodingOptions&, CompletionHandler<void(RefPtr<NativeImage>&&)>&&);
 
     virtual void setExpectedContentSize(long long) { }
     virtual void setData(const FragmentedSharedBuffer&, bool allDataReceived) = 0;

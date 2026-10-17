@@ -64,6 +64,11 @@ public:
     // because there isn't enough data yet).
     static RefPtr<ScalableImageDecoder> create(FragmentedSharedBuffer& data, AlphaOption, GammaAndColorProfileOption);
 
+    // Returns true if the data begins with a JPEG XL signature. Exposed so processes that
+    // route decoding of specific formats to another process can sniff the format without
+    // constructing a decoder.
+    static bool hasJPEGXLSignature(FragmentedSharedBuffer& data);
+
     bool premultiplyAlpha() const { return m_premultiplyAlpha; }
 
     bool isAllDataReceived() const override
@@ -138,6 +143,22 @@ public:
     void setIgnoreGammaAndColorProfile(bool flag) { m_ignoreGammaAndColorProfile = flag; }
     bool ignoresGammaAndColorProfile() const { return m_ignoreGammaAndColorProfile; }
 
+    // Out-of-process decoding support: provides an externally-owned destination for the
+    // decoded pixels of the frame at the given index. The next decode of that frame writes
+    // its pixels directly into the destination's memory instead of allocating a new backing
+    // store, avoiding a copy of the decoded image. The destination is consumed by the next
+    // initialization of the frame and is dropped if the frame is reinitialized (e.g. by the
+    // frame cache growing for animated images).
+    void setFrameDestination(size_t, Ref<FragmentedSharedBuffer::DataSegment>&&);
+
+    // True once decoding of the frame has started, after which a destination set with
+    // setFrameDestination() is no longer used for it.
+    bool frameIsInitializedAtIndex(size_t) const;
+
+    // True if decoding consumed the destination set with setFrameDestination(), i.e. the frame's
+    // pixels are in it. An unused destination is dropped.
+    bool didUseFrameDestination(size_t);
+
     ImageOrientation frameOrientationAtIndex(size_t) const final { return m_orientation; }
     std::optional<IntSize> frameDensityCorrectedSizeAtIndex(size_t) const final { return m_densityCorrectedSize; }
 
@@ -176,6 +197,13 @@ protected:
     // decode call out and use it here.
     virtual size_t decodeIfNeededAndGetFrameCount() const WTF_REQUIRES_LOCK(m_lock) { return 1; }
 
+    // Takes (and removes) the externally-owned destination previously set with
+    // setFrameDestination() for the frame at the given index, if any. Subclasses call this
+    // when they are about to initialize the frame's backing store, and pass the returned
+    // segment to ScalableImageDecoderFrame::initialize() so the decoded pixels are written
+    // directly into the externally provided memory.
+    std::optional<Ref<FragmentedSharedBuffer::DataSegment>> takeFrameDestination(size_t) WTF_REQUIRES_LOCK(m_lock);
+
     // Clears decoded pixel data from before the provided frame unless that
     // data may be needed to decode future frames (e.g. due to GIF frame
     // compositing).
@@ -183,6 +211,7 @@ protected:
 
     RefPtr<const SharedBuffer> m_data;
     Vector<ScalableImageDecoderFrame, 1> m_frameBufferCache WTF_GUARDED_BY_LOCK(m_lock);
+    HashMap<size_t, Ref<FragmentedSharedBuffer::DataSegment>, DefaultHash<size_t>, WTF::UnsignedWithZeroKeyHashTraits<size_t>> m_frameDestinations WTF_GUARDED_BY_LOCK(m_lock);
     mutable Lock m_lock;
     bool m_premultiplyAlpha;
     bool m_ignoreGammaAndColorProfile;

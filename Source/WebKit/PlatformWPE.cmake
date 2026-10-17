@@ -16,6 +16,7 @@ set(WebKit_OUTPUT_NAME WPEWebKit-${WPE_API_VERSION})
 set(WebProcess_OUTPUT_NAME WPEWebProcess)
 set(NetworkProcess_OUTPUT_NAME WPENetworkProcess)
 set(GPUProcess_OUTPUT_NAME WPEGPUProcess)
+set(ImageProcess_OUTPUT_NAME WPEImageProcess)
 
 file(MAKE_DIRECTORY ${DERIVED_SOURCES_WPE_API_DIR})
 file(MAKE_DIRECTORY ${FORWARDING_HEADERS_WPE_DIR})
@@ -101,6 +102,14 @@ list(APPEND GPUProcess_SOURCES
 )
 
 list(APPEND GPUProcess_INCLUDE_DIRECTORIES ${WebKit_PRIVATE_INCLUDE_DIRECTORIES})
+
+if (ENABLE_IMAGE_PROCESS)
+    list(APPEND ImageProcess_SOURCES
+        ImageProcess/EntryPoint/unix/ImageProcessMain.cpp
+    )
+
+    list(APPEND ImageProcess_INCLUDE_DIRECTORIES ${WebKit_PRIVATE_INCLUDE_DIRECTORIES})
+endif ()
 
 list(APPEND WebKit_UNIFIED_SOURCE_LIST_FILES
     "SourcesWPE.txt"

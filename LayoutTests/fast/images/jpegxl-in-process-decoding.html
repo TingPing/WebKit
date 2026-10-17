@@ -1,0 +1,31 @@
+<!DOCTYPE html><!-- webkit-test-runner [ ImageProcessDecodingEnabled=false ] -->
+<html>
+<head>
+<script src="../../resources/js-test.js"></script>
+</head>
+<body>
+<canvas id="canvas" width="313" height="313" style="display: none"></canvas>
+<script>
+description("Tests that turning off ImageProcessDecodingEnabled decodes JPEG XL images in the web process, where a loaded image can be drawn into a canvas synchronously.");
+jsTestIsAsync = true;
+
+var pixel;
+
+const image = new Image();
+image.onload = () => {
+    const context = document.getElementById("canvas").getContext("2d");
+    context.drawImage(image, 0, 0);
+    pixel = Array.from(context.getImageData(156, 156, 1, 1).data);
+    shouldBe("pixel[3]", "255");
+    shouldBeTrue("pixel[1] > 100 && pixel[0] < 50 && pixel[2] < 50");
+    finishJSTest();
+};
+image.onerror = () => {
+    testFailed("The image failed to load.");
+    finishJSTest();
+};
+// A unique URL, so the image isn't reused from the memory cache with a decoder an earlier test created.
+image.src = "resources/green-313x313.jxl?" + Math.random();
+</script>
+</body>
+</html>

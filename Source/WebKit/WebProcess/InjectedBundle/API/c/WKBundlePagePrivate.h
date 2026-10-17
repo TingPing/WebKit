@@ -58,6 +58,8 @@ WK_EXPORT double WKBundlePageGetPageZoomFactor(WKBundlePageRef page);
 
 WK_EXPORT void WKBundlePageForceRepaint(WKBundlePageRef page);
 WK_EXPORT void WKBundlePageFlushPendingEditorStateUpdate(WKBundlePageRef page);
+WK_EXPORT void WKBundlePageRequestAsynchronousImageDecodes(WKBundlePageRef page);
+WK_EXPORT bool WKBundlePageHasPendingAsynchronousImageDecodes(WKBundlePageRef page);
 
 WK_EXPORT uint64_t WKBundlePageGetRenderTreeSize(WKBundlePageRef page);
 WK_EXPORT void WKBundlePageCopyRenderTree(WKBundlePageRef page);

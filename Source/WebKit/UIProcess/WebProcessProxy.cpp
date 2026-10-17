@@ -1770,6 +1770,13 @@ void WebProcessProxy::unregisterMemoryAttributionIDIfNeeded()
 #endif // HAVE(TASK_IDENTITY_TOKEN)
 #endif // ENABLE(MODEL_PROCESS)
 
+#if ENABLE(IMAGE_PROCESS)
+void WebProcessProxy::createImageProcessConnection(IPC::Connection::Handle&& connectionIdentifier)
+{
+    protect(processPool())->createImageProcessConnection(*this, WTF::move(connectionIdentifier));
+}
+#endif // ENABLE(IMAGE_PROCESS)
+
 #if !PLATFORM(MAC)
 bool WebProcessProxy::shouldAllowNonValidInjectedCode() const
 {

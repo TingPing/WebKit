@@ -10,6 +10,11 @@ list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/image-decoders/webp"
 )
 
+list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+    platform/image-decoders/ScalableImageDecoder.h
+    platform/image-decoders/ScalableImageDecoderFrame.h
+)
+
 list(APPEND WebCore_SOURCES
     platform/image-decoders/ScalableImageDecoder.cpp
     platform/image-decoders/ScalableImageDecoderFrame.cpp
@@ -41,6 +46,10 @@ list(APPEND WebCore_LIBRARIES
 )
 
 if (USE_JPEGXL)
+    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+        platform/image-decoders/jpegxl/JPEGXLImageDecoder.h
+        platform/image-decoders/jpegxl/JxlDecoderPtr.h
+    )
     list(APPEND WebCore_LIBRARIES JPEGXL::jxl)
 endif ()
 

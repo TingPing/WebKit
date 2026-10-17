@@ -61,6 +61,10 @@
 #include "WebProcess.h"
 #include <WebCore/AXCoreObject.h>
 #include <WebCore/AXObjectCache.h>
+#include <WebCore/BitmapImage.h>
+#include <WebCore/CachedImage.h>
+#include <WebCore/CachedResourceLoader.h>
+#include <WebCore/DocumentResourceLoader.h>
 #include <WebCore/CSSPropertyParserConsumer+Color.h>
 #include <WebCore/CaptionUserPreferences.h>
 #include <WebCore/CompositionHighlight.h>
@@ -467,6 +471,28 @@ void WKBundlePageForceRepaint(WKBundlePageRef page)
 void WKBundlePageFlushPendingEditorStateUpdate(WKBundlePageRef page)
 {
     protect(WebKit::toImpl(page))->flushPendingEditorStateUpdate();
+}
+
+void WKBundlePageRequestAsynchronousImageDecodes(WKBundlePageRef pageRef)
+{
+    RefPtr page = WebKit::toImpl(pageRef)->corePage();
+    if (!page)
+        return;
+
+    page->forEachDocument([](WebCore::Document& document) {
+        for (auto& resource : document.cachedResourceLoader().allCachedResources().values()) {
+            RefPtr cachedImage = dynamicDowncast<WebCore::CachedImage>(resource.get());
+            if (!cachedImage)
+                continue;
+            if (RefPtr image = dynamicDowncast<WebCore::BitmapImage>(cachedImage->image()); image && image->decodesAsynchronously())
+                image->decode([](WebCore::DecodingStatus) { });
+        }
+    });
+}
+
+bool WKBundlePageHasPendingAsynchronousImageDecodes(WKBundlePageRef)
+{
+    return WebCore::BitmapImage::hasPendingAsynchronousDecodesForTesting();
 }
 
 uint64_t WKBundlePageGetRenderTreeSize(WKBundlePageRef pageRef)

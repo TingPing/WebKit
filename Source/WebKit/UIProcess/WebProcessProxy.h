@@ -798,6 +798,10 @@ private:
     void createModelProcessConnection(IPC::Connection::Handle&&);
 #endif
 
+#if ENABLE(IMAGE_PROCESS)
+    void createImageProcessConnection(IPC::Connection::Handle&&);
+#endif
+
     bool shouldAllowNonValidInjectedCode() const;
 
     static const MemoryCompactLookupOnlyRobinHoodHashSet<String>& platformPathsWithAssumedReadAccess();

@@ -46,6 +46,8 @@ public:
     WEBCORE_EXPORT static RefPtr<BitmapImage> create(PlatformImagePtr&&);
     WEBCORE_EXPORT static std::optional<Ref<BitmapImage>> create(RefPtr<ShareableBitmap>&&); // Uses `std::optional<Ref<...>>` to conform to the interface needed by IPC infrastructure.
 
+    WEBCORE_EXPORT static bool hasPendingAsynchronousDecodesForTesting();
+
     WEBCORE_EXPORT static BitmapImage& nullImage();
 
     // Animation
@@ -79,6 +81,7 @@ public:
     String uti() const final { return m_source->uti(); }
     FloatSize size(ImageOrientation orientation = ImageOrientation::Orientation::FromImage) const final { return m_source->size(orientation); }
     bool hasSomethingToDraw() const final { return !size().isEmpty(); }
+    bool decodesAsynchronously() const final { return m_source->decodesAsynchronously(); }
     FloatSize density() const { return m_source->density(); }
     ColorSpace colorSpace() final { return m_source->colorSpace(); }
     bool hasHDRContent() const final { return m_source->hasHDRContent(); }

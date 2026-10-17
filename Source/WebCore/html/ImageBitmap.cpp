@@ -1084,6 +1084,42 @@ private:
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(PendingImageBitmap);
 
+static void createImageBitmapFromDecodedImage(ScriptExecutionContext& scriptExecutionContext, BitmapImage& image, ImageBitmapOptions&& options, std::optional<IntRect>&& rect, ImageBitmap::ImageBitmapCompletionHandler&& completionHandler)
+{
+    auto sourceRectangle = croppedSourceRectangleWithFormatting(roundedIntSize(image.size()), options, WTF::move(rect));
+    if (sourceRectangle.hasException()) {
+        completionHandler(sourceRectangle.releaseException());
+        return;
+    }
+
+    auto outputSize = outputSizeForSourceRectangle(sourceRectangle.returnValue(), options);
+    auto drawsHDRContent = image.hasHDRContent() ? DrawsHDRContent::Yes : DrawsHDRContent::No;
+
+    auto orientation = image.orientation();
+    if (orientation == ImageOrientation::Orientation::FromImage)
+        orientation = ImageOrientation::Orientation::None;
+
+    const bool originClean = true;
+    const bool premultiplyAlpha = alphaPremultiplicationForPremultiplyAlpha(options.premultiplyAlpha) == AlphaPremultiplication::Premultiplied;
+    auto sourceRect = sourceRectangle.releaseReturnValue();
+    auto bufferAlphaFormat = AlphaPremultiplication::Unpremultiplied;
+    RefPtr bitmapData = premultiplyAlpha ? nullptr : unpremultipliedImageBuffer(scriptExecutionContext, image, sourceRect, outputSize, orientation, options, drawsHDRContent);
+    if (!bitmapData) {
+        bufferAlphaFormat = AlphaPremultiplication::Premultiplied;
+        bitmapData = ImageBitmap::createImageBuffer(scriptExecutionContext, outputSize, bufferRenderingMode(scriptExecutionContext), image.colorSpace(), 1, drawsHDRContent);
+        if (!bitmapData) {
+            completionHandler(Exception { ExceptionCode::InvalidStateError, "Cannot create an image buffer from the argument to createImageBitmap"_s });
+            return;
+        }
+        FloatRect destRect(FloatPoint(), outputSize);
+        bitmapData->context().drawBitmapImage(image, destRect, sourceRect, { interpolationQualityForResizeQuality(options.resizeQuality), options.resolvedImageOrientation(orientation), drawsHDRContent, scriptExecutionContext.settingsValues().hdrAcceleratedApplyGainMapEnabled ? AllowAcceleratedApplyGainMap::Yes : AllowAcceleratedApplyGainMap::No });
+    }
+
+    auto imageBitmap = ImageBitmap::create(bitmapData.releaseNonNull(), originClean, premultiplyAlpha, false, bufferAlphaFormat);
+
+    completionHandler(WTF::move(imageBitmap));
+}
+
 void ImageBitmap::createFromBuffer(ScriptExecutionContext& scriptExecutionContext, Ref<ArrayBuffer>&& arrayBuffer, String mimeType, long long expectedContentLength, const URL& sourceURL, ImageBitmapOptions&& options, std::optional<IntRect> rect, ImageBitmapCompletionHandler&& completionHandler)
 {
     if (!arrayBuffer->byteLength()) {
@@ -1095,43 +1131,28 @@ void ImageBitmap::createFromBuffer(ScriptExecutionContext& scriptExecutionContex
     auto observer = ImageBitmapImageObserver::create(mimeType, expectedContentLength, sourceURL);
     auto image = BitmapImage::create(observer.ptr());
     auto result = image->setData(sharedBuffer.copyRef(), true);
+
+    if (result == EncodedDataStatus::Unknown && image->decodesAsynchronously()) {
+        // The image's decoder resolves its metadata and decodes its frames
+        // asynchronously (e.g. because decoding happens in another process).
+        // Wait for the frame decode to finish before creating the ImageBitmap.
+        Ref<ScriptExecutionContext> protectedContext = scriptExecutionContext;
+        image->decode([protectedContext = WTF::move(protectedContext), image, options = WTF::move(options), rect = WTF::move(rect), completionHandler = WTF::move(completionHandler), observer = WTF::move(observer)](DecodingStatus status) mutable {
+            if (status != DecodingStatus::Complete || !image->hasSomethingToDraw()) {
+                completionHandler(Exception { ExceptionCode::InvalidStateError, "Cannot decode the data in the argument to createImageBitmap"_s });
+                return;
+            }
+            createImageBitmapFromDecodedImage(protectedContext, image, WTF::move(options), WTF::move(rect), WTF::move(completionHandler));
+        });
+        return;
+    }
+
     if (result != EncodedDataStatus::Complete || !image->hasSomethingToDraw()) {
         completionHandler(Exception { ExceptionCode::InvalidStateError, "Cannot decode the data in the argument to createImageBitmap"_s });
         return;
     }
 
-    auto sourceRectangle = croppedSourceRectangleWithFormatting(roundedIntSize(image->size()), options, rect);
-    if (sourceRectangle.hasException()) {
-        completionHandler(sourceRectangle.releaseException());
-        return;
-    }
-
-    auto outputSize = outputSizeForSourceRectangle(sourceRectangle.returnValue(), options);
-    auto drawsHDRContent = image->hasHDRContent() ? DrawsHDRContent::Yes : DrawsHDRContent::No;
-
-    auto orientation = image->orientation();
-    if (orientation == ImageOrientation::Orientation::FromImage)
-        orientation = ImageOrientation::Orientation::None;
-
-    const bool originClean = true;
-    const bool premultiplyAlpha = alphaPremultiplicationForPremultiplyAlpha(options.premultiplyAlpha) == AlphaPremultiplication::Premultiplied;
-    auto sourceRect = sourceRectangle.releaseReturnValue();
-    auto bufferAlphaFormat = AlphaPremultiplication::Unpremultiplied;
-    RefPtr bitmapData = premultiplyAlpha ? nullptr : unpremultipliedImageBuffer(scriptExecutionContext, image, sourceRect, outputSize, orientation, options, drawsHDRContent);
-    if (!bitmapData) {
-        bufferAlphaFormat = AlphaPremultiplication::Premultiplied;
-        bitmapData = createImageBuffer(scriptExecutionContext, outputSize, bufferRenderingMode(scriptExecutionContext), image->colorSpace(), 1, drawsHDRContent);
-        if (!bitmapData) {
-            completionHandler(Exception { ExceptionCode::InvalidStateError, "Cannot create an image buffer from the argument to createImageBitmap"_s });
-            return;
-        }
-        FloatRect destRect(FloatPoint(), outputSize);
-        bitmapData->context().drawBitmapImage(image, destRect, sourceRect, { interpolationQualityForResizeQuality(options.resizeQuality), options.resolvedImageOrientation(orientation), drawsHDRContent, scriptExecutionContext.settingsValues().hdrAcceleratedApplyGainMapEnabled ? AllowAcceleratedApplyGainMap::Yes : AllowAcceleratedApplyGainMap::No });
-    }
-
-    auto imageBitmap = create(bitmapData.releaseNonNull(), originClean, premultiplyAlpha, false, bufferAlphaFormat);
-
-    completionHandler(WTF::move(imageBitmap));
+    createImageBitmapFromDecodedImage(scriptExecutionContext, image, WTF::move(options), WTF::move(rect), WTF::move(completionHandler));
 }
 
 void ImageBitmap::createCompletionHandler(ScriptExecutionContext& scriptExecutionContext, Ref<Blob>&& blob, ImageBitmapOptions&& options, std::optional<IntRect> rect, ImageBitmapCompletionHandler&& completionHandler)

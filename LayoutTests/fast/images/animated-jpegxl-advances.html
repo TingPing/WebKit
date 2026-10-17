@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="../../resources/js-test.js"></script>
+</head>
+<body>
+<img id="image">
+<script>
+description("Tests that an animated JPEG XL image reports its frames and their durations, and advances through them.");
+jsTestIsAsync = true;
+
+var image = document.getElementById("image");
+
+(async () => {
+    await new Promise(resolve => {
+        image.onload = resolve;
+        image.onerror = resolve;
+        image.src = "resources/animated-red-green-blue-repeat-infinite.jxl";
+    });
+
+    const start = performance.now();
+    while (internals.imageFrameIndex(image) != 2 && performance.now() - start < 3000)
+        await new Promise(requestAnimationFrame);
+
+    shouldBe("internals.imageFrameCount(image)", "3");
+    shouldBe("internals.imageFrameIndex(image)", "2");
+    shouldBeTrue("internals.imageFrameDurationAtIndex(image, 1) >= 0.01");
+    finishJSTest();
+})();
+</script>
+</body>
+</html>

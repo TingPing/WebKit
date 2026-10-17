@@ -479,6 +479,7 @@
     [Legacy] MessageParam RemoteSampleBufferDisplayLayer.SetSharedVideoFrameMemory storageHandle
     [Legacy] MessageParam RemoteAudioDestinationManager.CreateAudioDestination frameCount
     [Legacy] MessageParam RemoteVideoFrameObjectHeap.SetSharedVideoFrameMemory storageHandle
+    [NeedsReview] MessageParam ImageConnectionToWebProcess.SetEncodedDataBuffer buffer
 
     # The same shared video frame memory RemoteDevice.SetSharedVideoFrameMemory above carries, for the
     # frames copyExternalImageToTexture copies from a video element or a WebCodecs frame.

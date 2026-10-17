@@ -54,6 +54,9 @@ enum class AuxiliaryProcessType : uint8_t {
 #if ENABLE(MODEL_PROCESS)
     Model,
 #endif
+#if ENABLE(IMAGE_PROCESS)
+    Image,
+#endif
 };
 
 WTF_EXPORT_PRIVATE void LEGACY_NODELETE setAuxiliaryProcessType(AuxiliaryProcessType);
@@ -83,11 +86,21 @@ inline bool isInModelProcess()
 #endif
 }
 
+inline bool isInImageProcess()
+{
+#if ENABLE(IMAGE_PROCESS)
+    return checkAuxiliaryProcessType(AuxiliaryProcessType::Image);
+#else
+    return false;
+#endif
+}
+
 } // namespace WTF
 
 using WTF::checkAuxiliaryProcessType;
 using WTF::isInAuxiliaryProcess;
 using WTF::isInGPUProcess;
+using WTF::isInImageProcess;
 using WTF::isInModelProcess;
 using WTF::isInNetworkProcess;
 using WTF::isInWebProcess;

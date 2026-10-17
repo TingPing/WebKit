@@ -2990,6 +2990,15 @@ ImageControlsEnabled:
   condition: ENABLE(SERVICE_CONTROLS)
   defaultValue: false
 
+ImageProcessDecodingEnabled:
+  type: bool
+  status: embedder
+  humanReadableName: "Image Process: Decoding"
+  humanReadableDescription: "Decode images of supported formats in the Image Process instead of the Web Content Process"
+  condition: ENABLE(IMAGE_PROCESS)
+  excludeFrom: [ WebKitLegacy, WebCore ]
+  defaultValue: true
+
 ImportDeferEnabled:
   type: bool
   status: stable

@@ -92,6 +92,13 @@ public:
 
     virtual bool hasSomethingToDraw() const = 0;
 
+    // True if the image's decoder resolves its encoded data status and decodes its
+    // frames asynchronously (e.g. because decoding happens in another process).
+    // Consumers that need results synchronously (layout, finishLoading, drawing)
+    // must handle the "not yet available" case and wait for the asynchronous
+    // notification instead.
+    virtual bool decodesAsynchronously() const { return false; }
+
     virtual FloatSize size(ImageOrientation = ImageOrientation::Orientation::FromImage) const = 0;
     virtual bool hasDensityCorrectedSize() const { return false; }
     FloatRect rect() const { return FloatRect(FloatPoint(), size()); }

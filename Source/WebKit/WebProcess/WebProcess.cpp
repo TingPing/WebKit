@@ -208,6 +208,11 @@
 #include "ModelProcessConnectionParameters.h"
 #endif
 
+#if ENABLE(IMAGE_PROCESS)
+#include "ImageProcessConnection.h"
+#include "RemoteImageDecoderManager.h"
+#endif
+
 #if ENABLE(REMOTE_INSPECTOR)
 #include <JavaScriptCore/RemoteInspector.h>
 #endif
@@ -363,6 +368,9 @@ WebProcess::WebProcess()
 #endif
 #if ENABLE(MODEL_PROCESS)
     , m_modelProcessModelPlayerManager(ModelProcessModelPlayerManager::create())
+#endif
+#if ENABLE(IMAGE_PROCESS)
+    , m_remoteImageDecoderManager(RemoteImageDecoderManager::create())
 #endif
     , m_cacheStorageProvider(WebCacheStorageProvider::create())
     , m_badgeClient(WebBadgeClient::create())
@@ -1657,6 +1665,30 @@ void WebProcess::modelProcessConnectionClosed(ModelProcessConnection& connection
 }
 
 #endif // ENABLE(MODEL_PROCESS)
+
+#if ENABLE(IMAGE_PROCESS)
+
+ImageProcessConnection& WebProcess::ensureImageProcessConnection()
+{
+    RELEASE_ASSERT(RunLoop::isMain());
+
+    // If we've lost our connection to the Image process (e.g. it crashed) try
+    // to re-establish it; a new Image process is launched by the UI process.
+    if (!m_imageProcessConnection)
+        m_imageProcessConnection = ImageProcessConnection::create(protect(*parentProcessConnection()));
+
+    return *m_imageProcessConnection;
+}
+
+void WebProcess::imageProcessConnectionClosed(ImageProcessConnection& connection)
+{
+    ASSERT(m_imageProcessConnection);
+    ASSERT_UNUSED(connection, m_imageProcessConnection == &connection);
+
+    m_imageProcessConnection = nullptr;
+}
+
+#endif // ENABLE(IMAGE_PROCESS)
 
 void WebProcess::setEnhancedAccessibility(bool flag)
 {

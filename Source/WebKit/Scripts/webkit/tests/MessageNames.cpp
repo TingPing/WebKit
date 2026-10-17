@@ -245,6 +245,8 @@ ASCIILiteral processLiteral(ProcessName name)
         return "WebContent";
     case ProcessName::Model:
         return "Model";
+    case ProcessName::Image:
+        return "Image";
     case ProcessName::Unknown:
         return "Unknown";
     default:

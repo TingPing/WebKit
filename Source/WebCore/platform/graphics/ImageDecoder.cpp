@@ -30,6 +30,10 @@
 #include "ScalableImageDecoder.h"
 #include <wtf/TZoneMallocInlines.h>
 
+#if ENABLE(IMAGE_PROCESS)
+#include "ImageDecoderFactory.h"
+#endif
+
 #if USE(CG)
 #include "ImageDecoderCG.h"
 #endif
@@ -49,6 +53,13 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(ImageDecoder);
 RefPtr<ImageDecoder> ImageDecoder::create(FragmentedSharedBuffer& data, const String& mimeType, AlphaOption alphaOption, GammaAndColorProfileOption gammaAndColorProfileOption)
 {
     UNUSED_PARAM(mimeType);
+
+#if ENABLE(IMAGE_PROCESS)
+    // Give a factory-installed decoder (e.g. one that decodes in another process)
+    // the first shot at the data.
+    if (RefPtr imageDecoder = ImageDecoderFactory::singleton().createImageDecoder(data, mimeType, alphaOption, gammaAndColorProfileOption))
+        return imageDecoder;
+#endif
 
 #if HAVE(AVASSETREADER)
     if (!ImageDecoderCG::canDecodeType(mimeType)) {
@@ -80,6 +91,11 @@ ImageDecoder::~ImageDecoder() = default;
 
 bool ImageDecoder::supportsMediaType(MediaType type)
 {
+#if ENABLE(IMAGE_PROCESS)
+    if (ImageDecoderFactory::singleton().supportsMediaType(type))
+        return true;
+#endif
+
 #if HAVE(AVASSETREADER)
     if (ImageDecoderFactoryAVF::singleton().supportsMediaType(type))
         return true;
@@ -117,6 +133,11 @@ bool ImageDecoder::fetchFrameMetaDataAtIndex(size_t index, SubsamplingLevel subs
     frame.m_orientation = frameOrientationAtIndex(index);
     frame.m_decodingStatus = frameIsCompleteAtIndex(index) ? DecodingStatus::Complete : DecodingStatus::Partial;
     return true;
+}
+
+void ImageDecoder::decodeFrameAsynchronously(size_t, SubsamplingLevel, const DecodingOptions&, CompletionHandler<void(RefPtr<NativeImage>&&)>&& completionHandler)
+{
+    completionHandler(nullptr);
 }
 
 std::optional<std::tuple<Ref<NativeImage>, DecodingDestination>> ImageDecoder::createNativeImageAtIndex(size_t index, SubsamplingLevel subsamplingLevel, const DecodingOptions& options)

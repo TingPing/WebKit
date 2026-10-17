@@ -2515,6 +2515,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/ImageBufferResourceLimits.h
     platform/graphics/ImageBufferTransferIdentifier.h
     platform/graphics/ImageDecoder.h
+    platform/graphics/ImageDecoderFactory.h
     platform/graphics/ImageDecoderIdentifier.h
     platform/graphics/ImageDrawingExtras.h
     platform/graphics/ImageFrame.h

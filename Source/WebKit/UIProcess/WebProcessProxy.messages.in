@@ -47,6 +47,10 @@ messages -> WebProcessProxy WantsDispatchMessage {
     [EnabledBy=ModelElementEnabled && ModelProcessEnabled] CreateModelProcessConnection(IPC::ConnectionHandle connectionIdentifier) AllowedWhenWaitingForSyncReply
 #endif
 
+#if ENABLE(IMAGE_PROCESS)
+    CreateImageProcessConnection(IPC::ConnectionHandle connectionIdentifier) AllowedWhenWaitingForSyncReply
+#endif
+
     DidExceedActiveMemoryLimit()
     DidExceedInactiveMemoryLimit()
     DidExceedMemoryFootprintThreshold(uint64_t footprint)

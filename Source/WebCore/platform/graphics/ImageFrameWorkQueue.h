@@ -27,6 +27,7 @@
 
 #include "DecodingOptions.h"
 #include "ImageTypes.h"
+#include <atomic>
 #include <wtf/SynchronizedFixedQueue.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/WorkQueue.h>
@@ -34,6 +35,8 @@
 namespace WebCore {
 
 class BitmapImageSource;
+class ImageDecoder;
+class NativeImage;
 
 class ImageFrameWorkQueue : public ThreadSafeRefCounted<ImageFrameWorkQueue> {
 public:
@@ -52,6 +55,9 @@ public:
     };
 
     static Ref<ImageFrameWorkQueue> create(BitmapImageSource&);
+    ~ImageFrameWorkQueue();
+
+    static bool hasPendingDecodes() { return s_pendingDecodeCount.load(); }
 
     void start();
     void dispatch(const Request&);
@@ -75,6 +81,10 @@ private:
 
     Seconds minimumDecodingDurationForTesting() const { return m_minimumDecodingDurationForTesting; }
 
+    bool didFinishDecoding(BitmapImageSource&, const Request&, RefPtr<NativeImage>&&);
+    void dispatchToAsynchronousDecoder(ImageDecoder&, const Request&);
+    void decrementPendingAsynchronousDecodeCount(unsigned);
+
     ThreadSafeWeakRef<BitmapImageSource> m_source;
 
     RefPtr<RequestQueue> m_requestQueue;
@@ -82,6 +92,9 @@ private:
     RefPtr<WorkQueue> m_workQueue;
 
     Seconds m_minimumDecodingDurationForTesting;
+
+    unsigned m_pendingAsynchronousDecodeCount { 0 };
+    static std::atomic<unsigned> s_pendingDecodeCount;
 };
 
 } // namespace WebCore

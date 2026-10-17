@@ -24,6 +24,7 @@ set(WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/GPUProcess/graphics/WebGPU"
     "${WEBKIT_DIR}/GPUProcess/media"
     "${WEBKIT_DIR}/GPUProcess/webrtc"
+    "${WEBKIT_DIR}/ImageProcess"
     "${WEBKIT_DIR}/ModelProcess"
     "${WEBKIT_DIR}/NetworkProcess"
     "${WEBKIT_DIR}/NetworkProcess/Authentication"
@@ -74,6 +75,7 @@ set(WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/UIProcess/Extensions"
     "${WEBKIT_DIR}/UIProcess/Gamepad"
     "${WEBKIT_DIR}/UIProcess/GPU"
+    "${WEBKIT_DIR}/UIProcess/Image"
     "${WEBKIT_DIR}/UIProcess/Inspector"
     "${WEBKIT_DIR}/UIProcess/Inspector/Agents"
     "${WEBKIT_DIR}/UIProcess/Launcher"
@@ -112,6 +114,7 @@ set(WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/WebProcess/GPU/media"
     "${WEBKIT_DIR}/WebProcess/GPU/webrtc"
     "${WEBKIT_DIR}/WebProcess/IconDatabase"
+    "${WEBKIT_DIR}/WebProcess/Image"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/c"
@@ -275,6 +278,9 @@ set(WebKit_MESSAGES_IN_FILES
     ModelProcess/ModelProcess
     ModelProcess/ModelProcessModelPlayerManagerProxy
 
+    ImageProcess/ImageConnectionToWebProcess
+    ImageProcess/ImageProcess
+
     NetworkProcess/Authentication/AuthenticationManager
 
     NetworkProcess/Cookies/WebCookieManager
@@ -348,6 +354,8 @@ set(WebKit_MESSAGES_IN_FILES
     UIProcess/Inspector/WebInspectorBackendProxy
     UIProcess/Inspector/WebInspectorUIProxy
 
+    UIProcess/Image/ImageProcessProxy
+
     UIProcess/Model/ModelProcessProxy
 
     UIProcess/Network/NetworkProcessProxy
@@ -400,6 +408,8 @@ set(WebKit_MESSAGES_IN_FILES
 
     WebProcess/Media/RemoteMediaSessionManager
     WebProcess/MediaSession/RemoteMediaSessionCoordinator
+
+    WebProcess/Image/RemoteImageDecoderManager
 
     WebProcess/Model/ModelProcessConnection
     WebProcess/Model/ModelProcessModelPlayer
@@ -812,6 +822,7 @@ endif ()
 set(WebProcess_LIBRARIES WebKit)
 set(NetworkProcess_LIBRARIES WebKit)
 set(GPUProcess_LIBRARIES WebKit)
+set(ImageProcess_LIBRARIES WebKit)
 
 # For platforms that want to use system-provided OpenGL (ES) / EGL headers,
 # these include directories, libraries or definitions need to be
@@ -871,6 +882,11 @@ if (NOT USE_EXTENSIONKIT)
     if (ENABLE_GPU_PROCESS)
         WEBKIT_EXECUTABLE_DECLARE(GPUProcess)
         list(APPEND WebKit_INTERFACE_LINK_DEPENDS $<TARGET_FILE:GPUProcess>)
+    endif ()
+
+    if (ENABLE_IMAGE_PROCESS)
+        WEBKIT_EXECUTABLE_DECLARE(ImageProcess)
+        list(APPEND WebKit_INTERFACE_LINK_DEPENDS $<TARGET_FILE:ImageProcess>)
     endif ()
 endif ()
 
@@ -1627,6 +1643,12 @@ if (NOT USE_EXTENSIONKIT)
         WEBKIT_EXECUTABLE(GPUProcess)
         WEBKIT_REUSE_PREFIX_HEADER(GPUProcess WebKit WebKitPrefix.h PREFIX_LANGUAGES CXX)
     endif ()
+
+    if (ENABLE_IMAGE_PROCESS)
+        list(APPEND ImageProcess_PRIVATE_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:WebKit,INCLUDE_DIRECTORIES>)
+        WEBKIT_EXECUTABLE(ImageProcess)
+        WEBKIT_REUSE_PREFIX_HEADER(ImageProcess WebKit WebKitPrefix.h PREFIX_LANGUAGES CXX)
+    endif ()
 endif ()
 
 if (COMPILER_IS_GCC_OR_CLANG)
@@ -1636,6 +1658,9 @@ if (COMPILER_IS_GCC_OR_CLANG)
         WEBKIT_ADD_TARGET_CXX_FLAGS(NetworkProcess -Wno-unused-parameter)
         if (ENABLE_GPU_PROCESS)
             WEBKIT_ADD_TARGET_CXX_FLAGS(GPUProcess -Wno-unused-parameter)
+        endif ()
+        if (ENABLE_IMAGE_PROCESS)
+            WEBKIT_ADD_TARGET_CXX_FLAGS(ImageProcess -Wno-unused-parameter)
         endif ()
     endif ()
 endif ()
@@ -1660,6 +1685,13 @@ if (NOT APPLE)
     )
     if (ENABLE_GPU_PROCESS)
         install(TARGETS GPUProcess
+            LIBRARY DESTINATION "${LIB_INSTALL_DIR}"
+            RUNTIME DESTINATION "${LIBEXEC_INSTALL_DIR}"
+            BUNDLE DESTINATION "${LIBEXEC_INSTALL_DIR}"
+        )
+    endif ()
+    if (ENABLE_IMAGE_PROCESS)
+        install(TARGETS ImageProcess
             LIBRARY DESTINATION "${LIB_INSTALL_DIR}"
             RUNTIME DESTINATION "${LIBEXEC_INSTALL_DIR}"
             BUNDLE DESTINATION "${LIBEXEC_INSTALL_DIR}"

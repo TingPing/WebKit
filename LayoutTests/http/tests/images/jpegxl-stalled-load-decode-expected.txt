@@ -1,0 +1,12 @@
+Tests that a JPEG XL image painted while its load is stalled is fully decoded once the load completes.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+PASS alphaTop is 255
+PASS alphaMiddle is 255
+PASS alphaBottom is 255
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

@@ -345,7 +345,15 @@ JxlDecoderStatus JPEGXLImageDecoder::processInput(Query query)
 
             auto& buffer = m_frameBufferCache[m_currentFrame];
             if (buffer.isInvalid()) {
-                if (!buffer.initialize(size(), m_premultiplyAlpha))
+                // If an externally-owned destination was provided for this frame
+                // (out-of-process decoding), decode directly into it instead of
+                // allocating a new backing store.
+                bool isFrameInitialized = false;
+                if (auto destination = takeFrameDestination(m_currentFrame))
+                    isFrameInitialized = buffer.initialize(size(), WTF::move(*destination), m_premultiplyAlpha);
+                else
+                    isFrameInitialized = buffer.initialize(size(), m_premultiplyAlpha);
+                if (!isFrameInitialized)
                     return JXL_DEC_ERROR;
 
                 buffer.setDecodingStatus(DecodingStatus::Partial);

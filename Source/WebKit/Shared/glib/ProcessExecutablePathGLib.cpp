@@ -92,4 +92,15 @@ String executablePathOfGPUProcess()
 }
 #endif
 
+#if ENABLE(IMAGE_PROCESS)
+String executablePathOfImageProcess()
+{
+#if PLATFORM(WPE)
+    return findWebKitProcess("WPEImageProcess"_s);
+#else
+    return findWebKitProcess("WebKitImageProcess"_s);
+#endif
+}
+#endif
+
 } // namespace WebKit

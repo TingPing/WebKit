@@ -34,5 +34,8 @@ String executablePathOfNetworkProcess();
 #if ENABLE(GPU_PROCESS)
 String executablePathOfGPUProcess();
 #endif
+#if ENABLE(IMAGE_PROCESS)
+String executablePathOfImageProcess();
+#endif
 
 }

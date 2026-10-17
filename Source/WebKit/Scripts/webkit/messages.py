@@ -64,7 +64,7 @@ CAN_DISPATCH_OUT_OF_ORDER_ATTRIBUTE = 'CanDispatchOutOfOrder'
 REPLY_CAN_DISPATCH_OUT_OF_ORDER_ATTRIBUTE = 'ReplyCanDispatchOutOfOrder'
 NOT_USING_IPC_CONNECTION_ATTRIBUTE = 'NotUsingIPCConnection'
 
-PROCESS_NAMES = ["UI", "Networking", "GPU", "WebContent", "Model"]
+PROCESS_NAMES = ["UI", "Networking", "GPU", "WebContent", "Model", "Image"]
 
 attributes_to_generate_validators = {
     "messageAllowedWhenWaitingForSyncReply": [ALLOWEDWHENWAITINGFORSYNCREPLY_ATTRIBUTE, SYNCHRONOUS_ATTRIBUTE, STREAM_ATTRIBUTE],
@@ -1995,6 +1995,7 @@ PROCESS_NAME_PREDICATES = {
     "GPU": "isInGPUProcess()",
     "WebContent": "isInWebProcess()",
     "Model": "isInModelProcess()",
+    "Image": "isInImageProcess()",
 }
 
 

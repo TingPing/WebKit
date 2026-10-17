@@ -39,9 +39,23 @@ Ref<ImageFrameWorkQueue> ImageFrameWorkQueue::create(BitmapImageSource& source)
     return adoptRef(*new ImageFrameWorkQueue(source));
 }
 
+std::atomic<unsigned> ImageFrameWorkQueue::s_pendingDecodeCount { 0 };
+
 ImageFrameWorkQueue::ImageFrameWorkQueue(BitmapImageSource& source)
     : m_source(source)
 {
+}
+
+ImageFrameWorkQueue::~ImageFrameWorkQueue()
+{
+    decrementPendingAsynchronousDecodeCount(m_pendingAsynchronousDecodeCount);
+}
+
+void ImageFrameWorkQueue::decrementPendingAsynchronousDecodeCount(unsigned count)
+{
+    count = std::min(count, m_pendingAsynchronousDecodeCount);
+    m_pendingAsynchronousDecodeCount -= count;
+    s_pendingDecodeCount -= count;
 }
 
 ImageFrameWorkQueue::RequestQueue& ImageFrameWorkQueue::requestQueue()
@@ -100,14 +114,7 @@ void ImageFrameWorkQueue::start()
                         return;
                     }
 
-                    // The DecodeQueue may have been cleared before the frame was decoded.
-                    if (protectedThis->decodeQueue().isEmpty() || !request.isCompatibleWith(protectedThis->decodeQueue().first())) {
-                        LOG(Images, "AsyncImageDecoder::%s - %p. DecodeQueue was cleared at index = %d.", __FUNCTION__, protectedThis.ptr(), request.index);
-                        return;
-                    }
-
-                    protectedThis->decodeQueue().removeFirst();
-                    protectedSource->imageFrameDecodeAtIndexHasFinished(request.index, request.subsamplingLevel, request.animatingState, request.options, WTF::move(nativeImage));
+                    protectedThis->didFinishDecoding(protectedSource, request, WTF::move(nativeImage));
                 });
             }
         }
@@ -119,12 +126,50 @@ void ImageFrameWorkQueue::start()
     });
 }
 
+bool ImageFrameWorkQueue::didFinishDecoding(BitmapImageSource& source, const Request& request, RefPtr<NativeImage>&& nativeImage)
+{
+    // The DecodeQueue may have been cleared before the frame was decoded.
+    if (decodeQueue().isEmpty() || !request.isCompatibleWith(decodeQueue().first())) {
+        LOG(Images, "AsyncImageDecoder::%s - %p. DecodeQueue was cleared at index = %d.", __FUNCTION__, this, request.index);
+        return false;
+    }
+
+    decodeQueue().removeFirst();
+    source.imageFrameDecodeAtIndexHasFinished(request.index, request.subsamplingLevel, request.animatingState, request.options, WTF::move(nativeImage));
+    return true;
+}
+
 void ImageFrameWorkQueue::dispatch(const Request& request)
 {
+    Ref source = m_source.get();
+    if (source->decodesAsynchronously()) {
+        dispatchToAsynchronousDecoder(*source->decoderIfExists(), request);
+        return;
+    }
+
     protect(requestQueue())->enqueue(request);
     decodeQueue().append(request);
 
     start();
+}
+
+void ImageFrameWorkQueue::dispatchToAsynchronousDecoder(ImageDecoder& decoder, const Request& request)
+{
+    // The decoder decodes elsewhere and calls back on this run loop, so no decoding thread is needed.
+    decodeQueue().append(request);
+
+    // These are the decodes that would otherwise be missing from test snapshots.
+    ++m_pendingAsynchronousDecodeCount;
+    ++s_pendingDecodeCount;
+
+    decoder.decodeFrameAsynchronously(request.index, request.subsamplingLevel, request.options, [protectedThis = Ref { *this }, weakSource = ThreadSafeWeakPtr<BitmapImageSource> { m_source.get() }, request](RefPtr<NativeImage>&& nativeImage) mutable {
+        RefPtr source = weakSource.get();
+        if (!source || source.get() != protectedThis->m_source.get().ptr())
+            return;
+
+        if (protectedThis->didFinishDecoding(*source, request, WTF::move(nativeImage)))
+            protectedThis->decrementPendingAsynchronousDecodeCount(1);
+    });
 }
 
 void ImageFrameWorkQueue::stop()
@@ -141,6 +186,7 @@ void ImageFrameWorkQueue::stop()
         m_requestQueue = nullptr;
     }
 
+    decrementPendingAsynchronousDecodeCount(m_pendingAsynchronousDecodeCount);
     m_decodeQueue.clear();
     m_workQueue = nullptr;
 }

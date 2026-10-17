@@ -474,6 +474,20 @@ void CachedImage::finishLoading(const FragmentedSharedBuffer* data, const Networ
 
     EncodedDataStatus encodedDataStatus = updateImageData(true);
 
+    if (encodedDataStatus == EncodedDataStatus::Unknown && protect(m_image)->decodesAsynchronously()) {
+        // The image's decoder resolves its metadata (e.g. its size) asynchronously,
+        // for instance because decoding happens in another process. Keep the resource
+        // loading until ImageObserver::encodedDataStatusChanged() reports the status,
+        // so that the load event does not fire before the image has a size.
+        m_metricsPendingAsynchronousDecode = Box<NetworkLoadMetrics>::create(metrics);
+        return;
+    }
+
+    completeLoading(encodedDataStatus, data, metrics);
+}
+
+void CachedImage::completeLoading(EncodedDataStatus encodedDataStatus, const FragmentedSharedBuffer* data, const NetworkLoadMetrics& metrics)
+{
     if (encodedDataStatus == EncodedDataStatus::Error || !protect(m_image)->hasSomethingToDraw()) {
         // Image decoding failed; the image data is malformed.
         error(errorOccurred() ? status() : DecodeError);
@@ -529,10 +543,17 @@ void CachedImage::destroyDecodedData()
         image->destroyDecodedData();
 }
 
-void CachedImage::encodedDataStatusChanged(const Image& image, EncodedDataStatus)
+void CachedImage::encodedDataStatusChanged(const Image& image, EncodedDataStatus status)
 {
     if (&image != m_image)
         return;
+
+    // finishLoading() waits for an asynchronous decoder's final status before completing the load.
+    if (m_metricsPendingAsynchronousDecode && (status == EncodedDataStatus::Error || status == EncodedDataStatus::Complete)) {
+        auto metrics = std::exchange(m_metricsPendingAsynchronousDecode, nullptr);
+        completeLoading(status, m_data.get(), *metrics);
+        return;
+    }
 
     notifyObservers();
 }

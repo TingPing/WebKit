@@ -47,6 +47,7 @@
 #include "FrameProcess.h"
 #include "GPUProcessConnectionParameters.h"
 #include "GamepadData.h"
+#include "ImageProcessProxy.h"
 #include "LegacyGlobalSettings.h"
 #include "LoadedWebArchive.h"
 #include "Logging.h"
@@ -511,6 +512,7 @@ static bool LEGACY_NODELETE shouldReportNetworkOrGPUProcessCrash(ProcessTerminat
     case ProcessTerminationReason::RequestedByNetworkProcess:
     case ProcessTerminationReason::RequestedByGPUProcess:
     case ProcessTerminationReason::RequestedByModelProcess:
+    case ProcessTerminationReason::RequestedByImageProcess:
         return false;
     case ProcessTerminationReason::GPUProcessCrashedTooManyTimes:
     case ProcessTerminationReason::ModelProcessCrashedTooManyTimes:
@@ -705,6 +707,28 @@ void WebProcessPool::terminateAllWebContentProcessesWithModelPlayers()
     }
 }
 #endif // ENABLE(MODEL_PROCESS)
+
+#if ENABLE(IMAGE_PROCESS)
+
+ImageProcessProxy& WebProcessPool::ensureImageProcess()
+{
+    if (!m_imageProcess)
+        m_imageProcess = ImageProcessProxy::getOrCreate();
+    return *m_imageProcess;
+}
+
+void WebProcessPool::imageProcessExited(ProcessID identifier, ProcessTerminationReason reason)
+{
+    WEBPROCESSPOOL_RELEASE_LOG(Process, "imageProcessExited: PID=%d, reason=%" PUBLIC_LOG_STRING, identifier, processTerminationReasonToString(reason).characters());
+    m_imageProcess = nullptr;
+}
+
+void WebProcessPool::createImageProcessConnection(WebProcessProxy& webProcessProxy, IPC::Connection::Handle&& connectionIdentifier)
+{
+    protect(ensureImageProcess())->createImageProcessConnection(webProcessProxy, WTF::move(connectionIdentifier));
+}
+
+#endif // ENABLE(IMAGE_PROCESS)
 
 bool WebProcessPool::s_useSeparateServiceWorkerProcess = false;
 

@@ -128,18 +128,27 @@ static bool matchesJPEGXLSignature(std::span<const uint8_t> contents)
 }
 #endif
 
+constexpr size_t lengthOfLongestSignature = 14; // To wit: "RIFF????WEBPVP"
+
+std::optional<std::array<uint8_t, lengthOfLongestSignature>> signatureBytes(FragmentedSharedBuffer& data)
+{
+    if (data.size() < lengthOfLongestSignature)
+        return std::nullopt;
+
+    std::array<uint8_t, lengthOfLongestSignature> contents;
+    data.copyTo(std::span { contents });
+    return contents;
+}
+
 } // Anonymous namespace
 
 RefPtr<ScalableImageDecoder> ScalableImageDecoder::create(FragmentedSharedBuffer& data, AlphaOption alphaOption, GammaAndColorProfileOption gammaAndColorProfileOption)
 {
-    constexpr size_t lengthOfLongestSignature = 14; // To wit: "RIFF????WEBPVP"
-    if (data.size() < lengthOfLongestSignature)
+    auto contents = signatureBytes(data);
+    if (!contents)
         return nullptr;
 
-    std::array<uint8_t, lengthOfLongestSignature> contents;
-    data.copyTo(std::span { contents });
-
-    std::span contentsSpan { contents };
+    std::span contentsSpan { *contents };
 
 #if !PLATFORM(COCOA)
     if (matchesGIFSignature(contentsSpan))
@@ -175,6 +184,43 @@ RefPtr<ScalableImageDecoder> ScalableImageDecoder::create(FragmentedSharedBuffer
 #endif
 
     return nullptr;
+}
+
+bool ScalableImageDecoder::hasJPEGXLSignature(FragmentedSharedBuffer& data)
+{
+#if USE(JPEGXL)
+    auto contents = signatureBytes(data);
+    return contents && WebCore::matchesJPEGXLSignature(std::span { *contents });
+#else
+    UNUSED_PARAM(data);
+    return false;
+#endif
+}
+
+void ScalableImageDecoder::setFrameDestination(size_t index, Ref<FragmentedSharedBuffer::DataSegment>&& destination)
+{
+    Locker locker { m_lock };
+    m_frameDestinations.set(index, WTF::move(destination));
+}
+
+std::optional<Ref<FragmentedSharedBuffer::DataSegment>> ScalableImageDecoder::takeFrameDestination(size_t index)
+{
+    assertIsHeld(m_lock);
+    if (RefPtr destination = m_frameDestinations.take(index))
+        return destination.releaseNonNull();
+    return std::nullopt;
+}
+
+bool ScalableImageDecoder::didUseFrameDestination(size_t index)
+{
+    Locker locker { m_lock };
+    return !m_frameDestinations.remove(index);
+}
+
+bool ScalableImageDecoder::frameIsInitializedAtIndex(size_t index) const
+{
+    Locker locker { m_lock };
+    return index < m_frameBufferCache.size() && !m_frameBufferCache[index].isInvalid();
 }
 
 bool ScalableImageDecoder::frameIsCompleteAtIndex(size_t index) const

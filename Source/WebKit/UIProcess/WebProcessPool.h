@@ -118,6 +118,7 @@ namespace WebKit {
 
 class BrowsingContextGroup;
 class ExtensionCapabilityGranter;
+class ImageProcessProxy;
 class LockdownModeObserver;
 class PerActivityStateCPUUsageSampler;
 class SuspendedPageProxy;
@@ -398,6 +399,12 @@ public:
     void createModelProcessConnection(WebProcessProxy&, IPC::Connection::Handle&&, WebKit::ModelProcessConnectionParameters&&);
 
     ModelProcessProxy* modelProcess() const { return m_modelProcess.get(); }
+#endif
+
+#if ENABLE(IMAGE_PROCESS)
+    void imageProcessExited(ProcessID, ProcessTerminationReason);
+
+    void createImageProcessConnection(WebProcessProxy&, IPC::Connection::Handle&&);
 #endif
 
     // Network Process Management
@@ -774,6 +781,10 @@ private:
     void terminateAllWebContentProcessesWithModelPlayers();
 #endif
 
+#if ENABLE(IMAGE_PROCESS)
+    ImageProcessProxy& ensureImageProcess();
+#endif
+
 #if ENABLE(CONTENT_EXTENSIONS)
     void loadOrUpdateResourceMonitorRuleList();
 
@@ -805,6 +816,9 @@ private:
 #if ENABLE(MODEL_PROCESS)
     RefPtr<ModelProcessProxy> m_modelProcess;
     WeakHashSet<WebProcessProxy> m_processesWithModelPlayers;
+#endif
+#if ENABLE(IMAGE_PROCESS)
+    RefPtr<ImageProcessProxy> m_imageProcess;
 #endif
 
     const Ref<WebPageGroup> m_defaultPageGroup;

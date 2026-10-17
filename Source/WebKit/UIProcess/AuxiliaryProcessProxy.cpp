@@ -191,6 +191,11 @@ void AuxiliaryProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& lau
         varname = "MODEL_PROCESS_CMD_PREFIX";
         break;
 #endif
+#if ENABLE(IMAGE_PROCESS)
+    case ProcessLauncher::ProcessType::Image:
+        varname = "IMAGE_PROCESS_CMD_PREFIX";
+        break;
+#endif
 #if ENABLE(BUBBLEWRAP_SANDBOX)
     case ProcessLauncher::ProcessType::DBusProxy:
         RELEASE_ASSERT_NOT_REACHED();

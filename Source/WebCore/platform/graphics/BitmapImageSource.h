@@ -49,6 +49,7 @@ public:
     // State
     ImageDecoder* decoder(FragmentedSharedBuffer* = nullptr) const;
     ImageDecoder* decoderIfExists() const { return m_decoder.get(); }
+    bool decodesAsynchronously() const final;
 
     // Encoded and decoded data
     void destroyDecodedData(bool destroyAll) final;
@@ -130,6 +131,7 @@ private:
     bool LEGACY_NODELETE isDecodingWorkQueueIdle() const;
     void stopDecodingWorkQueue() final;
     void decode(Function<void(DecodingStatus)>&& decodeCallback) final;
+    void decodeForCallbacks();
     void callDecodeCallbacks(DecodingStatus);
     void imageFrameDecodeAtIndexHasFinished(unsigned index, ImageAnimatingState, DecodingStatus);
 

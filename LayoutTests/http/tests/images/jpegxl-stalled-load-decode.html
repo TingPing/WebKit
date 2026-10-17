@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="/js-test-resources/js-test.js"></script>
+</head>
+<body>
+<img id="image" width="400" height="400">
+<canvas id="canvas" width="800" height="800" style="display: none"></canvas>
+<script>
+description("Tests that a JPEG XL image painted while its load is stalled is fully decoded once the load completes.");
+jsTestIsAsync = true;
+
+var alphaTop, alphaMiddle, alphaBottom;
+
+(async () => {
+    const image = document.getElementById("image");
+    const loaded = new Promise(resolve => {
+        image.onload = resolve;
+        image.onerror = resolve;
+    });
+    image.src = "/resources/load-and-stall.py?name=../../../fast/images/resources/red-at-12-oclock-with-color-profile.jxl&mimeType=image%2Fjxl&stallAt=20000&stallFor=1&rand=" + Math.random();
+    await loaded;
+    await image.decode();
+
+    const context = document.getElementById("canvas").getContext("2d");
+    context.drawImage(image, 0, 0);
+    alphaTop = context.getImageData(400, 10, 1, 1).data[3];
+    alphaMiddle = context.getImageData(400, 400, 1, 1).data[3];
+    alphaBottom = context.getImageData(400, 790, 1, 1).data[3];
+    shouldBe("alphaTop", "255");
+    shouldBe("alphaMiddle", "255");
+    shouldBe("alphaBottom", "255");
+    finishJSTest();
+})();
+</script>
+</body>
+</html>

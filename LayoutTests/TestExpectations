@@ -3170,6 +3170,9 @@ fast/images/jpegxl-image-decoding.html [ Skip ]
 fast/images/jpegxl-as-image.html [ Skip ]
 fast/images/jpegxl-with-color-profile.html [ Skip ]
 fast/images/animated-jpegxl-loop-count.html [ Skip ]
+fast/images/animated-jpegxl-advances.html [ Skip ]
+fast/images/jpegxl-in-process-decoding.html [ Skip ]
+http/tests/images/jpegxl-stalled-load-decode.html [ Skip ]
 
 # Only applicable on platforms with HDR support
 compositing/hdr [ Skip ]

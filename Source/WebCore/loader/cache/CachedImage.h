@@ -119,6 +119,7 @@ private:
     RefPtr<SharedBuffer> convertedDataIfNeeded(const FragmentedSharedBuffer* data) const;
     void didUpdateImageData();
     EncodedDataStatus updateImageData(bool allDataReceived);
+    void completeLoading(EncodedDataStatus, const FragmentedSharedBuffer*, const NetworkLoadMetrics&);
     void updateData(const SharedBuffer&) override;
     void error(CachedResource::Status) override;
     void responseReceived(ResourceResponse&&) override;
@@ -181,6 +182,8 @@ private:
 
     WeakPtr<Document, WeakPtrImplWithEventTargetData> m_skippingRevalidationDocument;
     RefPtr<const Settings> m_settings;
+
+    Box<NetworkLoadMetrics> m_metricsPendingAsynchronousDecode;
 
     static constexpr unsigned maxUpdateImageDataCount = 4;
     unsigned m_updateImageDataCount : 3;

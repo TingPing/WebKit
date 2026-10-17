@@ -104,6 +104,9 @@ public:
 #if ENABLE(MODEL_PROCESS)
         Model,
 #endif
+#if ENABLE(IMAGE_PROCESS)
+        Image,
+#endif
         WebContent,
     };
     virtual Type type() const = 0;

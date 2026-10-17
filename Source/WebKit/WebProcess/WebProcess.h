@@ -145,6 +145,7 @@ class AudioMediaStreamTrackRendererInternalUnitManager;
 class AudioSessionRoutingArbitrator;
 class GamepadData;
 class GPUProcessConnection;
+class ImageProcessConnection;
 class InjectedBundle;
 class LibWebRTCCodecs;
 class LibWebRTCNetwork;
@@ -152,6 +153,7 @@ class ModelProcessConnection;
 class ModelProcessModelPlayerManager;
 class RemoteCDMFactory;
 class RemoteImageDecoderAVFManager;
+class RemoteImageDecoderManager;
 class RemoteLegacyCDMFactory;
 class RemoteMediaEngineConfigurationFactory;
 class RemoteMediaPlayerManager;
@@ -343,6 +345,13 @@ public:
     void modelProcessConnectionClosed(ModelProcessConnection&);
     ModelProcessConnection* existingModelProcessConnection() { return m_modelProcessConnection.get(); }
 #endif // ENABLE(MODEL_PROCESS)
+
+#if ENABLE(IMAGE_PROCESS)
+    ImageProcessConnection& ensureImageProcessConnection();
+    void imageProcessConnectionClosed(ImageProcessConnection&);
+
+    RemoteImageDecoderManager& remoteImageDecoderManager() { return m_remoteImageDecoderManager.get(); }
+#endif // ENABLE(IMAGE_PROCESS)
 
 #if USE(LIBWEBRTC)
     LibWebRTCNetwork& libWebRTCNetwork();
@@ -857,6 +866,11 @@ private:
 #if ENABLE(MODEL_PROCESS)
     const Ref<ModelProcessModelPlayerManager> m_modelProcessModelPlayerManager;
     RefPtr<ModelProcessConnection> m_modelProcessConnection;
+#endif
+
+#if ENABLE(IMAGE_PROCESS)
+    RefPtr<ImageProcessConnection> m_imageProcessConnection;
+    const Ref<RemoteImageDecoderManager> m_remoteImageDecoderManager;
 #endif
 
     const Ref<WebCacheStorageProvider> m_cacheStorageProvider;

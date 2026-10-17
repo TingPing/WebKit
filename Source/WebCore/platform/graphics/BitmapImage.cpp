@@ -64,6 +64,11 @@ std::optional<Ref<BitmapImage>> BitmapImage::create(RefPtr<ShareableBitmap>&& bi
     return image.releaseNonNull();
 }
 
+bool BitmapImage::hasPendingAsynchronousDecodesForTesting()
+{
+    return ImageFrameWorkQueue::hasPendingDecodes();
+}
+
 RefPtr<BitmapImage> BitmapImage::create(PlatformImagePtr&& platformImage)
 {
     return create(NativeImage::create(WTF::move(platformImage)));

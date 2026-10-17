@@ -83,6 +83,9 @@ enum class ProcessLaunchType {
 #if ENABLE(MODEL_PROCESS)
     Model,
 #endif
+#if ENABLE(IMAGE_PROCESS)
+    Image,
+#endif
 };
 
 struct ProcessLaunchOptions {

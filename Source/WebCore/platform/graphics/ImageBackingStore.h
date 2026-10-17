@@ -60,6 +60,20 @@ public:
         return std::unique_ptr<ImageBackingStore>(new ImageBackingStore(other));
     }
 
+    // Creates a backing store that wraps externally provided memory (e.g. memory shared with
+    // another process) instead of allocating its own. The segment must outlive the backing
+    // store and must be able to hold a tightly packed image of the requested size. The
+    // wrapped memory is not cleared; the caller guarantees it is zeroed or fully overwritten
+    // by the decoder.
+    static std::unique_ptr<ImageBackingStore> create(const IntSize& size, Ref<FragmentedSharedBuffer::DataSegment>&& pixels, bool premultiplyAlpha = true)
+    {
+        if (size.isEmpty() || isOverSize(size))
+            return nullptr;
+        if (pixels->size() < (size.area() * sizeof(uint32_t)))
+            return nullptr;
+        return std::unique_ptr<ImageBackingStore>(new ImageBackingStore(size, WTF::move(pixels), premultiplyAlpha));
+    }
+
     PlatformImagePtr image() const;
 
     bool setSize(const IntSize& size)
@@ -213,6 +227,17 @@ private:
     {
         ASSERT(!size.isEmpty() && !isOverSize(size));
         RELEASE_ASSERT(setSize(size));
+    }
+
+    ImageBackingStore(const IntSize& size, Ref<FragmentedSharedBuffer::DataSegment>&& pixels, bool premultiplyAlpha)
+        : m_pixels(WTF::move(pixels))
+        , m_premultiplyAlpha(premultiplyAlpha)
+    {
+        ASSERT(!size.isEmpty() && !isOverSize(size));
+        ASSERT(m_pixels->size() >= (size.area() * sizeof(uint32_t)));
+        m_pixelsSpan = spanReinterpretCast<uint32_t>(spanConstCast<uint8_t>(protect(m_pixels)->span()));
+        m_size = size;
+        m_frameRect = IntRect(IntPoint(), m_size);
     }
 
     ImageBackingStore(const ImageBackingStore& other)
