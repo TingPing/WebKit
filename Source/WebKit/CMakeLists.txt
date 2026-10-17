@@ -822,7 +822,6 @@ endif ()
 set(WebProcess_LIBRARIES WebKit)
 set(NetworkProcess_LIBRARIES WebKit)
 set(GPUProcess_LIBRARIES WebKit)
-set(ImageProcess_LIBRARIES WebKit)
 
 # For platforms that want to use system-provided OpenGL (ES) / EGL headers,
 # these include directories, libraries or definitions need to be
@@ -1645,9 +1644,35 @@ if (NOT USE_EXTENSIONKIT)
     endif ()
 
     if (ENABLE_IMAGE_PROCESS)
+        # The Image process links WebKit's code statically instead of linking the shared library:
+        # resolving the shared library's symbols across all of its dependencies dominated its
+        # startup. The archive reuses WebKit's objects; only the code the Image process reaches
+        # is kept (--gc-sections), and only the libraries that code uses (--as-needed). WebKit's
+        # Swift objects are left out: their metadata sections are always retained, which would
+        # keep all of their code, and the UI process code it calls, alive.
+        add_library(WebKitStaticForImageProcess STATIC $<TARGET_OBJECTS:WebKit>)
+        foreach (_objectLibrary WebCore JavaScriptCore LowLevelInterpreterLib WTF bmalloc WPEPlatform WPEPlatformDRM WPEPlatformHeadless WPEPlatformWayland)
+            if (TARGET ${_objectLibrary})
+                get_target_property(_type ${_objectLibrary} TYPE)
+                if (_type STREQUAL "OBJECT_LIBRARY")
+                    target_sources(WebKitStaticForImageProcess PRIVATE $<TARGET_OBJECTS:${_objectLibrary}>)
+                endif ()
+            endif ()
+        endforeach ()
+        # WebKit's own link libraries, minus the objects it links from its object libraries;
+        # those are in the archive, where only the ones the Image process uses get linked.
+        get_target_property(_webKitLinkLibraries WebKit LINK_LIBRARIES)
+        list(FILTER _webKitLinkLibraries EXCLUDE REGEX "TARGET_OBJECTS|\\.o$")
+        target_link_libraries(WebKitStaticForImageProcess PUBLIC ${_webKitLinkLibraries})
+        add_dependencies(WebKitStaticForImageProcess WebKit)
+        # --as-needed only applies to the libraries after it on the command line, and linker
+        # options go after all the libraries, so pass it as the first link item.
+        set(ImageProcess_LIBRARIES -Wl,--as-needed WebKitStaticForImageProcess)
+
         list(APPEND ImageProcess_PRIVATE_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:WebKit,INCLUDE_DIRECTORIES>)
         WEBKIT_EXECUTABLE(ImageProcess)
         WEBKIT_REUSE_PREFIX_HEADER(ImageProcess WebKit WebKitPrefix.h PREFIX_LANGUAGES CXX)
+        set_target_properties(WebKitStaticForImageProcess ImageProcess PROPERTIES LINKER_LANGUAGE CXX)
     endif ()
 endif ()
 
