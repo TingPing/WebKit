@@ -94,15 +94,34 @@ using namespace WebCore;
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(AcceleratedSurface);
 
-Ref<AcceleratedSurface> AcceleratedSurface::create(WebPage& webPage, Function<void()>&& frameCompleteHandler, RenderingPurpose renderingPurpose)
+uint64_t AcceleratedSurface::generateSurfaceID()
 {
-    return adoptRef(*new AcceleratedSurface(webPage, WTF::move(frameCompleteHandler), renderingPurpose));
-}
-
-static uint64_t generateID()
-{
+    ASSERT(RunLoop::isMain());
     static uint64_t identifier = 0;
     return ++identifier;
+}
+
+Ref<AcceleratedSurface> AcceleratedSurface::create(WebPage& webPage, Function<void()>&& frameCompleteHandler, RenderingPurpose renderingPurpose)
+{
+    Parameters parameters {
+#if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
+        .hardwareAccelerationEnabled = webPage.corePage()->settings().hardwareAccelerationEnabled(),
+#endif
+        .backgroundColor = webPage.effectiveBackgroundColor(),
+        .isVisible = webPage.activityState().contains(ActivityState::IsVisible),
+#if USE(GBM) || OS(ANDROID)
+        .preferredBufferFormats = webPage.preferredBufferFormats(),
+#endif
+#if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
+        .rendererBufferTransportMode = WebProcess::singleton().rendererBufferTransportMode(),
+#endif
+    };
+    return adoptRef(*new AcceleratedSurface(*WebProcess::singleton().parentProcessConnection(), generateSurfaceID(), &webPage, WTF::move(parameters), WTF::move(frameCompleteHandler), renderingPurpose));
+}
+
+Ref<AcceleratedSurface> AcceleratedSurface::create(IPC::Connection& connection, uint64_t surfaceID, Parameters&& parameters, Function<void()>&& frameCompleteHandler)
+{
+    return adoptRef(*new AcceleratedSurface(connection, surfaceID, nullptr, WTF::move(parameters), WTF::move(frameCompleteHandler), RenderingPurpose::Composited));
 }
 
 static bool useExplicitSync()
@@ -112,22 +131,27 @@ static bool useExplicitSync()
     return extensions.ANDROID_native_fence_sync && (display.eglCheckVersion(1, 5) || extensions.KHR_fence_sync);
 }
 
-AcceleratedSurface::AcceleratedSurface(WebPage& webPage, Function<void()>&& frameCompleteHandler, RenderingPurpose renderingPurpose)
-    : m_webPage(webPage)
+AcceleratedSurface::AcceleratedSurface(IPC::Connection& connection, uint64_t surfaceID, WebPage* webPage, Parameters&& parameters, Function<void()>&& frameCompleteHandler, RenderingPurpose renderingPurpose)
+    : m_connection(connection)
+    , m_webPage(webPage)
     , m_frameCompleteHandler(WTF::move(frameCompleteHandler))
 #if USE(TEXTURE_MAPPER)
     , m_useSkia(renderingPurpose == RenderingPurpose::NonComposited)
 #else
     , m_useSkia(true)
 #endif
-    , m_id(generateID())
+    , m_id(surfaceID)
     , m_renderingPurpose(renderingPurpose)
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
-    , m_hardwareAccelerationEnabled(webPage.corePage()->settings().hardwareAccelerationEnabled())
+    , m_hardwareAccelerationEnabled(parameters.hardwareAccelerationEnabled)
+    , m_rendererBufferTransportMode(parameters.rendererBufferTransportMode)
 #endif
-    , m_backgroundColor(webPage.effectiveBackgroundColor())
+#if USE(GBM) || OS(ANDROID)
+    , m_preferredBufferFormats(WTF::move(parameters.preferredBufferFormats))
+#endif
+    , m_backgroundColor(WTF::move(parameters.backgroundColor))
     , m_swapChain(*this)
-    , m_isVisible(webPage.activityState().contains(ActivityState::IsVisible))
+    , m_isVisible(parameters.isVisible)
     , m_useExplicitSync(usesGL() && useExplicitSync())
 #if ENABLE(DAMAGE_TRACKING)
     , m_damageTracker(m_swapChain, !usesGL())
@@ -213,7 +237,7 @@ AcceleratedSurface::RenderTargetShareableBuffer::~RenderTargetShareableBuffer()
     if (m_colorBuffer)
         glDeleteRenderbuffers(1, &m_colorBuffer);
 
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidDestroyBuffer(m_id), m_surface->surfaceID());
+    m_surface->connection().send(Messages::AcceleratedBackingStore::DidDestroyBuffer(m_id), m_surface->surfaceID());
 }
 
 void AcceleratedSurface::RenderTargetShareableBuffer::initializeColorBuffer(EGLImage image)
@@ -232,7 +256,7 @@ void AcceleratedSurface::RenderTargetShareableBuffer::initializeColorBuffer(EGLI
 
 void AcceleratedSurface::RenderTargetShareableBuffer::sendFrame(Vector<WebCore::IntRect, 1>&& damageRects)
 {
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::Frame(m_id, WTF::move(damageRects), WTF::move(m_renderingFenceFD)), m_surface->surfaceID());
+    m_surface->connection().send(Messages::AcceleratedBackingStore::Frame(m_id, WTF::move(damageRects), WTF::move(m_renderingFenceFD)), m_surface->surfaceID());
 }
 
 void AcceleratedSurface::RenderTargetShareableBuffer::willRenderFrame()
@@ -333,7 +357,7 @@ AcceleratedSurface::RenderTargetEGLImage::RenderTargetEGLImage(AcceleratedSurfac
     , m_image(image)
 {
     initializeColorBuffer(m_image);
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidCreateDMABufBuffer(m_id, WTF::move(dmaBufAttributes), usage), m_surface->surfaceID());
+    m_surface->connection().send(Messages::AcceleratedBackingStore::DidCreateDMABufBuffer(m_id, WTF::move(dmaBufAttributes), usage), m_surface->surfaceID());
 }
 #endif // USE(GBM)
 
@@ -402,7 +426,7 @@ AcceleratedSurface::RenderTargetEGLImage::RenderTargetEGLImage(AcceleratedSurfac
     , m_image(image)
 {
     initializeColorBuffer(m_image);
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidCreateAndroidBuffer(m_id, WTF::move(hardwareBuffer)), m_surface->surfaceID());
+    m_surface->connection().send(Messages::AcceleratedBackingStore::DidCreateAndroidBuffer(m_id, WTF::move(hardwareBuffer)), m_surface->surfaceID());
 }
 #endif // OS(ANDROID)
 
@@ -440,7 +464,7 @@ AcceleratedSurface::RenderTargetSHMImage::RenderTargetSHMImage(AcceleratedSurfac
     else if (m_surface->useSkia())
         m_skiaSurface = m_bitmap->createSurface();
 
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidCreateSHMBuffer(m_id, WTF::move(bitmapHandle)), m_surface->surfaceID());
+    m_surface->connection().send(Messages::AcceleratedBackingStore::DidCreateSHMBuffer(m_id, WTF::move(bitmapHandle)), m_surface->surfaceID());
 }
 
 AcceleratedSurface::RenderTargetSHMImage::~RenderTargetSHMImage() = default;
@@ -515,7 +539,7 @@ AcceleratedSurface::RenderTargetTexture::RenderTargetTexture(AcceleratedSurface&
     if (m_surface->useSkia())
         createSkiaSurfaceForFramebuffer(m_fbo);
 
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidCreateDMABufBuffer(m_id, { size, format, WTF::move(fds), WTF::move(offsets), WTF::move(strides), modifier }, RendererBufferFormat::Usage::Rendering), m_surface->surfaceID());
+    m_surface->connection().send(Messages::AcceleratedBackingStore::DidCreateDMABufBuffer(m_id, { size, format, WTF::move(fds), WTF::move(offsets), WTF::move(strides), modifier }, RendererBufferFormat::Usage::Rendering), m_surface->surfaceID());
 }
 
 AcceleratedSurface::RenderTargetTexture::~RenderTargetTexture() = default;
@@ -609,7 +633,7 @@ AcceleratedSurface::SwapChain::SwapChain(AcceleratedSurface& surface)
     switch (display.type()) {
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
     case PlatformDisplay::Type::Surfaceless:
-        if (display.eglExtensions().MESA_image_dma_buf_export && WebProcess::singleton().rendererBufferTransportMode().contains(RendererBufferTransportMode::Hardware))
+        if (display.eglExtensions().MESA_image_dma_buf_export && m_surface->m_rendererBufferTransportMode.contains(RendererBufferTransportMode::Hardware))
             m_type = Type::Texture;
         else
             m_type = Type::SharedMemory;
@@ -640,7 +664,7 @@ AcceleratedSurface::SwapChain::SwapChain(AcceleratedSurface& surface)
 #if USE(WPE_RENDERER)
     case PlatformDisplay::Type::WPE:
         m_type = Type::WPEBackend;
-        Ref webPage { m_surface->m_webPage };
+        Ref webPage { *m_surface->m_webPage };
         m_initialSize = webPage->size();
         m_initialSize.scale(webPage->deviceScaleFactor());
         m_hostFD = webPage->hostFileDescriptor();
@@ -671,14 +695,13 @@ void AcceleratedSurface::SwapChain::setupBufferFormat()
             && fourcc != DRM_FORMAT_ABGR16161616F;
     };
 
-    Ref webPage { m_surface->m_webPage };
     bool isOpaque = m_surface->isOpaque();
 
     // The preferred formats vector is sorted by usage, but all formats for the same usage has the same priority.
     Locker locker { m_bufferFormatLock };
     BufferFormat newBufferFormat;
     const auto& supportedFormats = PlatformDisplay::sharedDisplay().bufferFormats();
-    for (const auto& bufferFormat : webPage->preferredBufferFormats()) {
+    for (const auto& bufferFormat : m_surface->m_preferredBufferFormats) {
 
         auto matchesOpacity = false;
         for (const auto& format : supportedFormats) {
@@ -809,7 +832,7 @@ AcceleratedSurface::RenderTarget* AcceleratedSurface::SwapChain::nextTarget()
         }
 
 #if ENABLE(WPE_PLATFORM)
-        WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidChangeBufferConfiguration(m_lockedTargets.size() + targetsToCreate), m_surface->surfaceID());
+        m_surface->connection().send(Messages::AcceleratedBackingStore::DidChangeBufferConfiguration(m_lockedTargets.size() + targetsToCreate), m_surface->surfaceID());
 #endif
 
         for (unsigned i = 0; i < targetsToCreate; ++i) {
@@ -819,7 +842,7 @@ AcceleratedSurface::RenderTarget* AcceleratedSurface::SwapChain::nextTarget()
 
 #if ENABLE(WPE_PLATFORM)
         if (m_freeTargets.size() != targetsToCreate)
-            WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidChangeBufferConfiguration(m_lockedTargets.size() + m_freeTargets.size()), m_surface->surfaceID());
+            m_surface->connection().send(Messages::AcceleratedBackingStore::DidChangeBufferConfiguration(m_lockedTargets.size() + m_freeTargets.size()), m_surface->surfaceID());
 #endif
     }
 
@@ -850,7 +873,7 @@ void AcceleratedSurface::SwapChain::releaseTarget(uint64_t targetID, UnixFileDes
 void AcceleratedSurface::SwapChain::reset()
 {
 #if ENABLE(WPE_PLATFORM)
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidChangeBufferConfiguration(0), m_surface->surfaceID());
+    m_surface->connection().send(Messages::AcceleratedBackingStore::DidChangeBufferConfiguration(0), m_surface->surfaceID());
 #endif
 
     m_lockedTargets.clear();
@@ -865,7 +888,7 @@ void AcceleratedSurface::SwapChain::releaseUnusedBuffers()
 #endif
 
 #if ENABLE(WPE_PLATFORM)
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidChangeBufferConfiguration(m_lockedTargets.size()), m_surface->surfaceID());
+    m_surface->connection().send(Messages::AcceleratedBackingStore::DidChangeBufferConfiguration(m_lockedTargets.size()), m_surface->surfaceID());
 #endif
 
     m_freeTargets.clear();
@@ -958,6 +981,16 @@ bool AcceleratedSurface::shouldPaintMirrored() const
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM) && (USE(GBM) || OS(ANDROID))
 void AcceleratedSurface::preferredBufferFormatsDidChange()
 {
+    RefPtr webPage = m_webPage;
+    if (!webPage)
+        return;
+    preferredBufferFormatsDidChange(Vector { webPage->preferredBufferFormats() });
+}
+
+void AcceleratedSurface::preferredBufferFormatsDidChange(Vector<RendererBufferFormat>&& formats)
+{
+    ASSERT(RunLoop::isMain());
+    m_preferredBufferFormats = WTF::move(formats);
     m_swapChain.setupBufferFormat();
 }
 #endif
@@ -1001,14 +1034,19 @@ void AcceleratedSurface::visibilityDidChange(bool isVisible)
 
 void AcceleratedSurface::backgroundColorDidChange()
 {
-    ASSERT(RunLoop::isMain());
-    Ref webPage = m_webPage;
-    const auto color = webPage->effectiveBackgroundColor();
+    RefPtr webPage = m_webPage;
+    if (!webPage)
+        return;
+    backgroundColorDidChange(webPage->effectiveBackgroundColor());
+}
 
+void AcceleratedSurface::backgroundColorDidChange(std::optional<Color>&& color)
+{
+    ASSERT(RunLoop::isMain());
     bool wasOpaque = this->isOpaque();
     {
         Locker locker { m_backgroundColorLock };
-        m_backgroundColor = color;
+        m_backgroundColor = WTF::move(color);
     }
     bool isOpaque = this->isOpaque();
     if (isOpaque == wasOpaque)
@@ -1033,7 +1071,7 @@ void AcceleratedSurface::didCreateCompositingRunLoop(RunLoop& runLoop)
 
     m_compositingRunLoop = &runLoop;
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
-    WebProcess::singleton().parentProcessConnection()->addMessageReceiver(runLoop, *this, Messages::AcceleratedSurface::messageReceiverName(), m_id);
+    m_connection->addMessageReceiver(runLoop, *this, Messages::AcceleratedSurface::messageReceiverName(), m_id);
 #endif
 }
 
@@ -1048,7 +1086,7 @@ void AcceleratedSurface::willDestroyCompositingRunLoop()
 
     m_compositingRunLoop = nullptr;
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
-    WebProcess::singleton().parentProcessConnection()->removeMessageReceiver(Messages::AcceleratedSurface::messageReceiverName(), m_id);
+    m_connection->removeMessageReceiver(Messages::AcceleratedSurface::messageReceiverName(), m_id);
 #endif
 }
 

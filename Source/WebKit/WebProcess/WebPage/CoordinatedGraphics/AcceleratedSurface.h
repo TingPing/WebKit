@@ -49,6 +49,14 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include "RendererBufferFormat.h"
 #endif
 
+#if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
+#include "RendererBufferTransportMode.h"
+#endif
+
+namespace IPC {
+class Connection;
+}
+
 #if USE(GBM)
 #include <WebCore/DRMDevice.h>
 #include <WebCore/GBMDevice.h>
@@ -106,8 +114,23 @@ public:
         NonComposited,
     };
 
+    struct Parameters {
+        bool hardwareAccelerationEnabled { true };
+        std::optional<WebCore::Color> backgroundColor;
+        bool isVisible { false };
+#if USE(GBM) || OS(ANDROID)
+        Vector<RendererBufferFormat> preferredBufferFormats;
+#endif
+#if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
+        OptionSet<RendererBufferTransportMode> rendererBufferTransportMode;
+#endif
+    };
+
     static Ref<AcceleratedSurface> create(WebPage&, Function<void()>&& frameCompleteHandler, RenderingPurpose);
+    static Ref<AcceleratedSurface> create(IPC::Connection&, uint64_t surfaceID, Parameters&&, Function<void()>&& frameCompleteHandler);
     ~AcceleratedSurface();
+
+    static uint64_t generateSurfaceID();
 
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
     void ref() const final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr::ref(); }
@@ -153,13 +176,17 @@ public:
 
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM) && (USE(GBM) || OS(ANDROID))
     void preferredBufferFormatsDidChange();
+    void preferredBufferFormatsDidChange(Vector<RendererBufferFormat>&&);
 #endif
 
     void visibilityDidChange(bool);
     void backgroundColorDidChange();
+    void backgroundColorDidChange(std::optional<WebCore::Color>&&);
 
 private:
-    AcceleratedSurface(WebPage&, Function<void()>&& frameCompleteHandler, RenderingPurpose);
+    AcceleratedSurface(IPC::Connection&, uint64_t surfaceID, WebPage*, Parameters&&, Function<void()>&& frameCompleteHandler, RenderingPurpose);
+
+    IPC::Connection& connection() const { return m_connection.get(); }
 
     RenderingPurpose renderingPurpose() const { return m_renderingPurpose; }
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
@@ -481,13 +508,18 @@ private:
     };
 #endif
 
-    const WeakRef<WebPage> m_webPage;
+    const Ref<IPC::Connection> m_connection;
+    const WeakPtr<WebPage> m_webPage;
     Function<void()> m_frameCompleteHandler;
     bool m_useSkia { false };
     uint64_t m_id { 0 };
     RenderingPurpose m_renderingPurpose { RenderingPurpose::Composited };
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
     bool m_hardwareAccelerationEnabled { true };
+    OptionSet<RendererBufferTransportMode> m_rendererBufferTransportMode;
+#endif
+#if USE(GBM) || OS(ANDROID)
+    Vector<RendererBufferFormat> m_preferredBufferFormats;
 #endif
     mutable Lock m_backgroundColorLock;
     std::optional<WebCore::Color> m_backgroundColor WTF_GUARDED_BY_LOCK(m_backgroundColorLock);
