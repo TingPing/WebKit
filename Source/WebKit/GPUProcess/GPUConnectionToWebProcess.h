@@ -123,6 +123,11 @@ struct RemoteAudioSessionConfiguration;
 class RemoteWCLayerTreeHost;
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+class RemoteCoordinatedCompositor;
+struct RendererBufferFormat;
+#endif
+
 #if ENABLE(VIDEO)
 class RemoteAudioVideoRendererProxyManager;
 class RemoteMediaPlayerManagerProxy;
@@ -365,6 +370,11 @@ private:
     void releaseWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier);
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void createCoordinatedCompositor(uint64_t identifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&&, bool usesHardwareBufferTransport);
+    void releaseCoordinatedCompositor(uint64_t identifier);
+#endif
+
     // IPC::Connection::Client
     void didClose(IPC::Connection&) final;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, const Vector<uint32_t>& indicesOfObjectsFailingDecoding) final;
@@ -465,6 +475,10 @@ private:
 #if USE(GRAPHICS_LAYER_WC)
     using RemoteWCLayerTreeHostMap = HashMap<WCLayerTreeHostIdentifier, Ref<RemoteWCLayerTreeHost>>;
     RemoteWCLayerTreeHostMap m_remoteWCLayerTreeHostMap;
+#endif
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    HashMap<uint64_t, Ref<RemoteCoordinatedCompositor>> m_remoteCoordinatedCompositors;
 #endif
 
     RefPtr<RemoteRemoteCommandListenerProxy> m_remoteRemoteCommandListener;

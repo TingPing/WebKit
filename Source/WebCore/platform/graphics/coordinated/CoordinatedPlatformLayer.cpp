@@ -1526,6 +1526,224 @@ void CoordinatedPlatformLayer::flushCompositingStateOnTarget(const OptionSet<Com
         }
     }
 }
+
+std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer::takePendingChanges()
+{
+    ASSERT(isMainThread());
+    Locker locker { m_lock };
+
+    PendingChanges changes { .properties = { .id = m_id } };
+    auto& properties = changes.properties;
+
+    auto takeChange = [&](Change change, CoordinatedLayerChange remoteChange, NOESCAPE const auto& function) {
+        assertIsHeld(m_lock);
+        if (!m_pendingChanges.contains(change))
+            return;
+        function();
+        properties.changes.add(remoteChange);
+        m_pendingChanges.remove(change);
+    };
+
+    takeChange(Change::Position, CoordinatedLayerChange::Position, [&] {
+        assertIsHeld(m_lock);
+        properties.position = m_position;
+    });
+    takeChange(Change::BoundsOrigin, CoordinatedLayerChange::BoundsOrigin, [&] {
+        assertIsHeld(m_lock);
+        properties.boundsOrigin = m_boundsOrigin;
+    });
+    takeChange(Change::AnchorPoint, CoordinatedLayerChange::AnchorPoint, [&] {
+        assertIsHeld(m_lock);
+        properties.anchorPoint = m_anchorPoint;
+    });
+    takeChange(Change::Size, CoordinatedLayerChange::Size, [&] {
+        assertIsHeld(m_lock);
+        properties.size = m_size;
+    });
+    takeChange(Change::Transform, CoordinatedLayerChange::Transform, [&] {
+        assertIsHeld(m_lock);
+        properties.transform = m_transform;
+    });
+    takeChange(Change::ChildrenTransform, CoordinatedLayerChange::ChildrenTransform, [&] {
+        assertIsHeld(m_lock);
+        properties.childrenTransform = m_childrenTransform;
+    });
+    takeChange(Change::Preserves3D, CoordinatedLayerChange::Preserves3D, [&] {
+        assertIsHeld(m_lock);
+        properties.preserves3D = m_preserves3D;
+    });
+    takeChange(Change::MasksToBounds, CoordinatedLayerChange::MasksToBounds, [&] {
+        assertIsHeld(m_lock);
+        properties.masksToBounds = m_masksToBounds;
+    });
+    takeChange(Change::BackfaceVisibility, CoordinatedLayerChange::BackfaceVisibility, [&] {
+        assertIsHeld(m_lock);
+        properties.backfaceVisibility = m_backfaceVisibility;
+    });
+    takeChange(Change::BackgroundColor, CoordinatedLayerChange::BackgroundColor, [&] {
+        assertIsHeld(m_lock);
+        properties.backgroundColor = m_backgroundColor;
+    });
+    takeChange(Change::Opacity, CoordinatedLayerChange::Opacity, [&] {
+        assertIsHeld(m_lock);
+        properties.opacity = m_opacity;
+    });
+    takeChange(Change::BlendMode, CoordinatedLayerChange::BlendMode, [&] {
+        assertIsHeld(m_lock);
+        properties.blendMode = m_blendMode;
+    });
+    takeChange(Change::BackingStore, CoordinatedLayerChange::BackingStore, [&] {
+        assertIsHeld(m_lock);
+        properties.hasBackingStore = !!m_backingStoreProxy;
+    });
+    takeChange(Change::ContentsVisible, CoordinatedLayerChange::ContentsVisible, [&] {
+        assertIsHeld(m_lock);
+        properties.contentsVisible = m_contentsVisible;
+    });
+    takeChange(Change::ContentsOpaque, CoordinatedLayerChange::ContentsOpaque, [&] {
+        assertIsHeld(m_lock);
+        properties.contentsOpaque = m_contentsOpaque;
+    });
+    takeChange(Change::ContentsRect, CoordinatedLayerChange::ContentsRect, [&] {
+        assertIsHeld(m_lock);
+        properties.contentsRect = m_contentsRect;
+    });
+    takeChange(Change::ContentsRectClipsDescendants, CoordinatedLayerChange::ContentsRectClipsDescendants, [&] {
+        assertIsHeld(m_lock);
+        properties.contentsRectClipsDescendants = m_contentsRectClipsDescendants;
+    });
+    takeChange(Change::ContentsClippingRect, CoordinatedLayerChange::ContentsClippingRect, [&] {
+        assertIsHeld(m_lock);
+        properties.contentsClippingRect = m_contentsClippingRect;
+    });
+    takeChange(Change::ContentsClipShapePath, CoordinatedLayerChange::ContentsClipShapePath, [&] {
+        assertIsHeld(m_lock);
+        properties.contentsClipShapePath = m_contentsClipShapePath;
+    });
+    takeChange(Change::ContentsTiling, CoordinatedLayerChange::ContentsTileSize, [&] {
+        assertIsHeld(m_lock);
+        properties.contentsTileSize = m_contentsTileSize;
+        properties.contentsTilePhase = m_contentsTilePhase;
+        properties.changes.add(CoordinatedLayerChange::ContentsTilePhase);
+    });
+    takeChange(Change::ContentsColor, CoordinatedLayerChange::ContentsColor, [&] {
+        assertIsHeld(m_lock);
+        properties.contentsColor = m_contentsColor;
+    });
+    takeChange(Change::ContentsImage, CoordinatedLayerChange::ContentsImage, [&] {
+        assertIsHeld(m_lock);
+        if (m_imageBackingStore.current)
+            changes.contentsImage = &m_imageBackingStore.current->nativeImage();
+    });
+    takeChange(Change::ClipPath, CoordinatedLayerChange::ClipPath, [&] {
+        assertIsHeld(m_lock);
+        properties.clipPath = m_clipPath.path;
+        properties.clipPathWindRule = m_clipPath.windRule;
+        properties.changes.add(CoordinatedLayerChange::ClipPathWindRule);
+    });
+    takeChange(Change::Filters, CoordinatedLayerChange::Filters, [&] {
+        assertIsHeld(m_lock);
+        properties.filters = m_filters;
+    });
+    takeChange(Change::Mask, CoordinatedLayerChange::Mask, [&] {
+        assertIsHeld(m_lock);
+        if (m_mask)
+            properties.mask = m_mask->id();
+    });
+    takeChange(Change::Replica, CoordinatedLayerChange::Replica, [&] {
+        assertIsHeld(m_lock);
+        if (m_replica)
+            properties.replica = m_replica->id();
+    });
+
+    if (m_pendingChanges.contains(Change::Backdrop) && !m_backdrop) {
+        properties.changes.add(CoordinatedLayerChange::BackdropFilters);
+        m_pendingChanges.remove(Change::Backdrop);
+    } else if (m_backdrop) {
+        Locker backdropLocker { m_backdrop->lock() };
+        if (m_pendingChanges.contains(Change::Backdrop) || m_backdrop->m_pendingChanges.contains(Change::Filters)) {
+            properties.backdropFilters = m_backdrop->m_filters;
+            properties.changes.add(CoordinatedLayerChange::BackdropFilters);
+            m_pendingChanges.remove(Change::Backdrop);
+            m_backdrop->m_pendingChanges.remove(Change::Filters);
+        }
+    }
+
+    takeChange(Change::BackdropRect, CoordinatedLayerChange::BackdropRect, [&] {
+        assertIsHeld(m_lock);
+        properties.backdropRect = m_backdropRect;
+    });
+    takeChange(Change::BackdropShapePath, CoordinatedLayerChange::BackdropShapePath, [&] {
+        assertIsHeld(m_lock);
+        properties.backdropShapePath = m_backdropShapePath;
+    });
+    takeChange(Change::BackdropRoot, CoordinatedLayerChange::BackdropRoot, [&] {
+        assertIsHeld(m_lock);
+        properties.isBackdropRoot = m_isBackdropRoot;
+    });
+    takeChange(Change::DebugIndicators, CoordinatedLayerChange::DebugBorderColor, [&] {
+        assertIsHeld(m_lock);
+        if (m_debugBorderColor.isVisible()) {
+            properties.debugBorderColor = m_debugBorderColor;
+            properties.debugBorderWidth = m_debugBorderWidth;
+        }
+        if (m_repaintCount != -1)
+            properties.repaintCount = m_repaintCount;
+        properties.changes.add({ CoordinatedLayerChange::DebugBorderWidth, CoordinatedLayerChange::RepaintCount });
+    });
+    takeChange(Change::Children, CoordinatedLayerChange::Children, [&] {
+        assertIsHeld(m_lock);
+        properties.children = WTF::map(m_children, [](auto& child) {
+            return child->id();
+        });
+    });
+
+    // FIXME: send animations, contents buffers and damage to the remote compositor.
+    m_pendingChanges.remove(Change::Animations);
+    if (m_pendingChanges.contains(Change::ContentsBuffer)) {
+        m_contentsBuffer.pending = nullptr;
+        m_pendingChanges.remove(Change::ContentsBuffer);
+    }
+#if ENABLE(DAMAGE_TRACKING)
+    if (m_pendingChanges.contains(Change::Damage)) {
+        m_damage = std::nullopt;
+        m_pendingChanges.remove(Change::Damage);
+    }
+#endif
+
+    if (m_backingStoreProxy) {
+        if (auto update = m_backingStoreProxy->takePendingUpdate(); !update.isEmpty())
+            changes.backingStoreUpdate = WTF::move(update);
+        changes.contentsScale = m_contentsScale;
+    }
+
+    if (properties.changes.isEmpty() && !changes.backingStoreUpdate)
+        return std::nullopt;
+
+    return changes;
+}
+
+std::optional<CoordinatedLayerProperties> CoordinatedPlatformLayer::takePendingPositionChanges()
+{
+    Locker locker { m_lock };
+    if (!m_pendingChanges.containsAny({ Change::Position, Change::BoundsOrigin }))
+        return std::nullopt;
+
+    CoordinatedLayerProperties properties { .id = m_id };
+    if (m_pendingChanges.contains(Change::Position)) {
+        properties.position = m_position;
+        properties.changes.add(CoordinatedLayerChange::Position);
+        m_pendingChanges.remove(Change::Position);
+    }
+
+    if (m_pendingChanges.contains(Change::BoundsOrigin)) {
+        properties.boundsOrigin = m_boundsOrigin;
+        properties.changes.add(CoordinatedLayerChange::BoundsOrigin);
+        m_pendingChanges.remove(Change::BoundsOrigin);
+    }
+
+    return properties;
+}
 #endif
 
 bool CoordinatedPlatformLayer::hasPendingBackingStoreTileUpdates() const

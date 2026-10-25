@@ -65,6 +65,10 @@ messages -> GPUConnectionToWebProcess WantsDispatchMessage {
     CreateWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier, uint64_t nativeWindow, bool usesOffscreenRendering) AllowedWhenWaitingForSyncReply
     ReleaseWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier) AllowedWhenWaitingForSyncReply
 #endif
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    CreateCoordinatedCompositor(uint64_t identifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color> backgroundColor, bool isVisible, Vector<WebKit::RendererBufferFormat> preferredBufferFormats, bool usesHardwareBufferTransport)
+    ReleaseCoordinatedCompositor(uint64_t identifier)
+#endif
 #if ENABLE(VIDEO)
     CanDecodeExtendedType(enum:uint8_t WebCore::PlatformMediaDecodingType platformType, WebCore::ContentType contentType) -> (bool supported);
 #endif

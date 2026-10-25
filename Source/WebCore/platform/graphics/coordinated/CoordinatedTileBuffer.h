@@ -120,9 +120,10 @@ private:
 class CoordinatedUnacceleratedTileBuffer final : public CoordinatedTileBuffer {
 public:
     WEBCORE_EXPORT static Ref<CoordinatedTileBuffer> create(const IntSize&, Flags);
+    WEBCORE_EXPORT static Ref<CoordinatedTileBuffer> createPainted(const IntSize&, Flags, Vector<unsigned char>&&);
     WEBCORE_EXPORT virtual ~CoordinatedUnacceleratedTileBuffer();
 
-    Vector<unsigned char> takeData();
+    WEBCORE_EXPORT Vector<unsigned char> takeData();
     int stride() const { return m_size.width() * 4; }
 
 #if USE(CAIRO)

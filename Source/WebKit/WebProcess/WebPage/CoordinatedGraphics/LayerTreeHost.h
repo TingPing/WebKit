@@ -150,7 +150,7 @@ private:
 #if ENABLE(SCROLLING_THREAD)
     bool m_compositionRequiredInScrollingThread { false };
 #endif
-    const RefPtr<ThreadedCompositor> m_compositor;
+    const RefPtr<CoordinatedCompositor> m_compositor;
     std::unique_ptr<WebCore::CoordinatedTileManager> m_tileManager;
     HashMap<uint64_t, Ref<WebCore::CoordinatedImageBackingStore>> m_imageBackingStores;
 

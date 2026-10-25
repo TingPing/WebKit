@@ -1,0 +1,144 @@
+# Copyright (C) 2026 Igalia S.L.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1.  Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+# 2.  Redistributions in binary form must reproduce the above copyright
+#     notice, this list of conditions and the following disclaimer in the
+#     documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS BE LIABLE FOR
+# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+
+header: <WebCore/CoordinatedLayerProperties.h>
+[CustomHeader, OptionSet] enum class WebCore::CoordinatedLayerChange : uint64_t {
+    Position,
+    BoundsOrigin,
+    AnchorPoint,
+    Size,
+    Transform,
+    ChildrenTransform,
+    Preserves3D,
+    MasksToBounds,
+    BackfaceVisibility,
+    BackgroundColor,
+    Opacity,
+    BlendMode,
+    BackingStore,
+    ContentsVisible,
+    ContentsOpaque,
+    ContentsRect,
+    ContentsRectClipsDescendants,
+    ContentsClippingRect,
+    ContentsClipShapePath,
+    ContentsTileSize,
+    ContentsTilePhase,
+    ContentsColor,
+    ClipPath,
+    ClipPathWindRule,
+    Filters,
+    Mask,
+    Replica,
+    BackdropFilters,
+    BackdropRect,
+    BackdropShapePath,
+    BackdropRoot,
+    DebugBorderColor,
+    DebugBorderWidth,
+    RepaintCount,
+    Children,
+    ContentsImage,
+}
+
+header: <WebCore/CoordinatedLayerProperties.h>
+struct WebCore::CoordinatedLayerProperties {
+    [Validator='id'] WebCore::PlatformLayerIdentifier id;
+    [OptionalTupleBits] OptionSet<WebCore::CoordinatedLayerChange> changes;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Position] WebCore::FloatPoint position;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BoundsOrigin] WebCore::FloatPoint boundsOrigin;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::AnchorPoint] WebCore::FloatPoint3D anchorPoint;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Size] WebCore::FloatSize size;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Transform] WebCore::TransformationMatrix transform;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ChildrenTransform] WebCore::TransformationMatrix childrenTransform;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Preserves3D] bool preserves3D;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::MasksToBounds] bool masksToBounds;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BackfaceVisibility] bool backfaceVisibility;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BackgroundColor] WebCore::Color backgroundColor;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Opacity] float opacity;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BlendMode] WebCore::BlendMode blendMode;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BackingStore] bool hasBackingStore;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsVisible] bool contentsVisible;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsOpaque] bool contentsOpaque;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsRect] WebCore::FloatRect contentsRect;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsRectClipsDescendants] bool contentsRectClipsDescendants;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsClippingRect] WebCore::FloatRoundedRect contentsClippingRect;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsClipShapePath] WebCore::Path contentsClipShapePath;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsTileSize] WebCore::FloatSize contentsTileSize;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsTilePhase] WebCore::FloatSize contentsTilePhase;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsColor] WebCore::Color contentsColor;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ClipPath] WebCore::Path clipPath;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ClipPathWindRule] WebCore::WindRule clipPathWindRule;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Filters] WebCore::FilterOperations filters;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Mask] std::optional<WebCore::PlatformLayerIdentifier> mask;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Replica] std::optional<WebCore::PlatformLayerIdentifier> replica;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BackdropFilters] WebCore::FilterOperations backdropFilters;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BackdropRect] WebCore::FloatRoundedRect backdropRect;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BackdropShapePath] WebCore::Path backdropShapePath;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::BackdropRoot] bool isBackdropRoot;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::DebugBorderColor] WebCore::Color debugBorderColor;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::DebugBorderWidth] std::optional<float> debugBorderWidth;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::RepaintCount] std::optional<unsigned> repaintCount;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Children] Vector<WebCore::PlatformLayerIdentifier> children;
+}
+
+header: "CoordinatedLayerTreeTransaction.h"
+[CustomHeader] struct WebKit::CoordinatedPixels {
+    uint64_t offset;
+    WebCore::IntSize size;
+}
+
+header: "CoordinatedLayerTreeTransaction.h"
+[CustomHeader] struct WebKit::CoordinatedTileUpdate {
+    uint32_t tileID;
+    WebCore::IntRect tileRect;
+    WebCore::IntRect dirtyRect;
+    bool supportsAlpha;
+    WebKit::CoordinatedPixels pixels;
+}
+
+header: "CoordinatedLayerTreeTransaction.h"
+[CustomHeader] struct WebKit::CoordinatedBackingStoreUpdate {
+    float contentsScale;
+    Vector<uint32_t> tilesToCreate;
+    Vector<WebKit::CoordinatedTileUpdate> tilesToUpdate;
+    Vector<uint32_t> tilesToRemove;
+}
+
+header: "CoordinatedLayerTreeTransaction.h"
+[CustomHeader] struct WebKit::CoordinatedLayerUpdate {
+    WebCore::CoordinatedLayerProperties properties;
+    std::optional<WebKit::CoordinatedBackingStoreUpdate> backingStore;
+    std::optional<WebKit::CoordinatedPixels> contentsImage;
+}
+
+header: "CoordinatedLayerTreeTransaction.h"
+struct WebKit::CoordinatedLayerTreeTransaction {
+    WebCore::PlatformLayerIdentifier rootLayer;
+    Vector<WebKit::CoordinatedLayerUpdate> layers;
+    Vector<WebCore::PlatformLayerIdentifier> removedLayers;
+    IPC::SharedBufferReference pixels;
+}
+
+#endif

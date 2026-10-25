@@ -26,6 +26,8 @@ GPUProcess/glib/GPUProcessMainGLib.cpp
 
 GPUProcess/graphics/RemoteGraphicsContextGLGBM.cpp @no-unify
 
+GPUProcess/graphics/coordinated/RemoteCoordinatedCompositor.cpp
+
 GPUProcess/media/RemoteAudioDestinationManager.cpp
 
 GPUProcess/media/gstreamer/RemoteMediaPlayerProxyGStreamer.cpp
@@ -329,6 +331,8 @@ UIProcess/XR/openxr/OpenXRLayer.cpp
 UIProcess/XR/openxr/OpenXRSwapchain.cpp
 UIProcess/XR/openxr/PlatformXROpenXR.cpp
 UIProcess/XR/openxr/PlatformXRSystemOpenXR.cpp
+
+WebProcess/GPU/graphics/coordinated/RemoteCoordinatedCompositorProxy.cpp
 
 WebProcess/GPU/graphics/gbm/RemoteGraphicsContextGLProxyGBM.cpp
 

@@ -300,7 +300,8 @@ void webKitGLVideoSinkSetMediaPlayerPrivate(WebKitGLVideoSink* sink, const Threa
 
 bool webKitGLVideoSinkProbePlatform()
 {
-    if (!PlatformDisplay::sharedDisplay().gstGLContext()) {
+    auto* sharedDisplay = PlatformDisplay::sharedDisplayIfExists();
+    if (!sharedDisplay || !sharedDisplay->gstGLContext()) {
         GST_WARNING("WebKit shared GL context is not available.");
         return false;
     }

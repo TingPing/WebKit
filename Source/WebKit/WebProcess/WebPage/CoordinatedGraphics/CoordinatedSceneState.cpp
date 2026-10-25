@@ -148,6 +148,29 @@ void CoordinatedSceneState::flushCompositingState(const OptionSet<CompositionRea
         layer->processPendingBackingStoreTileUpdates();
 }
 
+void CoordinatedSceneState::forEachLayer(NOESCAPE const Function<void(CoordinatedPlatformLayer&)>& function)
+{
+    function(m_rootLayer.get());
+    Locker locker { m_layersLock };
+    for (Ref layer : m_layers)
+        function(layer.get());
+}
+
+HashSet<Ref<CoordinatedPlatformLayer>> CoordinatedSceneState::takePendingLayersToRemove()
+{
+    ASSERT(isMainRunLoop());
+    Locker pendingLayersLock { m_pendingLayersLock };
+    m_pendingLayers.clear();
+    auto layersToRemove = std::exchange(m_pendingLayersToRemove, { });
+
+    Locker locker { m_layersLock };
+    layersToRemove.removeIf([&](auto& layer) {
+        assertIsHeld(m_layersLock);
+        return m_layers.contains(layer);
+    });
+    return layersToRemove;
+}
+
 void CoordinatedSceneState::invalidateCommittedLayers()
 {
     ASSERT(!isMainRunLoop());

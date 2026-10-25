@@ -425,6 +425,7 @@
     [Legacy] MessageParam ServiceWorkerDownloadTask.DidReceiveData data
     [Legacy] MessageParam ServiceWorkerFetchTask.DidReceiveData data
     [Legacy] MessageParam NetworkResourceLoader.PendingStreamAppendData chunk
+    [NeedsReview] StructureParam WebKit::CoordinatedLayerTreeTransaction.pixels
 
     [NotSentFromWebContent] MessageParam WebResourceLoader.DidReceiveData data
     [NotSentFromWebContent] MessageParam WebSWClientConnection.NotifyRecordResponseBodyChunk data

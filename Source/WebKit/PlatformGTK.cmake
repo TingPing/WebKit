@@ -53,6 +53,8 @@ list(APPEND WebKit_LIBRARIES
 )
 
 list(APPEND WebKit_MESSAGES_IN_FILES
+    GPUProcess/graphics/coordinated/RemoteCoordinatedCompositor
+
     UIProcess/ViewGestureController
 
     UIProcess/glib/AcceleratedBackingStore
@@ -71,6 +73,8 @@ if (USE_GBM)
 endif ()
 
 list(APPEND WebKit_SERIALIZATION_IN_FILES
+    Shared/coordinated/CoordinatedLayerTreeTransaction.serialization.in
+
     Shared/glib/AvailableInputDevices.serialization.in
     Shared/glib/CoreIPCGByteArray.serialization.in
     Shared/glib/CoreIPCGTlsCertificate.serialization.in
@@ -302,6 +306,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
 
 list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/Modules/mediastream"
+    "${WEBKIT_DIR}/GPUProcess/graphics/coordinated"
     "${WEBKIT_DIR}/NetworkProcess/glib"
     "${WEBKIT_DIR}/NetworkProcess/soup"
     "${WEBKIT_DIR}/NetworkProcess/webrtc/rice"
@@ -312,6 +317,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/Shared/API/c/gtk"
     "${WEBKIT_DIR}/Shared/API/glib"
     "${WEBKIT_DIR}/Shared/Extensions"
+    "${WEBKIT_DIR}/Shared/coordinated"
     "${WEBKIT_DIR}/Shared/glib"
     "${WEBKIT_DIR}/Shared/gtk"
     "${WEBKIT_DIR}/Shared/linux"
@@ -331,6 +337,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/UIProcess/gtk"
     "${WEBKIT_DIR}/UIProcess/linux"
     "${WEBKIT_DIR}/UIProcess/soup"
+    "${WEBKIT_DIR}/WebProcess/GPU/graphics/coordinated"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/glib"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/gtk"
     "${WEBKIT_DIR}/WebProcess/Inspector/gtk"

@@ -144,6 +144,16 @@ Ref<CoordinatedTileBuffer> CoordinatedUnacceleratedTileBuffer::create(const IntS
     return adoptRef(*new CoordinatedUnacceleratedTileBuffer(size, flags));
 }
 
+Ref<CoordinatedTileBuffer> CoordinatedUnacceleratedTileBuffer::createPainted(const IntSize& size, Flags flags, Vector<unsigned char>&& data)
+{
+    Ref buffer = adoptRef(*new CoordinatedUnacceleratedTileBuffer(size, flags));
+    buffer->m_data = WTF::move(data);
+    didAllocateMemory(buffer->m_data.size());
+    Locker locker { buffer->m_painting.lock };
+    buffer->m_painting.state = PaintingState::Complete;
+    return buffer;
+}
+
 CoordinatedUnacceleratedTileBuffer::CoordinatedUnacceleratedTileBuffer(const IntSize& size, Flags flags)
     : CoordinatedTileBuffer(flags)
     , m_size(size)

@@ -170,6 +170,10 @@
 #include "WCRemoteFrameHostLayerManager.h"
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include "RemoteCoordinatedCompositor.h"
+#endif
+
 #if ENABLE(IPC_TESTING_API)
 #include "IPCTesterMessages.h"
 #endif
@@ -458,6 +462,10 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
         WCRemoteFrameHostLayerManager::singleton().removeAllLayersForProcess(webProcessIdentifier);
     });
 #endif
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    for (Ref compositor : std::exchange(m_remoteCoordinatedCompositors, { }).values())
+        compositor->invalidate();
+#endif
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
     m_libWebRTCCodecsProxy = nullptr;
 #endif
@@ -529,6 +537,27 @@ void GPUConnectionToWebProcess::createWCLayerTreeHost(WebKit::WCLayerTreeHostIde
 void GPUConnectionToWebProcess::releaseWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier)
 {
     m_remoteWCLayerTreeHostMap.remove(identifier);
+}
+#endif
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void GPUConnectionToWebProcess::createCoordinatedCompositor(uint64_t identifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&& preferredBufferFormats, bool usesHardwareBufferTransport)
+{
+    MESSAGE_CHECK(!m_remoteCoordinatedCompositors.contains(identifier));
+    m_remoteCoordinatedCompositors.add(identifier, RemoteCoordinatedCompositor::create(*this, identifier, {
+        .viewportSize = viewportSize,
+        .deviceScaleFactor = deviceScaleFactor,
+        .backgroundColor = WTF::move(backgroundColor),
+        .isVisible = isVisible,
+        .preferredBufferFormats = WTF::move(preferredBufferFormats),
+        .usesHardwareBufferTransport = usesHardwareBufferTransport,
+    }));
+}
+
+void GPUConnectionToWebProcess::releaseCoordinatedCompositor(uint64_t identifier)
+{
+    if (RefPtr compositor = m_remoteCoordinatedCompositors.take(identifier))
+        compositor->invalidate();
 }
 #endif
 

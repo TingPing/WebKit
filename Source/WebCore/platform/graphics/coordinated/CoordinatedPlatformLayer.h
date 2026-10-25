@@ -43,6 +43,8 @@
 #include "TextureMapperAnimation.h"
 #else
 #include "AcceleratedAnimations.h"
+#include "CoordinatedBackingStoreProxy.h"
+#include "CoordinatedLayerProperties.h"
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/gpu/ganesh/GrContextThreadSafeProxy.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
@@ -204,6 +206,17 @@ public:
     void flushPendingState();
     void flushPositionChanges(const OptionSet<CompositionReason>&);
     void flushCompositingState(const OptionSet<CompositionReason>&);
+
+#if !USE(TEXTURE_MAPPER)
+    struct PendingChanges {
+        CoordinatedLayerProperties properties;
+        std::optional<CoordinatedBackingStoreProxy::Update> backingStoreUpdate;
+        float contentsScale { 1 };
+        RefPtr<NativeImage> contentsImage;
+    };
+    std::optional<PendingChanges> takePendingChanges();
+    std::optional<CoordinatedLayerProperties> takePendingPositionChanges();
+#endif
 
     bool hasPendingTilesCreation() const { assertIsMainThread(); return m_pendingTilesCreation; }
     bool hasPendingBackingStoreTileUpdates() const;

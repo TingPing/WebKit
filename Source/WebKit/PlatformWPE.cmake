@@ -115,6 +115,8 @@ if (USE_GBM)
 endif ()
 
 list(APPEND WebKit_SERIALIZATION_IN_FILES
+    Shared/coordinated/CoordinatedLayerTreeTransaction.serialization.in
+
     Shared/glib/AvailableInputDevices.serialization.in
     Shared/glib/CoreIPCGByteArray.serialization.in
     Shared/glib/CoreIPCGTlsCertificate.serialization.in
@@ -384,6 +386,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${FORWARDING_HEADERS_WPE_DIR}"
     "${FORWARDING_HEADERS_WPE_EXTENSION_DIR}"
     "${WEBCORE_DIR}/Modules/mediastream"
+    "${WEBKIT_DIR}/GPUProcess/graphics/coordinated"
     "${WEBKIT_DIR}/NetworkProcess/glib"
     "${WEBKIT_DIR}/NetworkProcess/soup"
     "${WEBKIT_DIR}/NetworkProcess/webrtc/rice"
@@ -395,6 +398,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/Shared/API/c/wpe"
     "${WEBKIT_DIR}/Shared/API/glib"
     "${WEBKIT_DIR}/Shared/Extensions"
+    "${WEBKIT_DIR}/Shared/coordinated"
     "${WEBKIT_DIR}/Shared/glib"
     "${WEBKIT_DIR}/Shared/libwpe"
     "${WEBKIT_DIR}/Shared/soup"
@@ -417,6 +421,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/UIProcess/soup"
     "${WEBKIT_DIR}/UIProcess/wpe"
     "${WEBKIT_DIR}/WPEPlatform/wpe"
+    "${WEBKIT_DIR}/WebProcess/GPU/graphics/coordinated"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/glib"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/wpe"
     "${WEBKIT_DIR}/WebProcess/Network/webrtc/rice"
@@ -487,6 +492,8 @@ else ()
 endif ()
 
 list(APPEND WebKit_MESSAGES_IN_FILES
+    GPUProcess/graphics/coordinated/RemoteCoordinatedCompositor
+
     WebProcess/glib/SystemSettingsManager
 )
 

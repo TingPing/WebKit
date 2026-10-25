@@ -51,6 +51,9 @@ public:
 
     bool isSameNativeImage(const NativeImage& nativeImage) { return nativeImage.uniqueID() == m_uniqueID; }
     CoordinatedPlatformLayerBuffer* buffer() const LIFETIME_BOUND { return m_buffer.get(); }
+#if !USE(TEXTURE_MAPPER)
+    NativeImage& nativeImage() const LIFETIME_BOUND { return m_nativeImage.get(); }
+#endif
 
 private:
 #if USE(TEXTURE_MAPPER)
@@ -60,6 +63,9 @@ private:
 #endif
 
     const std::unique_ptr<CoordinatedPlatformLayerBuffer> m_buffer;
+#if !USE(TEXTURE_MAPPER)
+    const Ref<NativeImage> m_nativeImage;
+#endif
     uint64_t m_uniqueID { 0 };
 };
 

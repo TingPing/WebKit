@@ -69,6 +69,7 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/coordinated/CoordinatedBackingStoreProxy.h
     platform/graphics/coordinated/CoordinatedCompositionReason.h
     platform/graphics/coordinated/CoordinatedImageBackingStore.h
+    platform/graphics/coordinated/CoordinatedLayerProperties.h
     platform/graphics/coordinated/CoordinatedPlatformLayer.h
     platform/graphics/coordinated/CoordinatedPlatformLayerBuffer.h
     platform/graphics/coordinated/CoordinatedPlatformLayerBufferProxy.h

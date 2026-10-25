@@ -28,6 +28,7 @@
 #if USE(COORDINATED_GRAPHICS)
 #include <WebCore/CoordinatedCompositionReason.h>
 #include <atomic>
+#include <wtf/Function.h>
 #include <wtf/HashSet.h>
 #include <wtf/Lock.h>
 #include <wtf/ThreadSafeRefCounted.h>
@@ -59,6 +60,9 @@ public:
     void invalidate();
 
     void invalidateCommittedLayers();
+
+    void forEachLayer(NOESCAPE const Function<void(WebCore::CoordinatedPlatformLayer&)>&);
+    HashSet<Ref<WebCore::CoordinatedPlatformLayer>> takePendingLayersToRemove();
 
     bool layersDidChange() const { return m_didChangeLayers; }
 

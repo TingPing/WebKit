@@ -32,6 +32,7 @@
 #if USE(COORDINATED_GRAPHICS)
 #include "CoordinatedSceneState.h"
 #include "DrawingArea.h"
+#include "RemoteCoordinatedCompositorProxy.h"
 #include "RenderProcessInfo.h"
 #include "WebPageInlines.h"
 #include "WebPageProxyMessages.h"
@@ -108,7 +109,13 @@ LayerTreeHost::LayerTreeHost(WebPage& webPage)
         rootLayer.setSize(m_webPage->size());
     }
 
-    lazyInitialize(m_compositor, ThreadedCompositor::create(webPage, *this, m_sceneState.get()));
+#if ENABLE(GPU_PROCESS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (webPage.shouldRenderDOMInGPUProcess()) {
+        ProcessCapabilities::setCanUseAcceleratedBuffers(false);
+        lazyInitialize(m_compositor, RemoteCoordinatedCompositorProxy::create(webPage, m_sceneState.get()));
+    } else
+#endif
+        lazyInitialize(m_compositor, ThreadedCompositor::create(webPage, *this, m_sceneState.get()));
 #if USE(TEXTURE_MAPPER)
     m_tileManager = CoordinatedTileManager::create(nullptr);
 #else
@@ -616,7 +623,8 @@ void LayerTreeHost::fillGLInformation(RenderProcessInfo&& info, CompletionHandle
 
 void LayerTreeHost::releaseMemory(WTF::Critical critical)
 {
-    PlatformDisplay::sharedDisplay().skiaReleaseUnusedResources(critical);
+    if (auto* display = PlatformDisplay::sharedDisplayIfExists())
+        display->skiaReleaseUnusedResources(critical);
     m_compositor->releaseMemory(critical);
 }
 

@@ -2202,6 +2202,8 @@ public:
     const Vector<RendererBufferFormat>& preferredBufferFormats() const LIFETIME_BOUND { return m_preferredBufferFormats; }
 #endif
 
+    bool shouldRenderDOMInGPUProcess() const { return m_shouldRenderDOMInGPUProcess; }
+
 #if ENABLE(EXTENSION_CAPABILITIES)
     const String& mediaPlaybackEnvironment() const LIFETIME_BOUND { return m_mediaPlaybackEnvironment; }
     void setMediaPlaybackEnvironment(const String&);

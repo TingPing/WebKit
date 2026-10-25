@@ -26,6 +26,7 @@
 #pragma once
 
 #if USE(COORDINATED_GRAPHICS)
+#include "CoordinatedCompositor.h"
 #include <WebCore/CoordinatedCompositionReason.h>
 #include <WebCore/Damage.h>
 #include <WebCore/DisplayUpdate.h>
@@ -72,7 +73,7 @@ class LayerTreeHost;
 class WebPage;
 struct RenderProcessInfo;
 
-class ThreadedCompositor : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<ThreadedCompositor>, public CanMakeThreadSafeCheckedPtr<ThreadedCompositor> {
+class ThreadedCompositor final : public CoordinatedCompositor, public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<ThreadedCompositor>, public CanMakeThreadSafeCheckedPtr<ThreadedCompositor> {
     WTF_MAKE_TZONE_ALLOCATED(ThreadedCompositor);
     WTF_MAKE_NONCOPYABLE(ThreadedCompositor);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ThreadedCompositor);
@@ -80,43 +81,42 @@ public:
     static Ref<ThreadedCompositor> create(WebPage&, LayerTreeHost&, CoordinatedSceneState&);
     virtual ~ThreadedCompositor();
 
-    uint64_t surfaceID() const;
-    int maxTextureSize() const { return m_maxTextureSize; }
+    void ref() const final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr::ref(); }
+    void deref() const final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr::deref(); }
 
-    void backgroundColorDidChange();
+    uint64_t surfaceID() const final;
+    int maxTextureSize() const final { return m_maxTextureSize; }
+
+    void backgroundColorDidChange() final;
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM) && (USE(GBM) || OS(ANDROID))
-    void preferredBufferFormatsDidChange();
+    void preferredBufferFormatsDidChange() final;
 #endif
-    void pendingTilesDidChange();
+    void pendingTilesDidChange() final;
 
-    void setSize(const WebCore::IntSize&, float);
-    void requestCompositionForRenderingUpdate(Function<void()>&&);
-    void requestComposition(WebCore::CompositionReason);
-    RunLoop* runLoop();
+    void setSize(const WebCore::IntSize&, float) final;
+    void requestCompositionForRenderingUpdate(Function<void()>&&) final;
+    void requestComposition(WebCore::CompositionReason) final;
+    RunLoop* runLoop() final;
 
-    void invalidate();
-    void suspend();
-    void resume();
+    void invalidate() final;
+    void suspend() final;
+    void resume() final;
 
-    bool isActive() const;
+    bool isActive() const final;
 
-    std::optional<float> fps() const { return m_fpsCounter.fps.load(); };
+    std::optional<float> fps() const final { return m_fpsCounter.fps.load(); };
 
 #if ENABLE(DAMAGE_TRACKING)
-    enum class DamagePropagationFlags : uint8_t {
-        Unified = 1 << 0,
-        UseForCompositing = 1 << 1
-    };
-    void setDamagePropagationSettings(std::optional<OptionSet<DamagePropagationFlags>>, unsigned rectangleThreshold);
-    void enableFrameDamageNotificationForTesting();
+    void setDamagePropagationSettings(std::optional<OptionSet<DamagePropagationFlags>>, unsigned rectangleThreshold) final;
+    void enableFrameDamageNotificationForTesting() final;
 #endif
 
-    void fillGLInformation(RenderProcessInfo&&, CompletionHandler<void(RenderProcessInfo&&)>&&);
+    void fillGLInformation(RenderProcessInfo&&, CompletionHandler<void(RenderProcessInfo&&)>&&) final;
 
-    void releaseMemory(WTF::Critical);
+    void releaseMemory(WTF::Critical) final;
 
 #if !USE(TEXTURE_MAPPER)
-    sk_sp<GrContextThreadSafeProxy> threadSafeGrContext() const { return m_threadSafeGrContext; }
+    sk_sp<GrContextThreadSafeProxy> threadSafeGrContext() const final { return m_threadSafeGrContext; }
 #endif
 
 private:

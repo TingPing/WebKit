@@ -115,7 +115,7 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
     Ref page = *m_webPage->corePage();
     Settings& settings = page->settings();
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
-    if (settings.hardwareAccelerationEnabled()) {
+    if (settings.hardwareAccelerationEnabled() && !m_webPage->shouldRenderDOMInGPUProcess()) {
         WebProcess::singleton().initializePlatformDisplayIfNeeded();
         WebProcess::singleton().initializeVulkanIfNeeded();
     }
