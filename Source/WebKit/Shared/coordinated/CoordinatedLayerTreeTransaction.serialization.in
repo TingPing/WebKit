@@ -59,7 +59,82 @@ header: <WebCore/CoordinatedLayerProperties.h>
     DebugBorderWidth,
     RepaintCount,
     Children,
+    Animations,
     ContentsImage,
+}
+
+header: <WebCore/GraphicsLayerClient.h>
+[CustomHeader] enum class WebCore::AnimatedProperty : uint8_t {
+    Invalid,
+    Translate,
+    Scale,
+    Rotate,
+    Transform,
+    Opacity,
+    BackgroundColor,
+    Filter,
+    WebkitBackdropFilter,
+}
+
+header: <WebCore/GraphicsLayerAnimation.h>
+[CustomHeader, Nested] enum class WebCore::GraphicsLayerAnimation::Direction : uint8_t {
+    Normal,
+    Alternate,
+    Reverse,
+    AlternateReverse,
+}
+
+header: <WebCore/AcceleratedAnimation.h>
+[CustomHeader, Nested] struct WebCore::AcceleratedAnimation::Keyframe {
+    double keyTime;
+    Variant<float, WebCore::TransformOperations, WebCore::FilterOperations> value;
+    RefPtr<WebCore::TimingFunction> timingFunction;
+}
+
+header: <WebCore/AcceleratedAnimation.h>
+[CustomHeader, Nested] enum class WebCore::AcceleratedAnimation::State : uint8_t {
+    Playing,
+    Paused,
+    Stopped,
+}
+
+header: <WebCore/AcceleratedAnimation.h>
+[CustomHeader, Nested] struct WebCore::AcceleratedAnimation::Playback {
+    MonotonicTime startTime;
+    Seconds pauseTime;
+    WebCore::AcceleratedAnimation::State state;
+}
+
+header: <WebCore/AcceleratedAnimation.h>
+[CustomHeader, RefCounted] class WebCore::AcceleratedAnimation {
+    String name();
+    WebCore::AnimatedProperty property();
+    Vector<WebCore::AcceleratedAnimation::Keyframe> keyframeValues();
+    Ref<WebCore::TimingFunction> timingFunction();
+    RefPtr<WebCore::TimingFunction> defaultTimingFunctionForKeyframes();
+    double iterationCount();
+    double duration();
+    WebCore::GraphicsLayerAnimation::Direction direction();
+}
+
+header: <WebCore/AcceleratedAnimations.h>
+[CustomHeader, Nested] struct WebCore::AcceleratedAnimations::Transforms {
+    WebCore::TransformationMatrix translate;
+    WebCore::TransformationMatrix rotate;
+    WebCore::TransformationMatrix scale;
+    WebCore::TransformationMatrix transform;
+}
+
+header: <WebCore/AcceleratedAnimations.h>
+[CustomHeader, Nested] struct WebCore::AcceleratedAnimations::Entry {
+    Ref<WebCore::AcceleratedAnimation> animation;
+    WebCore::AcceleratedAnimation::Playback playback;
+}
+
+header: <WebCore/AcceleratedAnimations.h>
+[CustomHeader] class WebCore::AcceleratedAnimations {
+    WebCore::AcceleratedAnimations::Transforms transforms();
+    Vector<WebCore::AcceleratedAnimations::Entry> animations();
 }
 
 header: <WebCore/CoordinatedLayerProperties.h>
@@ -101,6 +176,7 @@ struct WebCore::CoordinatedLayerProperties {
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::DebugBorderWidth] std::optional<float> debugBorderWidth;
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::RepaintCount] std::optional<unsigned> repaintCount;
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::Children] Vector<WebCore::PlatformLayerIdentifier> children;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Animations] WebCore::AcceleratedAnimations animations;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"

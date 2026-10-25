@@ -210,6 +210,8 @@ void RemoteCoordinatedCompositor::applyLayerProperties(SkiaCompositingLayer& lay
             return Ref { ensureLayer(identifier) };
         }));
     }
+    if (changes.contains(CoordinatedLayerChange::Animations))
+        layer.setAnimations(properties.animations);
 }
 
 static std::span<const uint8_t> pixelsSpan(std::span<const uint8_t> pixels, const CoordinatedPixels& location)
@@ -379,7 +381,8 @@ void RemoteCoordinatedCompositor::render()
 
     std::optional<Damage> frameDamage;
     canvas->save();
-    m_rootLayer->paint(*canvas, frameDamage, std::nullopt, m_surface->skiaClearColor(CompositionReason::RenderingUpdate));
+    if (m_rootLayer->paint(*canvas, frameDamage, std::nullopt, m_surface->skiaClearColor(CompositionReason::RenderingUpdate)))
+        m_needsRender = true;
     canvas->restore();
 
     if (auto* surface = canvas->getSurface())

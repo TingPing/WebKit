@@ -25,7 +25,7 @@
 
 namespace WebCore {
 
-void AcceleratedAnimations::add(Ref<const AcceleratedAnimation>&& animation, MonotonicTime startTime)
+void AcceleratedAnimations::add(Ref<AcceleratedAnimation>&& animation, MonotonicTime startTime)
 {
     // Remove the old state if we are resuming a paused animation.
     m_animations.removeAllMatching([&] (const auto& entry) {

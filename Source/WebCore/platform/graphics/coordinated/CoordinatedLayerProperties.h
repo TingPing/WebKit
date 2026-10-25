@@ -26,6 +26,7 @@
 #pragma once
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include "AcceleratedAnimations.h"
 #include "Color.h"
 #include "FilterOperations.h"
 #include "FloatPoint.h"
@@ -80,7 +81,8 @@ enum class CoordinatedLayerChange : uint64_t {
     DebugBorderWidth             = 1LLU << 32,
     RepaintCount                 = 1LLU << 33,
     Children                     = 1LLU << 34,
-    ContentsImage                = 1LLU << 35,
+    Animations                   = 1LLU << 35,
+    ContentsImage                = 1LLU << 36,
 };
 
 struct CoordinatedLayerProperties {
@@ -121,6 +123,7 @@ struct CoordinatedLayerProperties {
     std::optional<float> debugBorderWidth { };
     std::optional<unsigned> repaintCount { };
     Vector<PlatformLayerIdentifier> children { };
+    AcceleratedAnimations animations { };
 };
 
 } // namespace WebCore

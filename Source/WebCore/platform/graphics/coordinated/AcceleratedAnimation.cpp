@@ -149,6 +149,49 @@ AcceleratedAnimation::AcceleratedAnimation(const String& name, const GraphicsLay
 {
 }
 
+AcceleratedAnimation::AcceleratedAnimation(String&& name, GraphicsLayerKeyframeValueList&& keyframes, Ref<TimingFunction>&& timingFunction, RefPtr<TimingFunction>&& defaultTimingFunctionForKeyframes, double iterationCount, double duration, GraphicsLayerAnimation::Direction direction)
+    : m_name(WTF::move(name))
+    , m_keyframes(WTF::move(keyframes))
+    , m_timingFunction(WTF::move(timingFunction))
+    , m_defaultTimingFunctionForKeyframes(WTF::move(defaultTimingFunctionForKeyframes))
+    , m_iterationCount(iterationCount)
+    , m_duration(duration)
+    , m_direction(direction)
+{
+}
+
+Ref<AcceleratedAnimation> AcceleratedAnimation::create(String&& name, AnimatedProperty property, Vector<Keyframe>&& keyframeValues, Ref<TimingFunction>&& timingFunction, RefPtr<TimingFunction>&& defaultTimingFunctionForKeyframes, double iterationCount, double duration, GraphicsLayerAnimation::Direction direction)
+{
+    GraphicsLayerKeyframeValueList keyframes(property);
+    for (auto& keyframe : keyframeValues) {
+        WTF::switchOn(keyframe.value, [&](float value) {
+            keyframes.insert(makeUnique<GraphicsLayerFloatAnimationValue>(keyframe.keyTime, value, keyframe.timingFunction.get()));
+        }, [&](const TransformOperations& value) {
+            keyframes.insert(makeUnique<GraphicsLayerTransformAnimationValue>(keyframe.keyTime, value, keyframe.timingFunction.get()));
+        }, [&](const FilterOperations& value) {
+            keyframes.insert(makeUnique<GraphicsLayerFilterAnimationValue>(keyframe.keyTime, value, keyframe.timingFunction.get()));
+        });
+    }
+    return adoptRef(*new AcceleratedAnimation(WTF::move(name), WTF::move(keyframes), WTF::move(timingFunction), WTF::move(defaultTimingFunctionForKeyframes), iterationCount, duration, direction));
+}
+
+Vector<AcceleratedAnimation::Keyframe> AcceleratedAnimation::keyframeValues() const
+{
+    Vector<Keyframe> keyframes;
+    keyframes.reserveInitialCapacity(m_keyframes.size());
+    for (size_t i = 0; i < m_keyframes.size(); ++i) {
+        const auto& value = m_keyframes.at(i);
+        RefPtr timingFunction = const_cast<TimingFunction*>(value.timingFunction());
+        if (auto* floatValue = dynamicDowncast<GraphicsLayerFloatAnimationValue>(value))
+            keyframes.append({ value.keyTime(), floatValue->value(), WTF::move(timingFunction) });
+        else if (auto* transformValue = dynamicDowncast<GraphicsLayerTransformAnimationValue>(value))
+            keyframes.append({ value.keyTime(), transformValue->value(), WTF::move(timingFunction) });
+        else if (auto* filterValue = dynamicDowncast<GraphicsLayerFilterAnimationValue>(value))
+            keyframes.append({ value.keyTime(), filterValue->value(), WTF::move(timingFunction) });
+    }
+    return keyframes;
+}
+
 void AcceleratedAnimation::apply(ApplyResult& applyResult, const Playback& playback, MonotonicTime time) const
 {
     auto elapsedTime = [&] {

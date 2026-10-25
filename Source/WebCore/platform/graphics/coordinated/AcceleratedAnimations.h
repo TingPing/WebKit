@@ -36,7 +36,7 @@ public:
             animation->apply(applyResult, playback, time);
         }
 
-        Ref<const AcceleratedAnimation> animation;
+        Ref<AcceleratedAnimation> animation;
         AcceleratedAnimation::Playback playback;
     };
 
@@ -46,9 +46,17 @@ public:
         TransformationMatrix scale;
         TransformationMatrix transform;
     };
-    void setTransforms(Transforms&& transforms) { m_transforms = WTF::move(transforms); }
 
-    void add(Ref<const AcceleratedAnimation>&&, MonotonicTime);
+    AcceleratedAnimations(Transforms&& transforms, Vector<Entry>&& animations)
+        : m_transforms(WTF::move(transforms))
+        , m_animations(WTF::move(animations))
+    {
+    }
+
+    void setTransforms(Transforms&& transforms) { m_transforms = WTF::move(transforms); }
+    const Transforms& transforms() const LIFETIME_BOUND { return m_transforms; }
+
+    void add(Ref<AcceleratedAnimation>&&, MonotonicTime);
     void remove(const String&);
     void pause(const String&, Seconds);
 

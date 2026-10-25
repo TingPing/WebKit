@@ -1698,8 +1698,12 @@ std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer
         });
     });
 
-    // FIXME: send animations, contents buffers and damage to the remote compositor.
-    m_pendingChanges.remove(Change::Animations);
+    takeChange(Change::Animations, CoordinatedLayerChange::Animations, [&] {
+        assertIsHeld(m_lock);
+        properties.animations = m_animations;
+    });
+
+    // FIXME: send contents buffers and damage to the remote compositor.
     if (m_pendingChanges.contains(Change::ContentsBuffer)) {
         m_contentsBuffer.pending = nullptr;
         m_pendingChanges.remove(Change::ContentsBuffer);

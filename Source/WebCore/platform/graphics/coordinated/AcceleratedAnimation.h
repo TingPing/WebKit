@@ -21,9 +21,12 @@
 #pragma once
 
 #if USE(COORDINATED_GRAPHICS) && !USE(TEXTURE_MAPPER)
+#include "FilterOperations.h"
 #include "GraphicsLayer.h"
 #include "GraphicsLayerAnimation.h"
 #include "GraphicsLayerKeyframeValueList.h"
+#include "TransformOperations.h"
+#include <wtf/Variant.h>
 
 namespace WebCore {
 
@@ -35,6 +38,21 @@ public:
     {
         return adoptRef(*new AcceleratedAnimation(name, keyframes, animation));
     }
+
+    struct Keyframe {
+        double keyTime { 0 };
+        Variant<float, TransformOperations, FilterOperations> value;
+        RefPtr<TimingFunction> timingFunction;
+    };
+    WEBCORE_EXPORT static Ref<AcceleratedAnimation> create(String&& name, AnimatedProperty, Vector<Keyframe>&&, Ref<TimingFunction>&&, RefPtr<TimingFunction>&& defaultTimingFunctionForKeyframes, double iterationCount, double duration, GraphicsLayerAnimation::Direction);
+
+    AnimatedProperty property() const { return m_keyframes.property(); }
+    WEBCORE_EXPORT Vector<Keyframe> keyframeValues() const;
+    const Ref<TimingFunction>& timingFunction() const LIFETIME_BOUND { return m_timingFunction; }
+    const RefPtr<TimingFunction>& defaultTimingFunctionForKeyframes() const LIFETIME_BOUND { return m_defaultTimingFunctionForKeyframes; }
+    double iterationCount() const { return m_iterationCount; }
+    double duration() const { return m_duration; }
+    GraphicsLayerAnimation::Direction direction() const { return m_direction; }
 
     enum class State : uint8_t { Playing, Paused, Stopped };
     struct Playback {
@@ -71,6 +89,7 @@ public:
 
 private:
     AcceleratedAnimation(const String&, const GraphicsLayerKeyframeValueList&, const GraphicsLayerAnimation&);
+    AcceleratedAnimation(String&&, GraphicsLayerKeyframeValueList&&, Ref<TimingFunction>&&, RefPtr<TimingFunction>&&, double iterationCount, double duration, GraphicsLayerAnimation::Direction);
 
     void applyInternal(ApplyResult&, const GraphicsLayerAnimationValue& from, const GraphicsLayerAnimationValue& to, float progress) const;
     const TimingFunction& timingFunctionForKeyframe(const GraphicsLayerAnimationValue&) const;
