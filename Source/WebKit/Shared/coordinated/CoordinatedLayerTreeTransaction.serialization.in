@@ -60,7 +60,25 @@ header: <WebCore/CoordinatedLayerProperties.h>
     RepaintCount,
     Children,
     Animations,
+    ContentsBuffer,
     ContentsImage,
+}
+
+header: <WebCore/CoordinatedPlatformLayerBuffer.h>
+[CustomHeader, Nested] enum class WebCore::CoordinatedPlatformLayerBuffer::AlphaMode : uint8_t {
+    Opaque,
+    Premultiplied,
+    Unpremultiplied,
+}
+
+header: <WebCore/CoordinatedPlatformLayerBuffer.h>
+[CustomHeader, Nested] enum class WebCore::CoordinatedPlatformLayerBuffer::Origin : bool
+
+header: <WebCore/CoordinatedLayerProperties.h>
+[CustomHeader] struct WebCore::CoordinatedRemoteContentsBuffer {
+    uint64_t identifier;
+    WebCore::CoordinatedPlatformLayerBuffer::AlphaMode alphaMode;
+    WebCore::CoordinatedPlatformLayerBuffer::Origin origin;
 }
 
 header: <WebCore/GraphicsLayerClient.h>
@@ -177,6 +195,7 @@ struct WebCore::CoordinatedLayerProperties {
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::RepaintCount] std::optional<unsigned> repaintCount;
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::Children] Vector<WebCore::PlatformLayerIdentifier> children;
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::Animations] WebCore::AcceleratedAnimations animations;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsBuffer] std::optional<WebCore::CoordinatedRemoteContentsBuffer> contentsBuffer;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"

@@ -500,6 +500,11 @@ public:
 #endif
 #endif
 
+#if USE(COORDINATED_GRAPHICS)
+    void setUsesGPUProcessForCompositing() { m_usesGPUProcessForCompositing = true; }
+    bool usesGPUProcessForCompositing() const { return m_usesGPUProcessForCompositing; }
+#endif
+
 #if PLATFORM(COCOA)
     void willWriteToPasteboardAsynchronously(const String& pasteboardName);
     void waitForPendingPasteboardWritesToFinish(const String& pasteboardName);
@@ -988,6 +993,9 @@ private:
 #if ENABLE(WEBGL)
     bool m_useGPUProcessForWebGL { false };
 #endif
+#endif
+#if USE(COORDINATED_GRAPHICS)
+    bool m_usesGPUProcessForCompositing { false };
 #endif
 
 #if ENABLE(MEDIA_STREAM)

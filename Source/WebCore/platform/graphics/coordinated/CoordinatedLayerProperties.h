@@ -28,6 +28,7 @@
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "AcceleratedAnimations.h"
 #include "Color.h"
+#include "CoordinatedPlatformLayerBuffer.h"
 #include "FilterOperations.h"
 #include "FloatPoint.h"
 #include "FloatPoint3D.h"
@@ -82,7 +83,14 @@ enum class CoordinatedLayerChange : uint64_t {
     RepaintCount                 = 1LLU << 33,
     Children                     = 1LLU << 34,
     Animations                   = 1LLU << 35,
-    ContentsImage                = 1LLU << 36,
+    ContentsBuffer               = 1LLU << 36,
+    ContentsImage                = 1LLU << 37,
+};
+
+struct CoordinatedRemoteContentsBuffer {
+    uint64_t identifier { 0 };
+    CoordinatedPlatformLayerBuffer::AlphaMode alphaMode { CoordinatedPlatformLayerBuffer::AlphaMode::Opaque };
+    CoordinatedPlatformLayerBuffer::Origin origin { CoordinatedPlatformLayerBuffer::Origin::TopLeft };
 };
 
 struct CoordinatedLayerProperties {
@@ -124,6 +132,7 @@ struct CoordinatedLayerProperties {
     std::optional<unsigned> repaintCount { };
     Vector<PlatformLayerIdentifier> children { };
     AcceleratedAnimations animations { };
+    std::optional<CoordinatedRemoteContentsBuffer> contentsBuffer { };
 };
 
 } // namespace WebCore

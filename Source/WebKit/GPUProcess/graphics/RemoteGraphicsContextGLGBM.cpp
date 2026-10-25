@@ -29,6 +29,8 @@
 
 #if ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(GBM)
 
+#include "GPUConnectionToWebProcess.h"
+#include "RemoteCoordinatedContentsRegistry.h"
 #include <wtf/HashSet.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -41,20 +43,38 @@ class RemoteGraphicsContextGLGBM final : public RemoteGraphicsContextGL {
 
 public:
     RemoteGraphicsContextGLGBM(GPUConnectionToWebProcess&, RemoteGraphicsContextGLIdentifier, RemoteRenderingBackend&, Ref<IPC::StreamServerConnection>&&);
+    ~RemoteGraphicsContextGLGBM();
 
 private:
     void platformWorkQueueInitialize(WebCore::GraphicsContextGLAttributes&&) final;
     void didRunOutOfMessages() final;
     void prepareForDisplay(Vector<uint64_t>&&, CompletionHandler<void(uint64_t, std::optional<WebCore::DMABufBuffer::Attributes>&&, UnixFileDescriptor&&, Vector<uint64_t>&&)>&&) final;
 
+    const WebCore::ProcessIdentifier m_webProcessIdentifier;
     HashSet<Ref<WebCore::DMABufBuffer>> m_inUseBuffers WTF_GUARDED_BY_CAPABILITY(workQueue());
+    HashSet<uint64_t> m_sentBuffers WTF_GUARDED_BY_CAPABILITY(workQueue());
 };
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteGraphicsContextGLGBM);
 
 RemoteGraphicsContextGLGBM::RemoteGraphicsContextGLGBM(GPUConnectionToWebProcess& connection, RemoteGraphicsContextGLIdentifier identifier, RemoteRenderingBackend& renderingBackend, Ref<IPC::StreamServerConnection>&& streamConnection)
     : RemoteGraphicsContextGL(connection, identifier, renderingBackend, WTF::move(streamConnection))
+    , m_webProcessIdentifier(connection.webProcessIdentifier())
 { }
+
+RemoteGraphicsContextGLGBM::~RemoteGraphicsContextGLGBM()
+{
+#if USE(SKIA) && !USE(TEXTURE_MAPPER)
+    RemoteCoordinatedContentsRegistry::singleton().remove(m_webProcessIdentifier, m_identifier.toUInt64());
+#endif
+}
+
+static WebCore::DMABufBuffer::Attributes duplicateAttributes(const WebCore::DMABufBuffer::Attributes& attributes)
+{
+    return { attributes.size, attributes.fourcc, WTF::map(attributes.fds, [](const auto& fd) {
+        return fd.duplicate();
+    }), attributes.offsets, attributes.strides, attributes.modifier };
+}
 
 void RemoteGraphicsContextGLGBM::didRunOutOfMessages()
 {
@@ -77,6 +97,11 @@ void RemoteGraphicsContextGLGBM::prepareForDisplay(Vector<uint64_t>&& inUseBuffe
         return !inUseBuffers.contains(buffer->id());
     });
 
+    auto drawingBufferIDs = m_context->drawingBufferIDs();
+    m_sentBuffers.removeIf([&](auto id) {
+        return !drawingBufferIDs.contains(id);
+    });
+
     UnixFileDescriptor fenceFD;
     m_context->prepareForDisplayWithFinishedSignal([this, &fenceFD] {
         assertIsCurrent(workQueue());
@@ -93,7 +118,15 @@ void RemoteGraphicsContextGLGBM::prepareForDisplay(Vector<uint64_t>&& inUseBuffe
 
     m_inUseBuffers.add(Ref { *dmabuf });
 
-    completionHandler(dmabuf->id(), dmabuf->takeAttributes(), WTF::move(fenceFD), m_context->drawingBufferIDs());
+#if USE(SKIA) && !USE(TEXTURE_MAPPER)
+    RemoteCoordinatedContentsRegistry::singleton().setFrame(m_webProcessIdentifier, m_identifier.toUInt64(), *dmabuf, fenceFD.duplicate());
+#endif
+
+    std::optional<WebCore::DMABufBuffer::Attributes> attributes;
+    if (m_sentBuffers.add(dmabuf->id()).isNewEntry)
+        attributes = duplicateAttributes(dmabuf->attributes());
+
+    completionHandler(dmabuf->id(), WTF::move(attributes), WTF::move(fenceFD), m_context->drawingBufferIDs());
 }
 
 Ref<RemoteGraphicsContextGL> RemoteGraphicsContextGL::create(GPUConnectionToWebProcess& connection, WebCore::GraphicsContextGLAttributes&& attributes, RemoteGraphicsContextGLIdentifier identifier, RemoteRenderingBackend& renderingBackend, Ref<IPC::StreamServerConnection>&& streamConnection)

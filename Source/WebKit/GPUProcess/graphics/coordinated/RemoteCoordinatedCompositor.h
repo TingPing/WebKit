@@ -31,6 +31,7 @@
 #include <WebCore/Color.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/PlatformLayerIdentifier.h>
+#include <WebCore/ProcessIdentifier.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/gpu/ganesh/GrContextThreadSafeProxy.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
@@ -93,6 +94,7 @@ private:
     void didComposite();
 
     WeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
+    const WebCore::ProcessIdentifier m_webProcessIdentifier;
     const uint64_t m_identifier;
     const Ref<WorkQueue> m_workQueue;
     RefPtr<AcceleratedSurface> m_surface;

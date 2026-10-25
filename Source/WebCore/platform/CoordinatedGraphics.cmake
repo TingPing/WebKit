@@ -73,6 +73,7 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/coordinated/CoordinatedPlatformLayer.h
     platform/graphics/coordinated/CoordinatedPlatformLayerBuffer.h
     platform/graphics/coordinated/CoordinatedPlatformLayerBufferProxy.h
+    platform/graphics/coordinated/CoordinatedPlatformLayerBufferRemote.h
     platform/graphics/coordinated/CoordinatedTileBuffer.h
     platform/graphics/coordinated/CoordinatedTileManager.h
     platform/graphics/coordinated/GraphicsContextGLCoordinated.h

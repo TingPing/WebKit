@@ -27,9 +27,14 @@
 #include "RemoteGraphicsContextGLProxy.h"
 
 #if ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(GBM)
+#include "WebProcess.h"
 #include <WebCore/CoordinatedPlatformLayerBufferDMABuf.h>
 #include <WebCore/DMABufBuffer.h>
 #include <WebCore/GraphicsLayerContentsDisplayDelegateCoordinated.h>
+
+#if !USE(TEXTURE_MAPPER)
+#include <WebCore/CoordinatedPlatformLayerBufferRemote.h>
+#endif
 
 #if USE(TEXTURE_MAPPER)
 #include <WebCore/TextureMapperFlags.h>
@@ -78,6 +83,18 @@ void RemoteGraphicsContextGLProxyGBM::prepareForDisplay()
     }
 
     auto [bufferID, bufferAttributes, fenceFD, drawingBufferIDs] = sendResult.takeReply();
+
+#if !USE(TEXTURE_MAPPER)
+    if (WebProcess::singleton().usesGPUProcessForCompositing()) {
+        if (!bufferID)
+            return;
+
+        auto alphaMode = contextAttributes().alpha ? CoordinatedPlatformLayerBuffer::AlphaMode::Premultiplied : CoordinatedPlatformLayerBuffer::AlphaMode::Opaque;
+        m_layerContentsDisplayDelegate->setDisplayBuffer(CoordinatedPlatformLayerBufferRemote::create(m_identifier.toUInt64(), alphaMode, CoordinatedPlatformLayerBuffer::Origin::BottomLeft));
+        m_hasPreparedForDisplay = true;
+        return;
+    }
+#endif
 
     m_buffers.removeIf([&](auto& entry) {
         return !drawingBufferIDs.contains(entry.key);

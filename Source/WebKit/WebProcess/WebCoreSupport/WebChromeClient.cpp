@@ -1311,8 +1311,10 @@ std::unique_ptr<WebCore::WorkerClient> WebChromeClient::createWorkerClient(Seria
 RefPtr<GraphicsContextGL> WebChromeClient::createGraphicsContextGL(const GraphicsContextGLAttributes& attributes) const
 {
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
-    WebProcess::singleton().initializePlatformDisplayIfNeeded();
-    WebProcess::singleton().initializeVulkanIfNeeded();
+    if (!WebProcess::singleton().usesGPUProcessForCompositing()) {
+        WebProcess::singleton().initializePlatformDisplayIfNeeded();
+        WebProcess::singleton().initializeVulkanIfNeeded();
+    }
 #endif
 #if ENABLE(GPU_PROCESS)
     if (WebProcess::singleton().shouldUseRemoteRenderingForWebGL()) {
@@ -1321,6 +1323,10 @@ RefPtr<GraphicsContextGL> WebChromeClient::createGraphicsContextGL(const Graphic
             return nullptr;
         return RemoteGraphicsContextGLProxy::create(attributes, page.releaseNonNull());
     }
+#endif
+#if USE(COORDINATED_GRAPHICS)
+    if (WebProcess::singleton().usesGPUProcessForCompositing())
+        return nullptr;
 #endif
     return WebCore::createWebProcessGraphicsContextGL(attributes);
 }

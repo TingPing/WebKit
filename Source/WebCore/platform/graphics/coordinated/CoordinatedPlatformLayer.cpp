@@ -49,6 +49,10 @@
 #include "SkiaCompositingLayer.h"
 #endif
 
+#if USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include "CoordinatedPlatformLayerBufferRemote.h"
+#endif
+
 namespace WebCore {
 
 Ref<CoordinatedPlatformLayer> CoordinatedPlatformLayer::create(Client& client)
@@ -1703,11 +1707,15 @@ std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer
         properties.animations = m_animations;
     });
 
-    // FIXME: send contents buffers and damage to the remote compositor.
-    if (m_pendingChanges.contains(Change::ContentsBuffer)) {
-        m_contentsBuffer.pending = nullptr;
-        m_pendingChanges.remove(Change::ContentsBuffer);
-    }
+    takeChange(Change::ContentsBuffer, CoordinatedLayerChange::ContentsBuffer, [&] {
+        assertIsHeld(m_lock);
+        auto buffer = std::exchange(m_contentsBuffer.pending, nullptr);
+        m_contentsBuffer.hasCommitted = !!buffer;
+        if (auto* remoteBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferRemote>(buffer))
+            properties.contentsBuffer = CoordinatedRemoteContentsBuffer { remoteBuffer->identifier(), remoteBuffer->alphaMode(), remoteBuffer->origin() };
+    });
+
+    // FIXME: send damage to the remote compositor.
 #if ENABLE(DAMAGE_TRACKING)
     if (m_pendingChanges.contains(Change::Damage)) {
         m_damage = std::nullopt;

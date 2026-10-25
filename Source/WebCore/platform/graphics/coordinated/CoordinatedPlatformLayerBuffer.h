@@ -61,7 +61,8 @@ public:
         NativeImage,
 #else
         SkiaImage,
-        SkiaDeferredImage
+        SkiaDeferredImage,
+        Remote
 #endif
     };
 

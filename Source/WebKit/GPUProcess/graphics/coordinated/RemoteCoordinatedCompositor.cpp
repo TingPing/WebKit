@@ -31,8 +31,10 @@
 #include "CoordinatedLayerTreeTransaction.h"
 #include "GPUConnectionToWebProcess.h"
 #include "RemoteCoordinatedCompositorMessages.h"
+#include "RemoteCoordinatedContentsRegistry.h"
 #include <WebCore/CoordinatedBackingStoreProxy.h>
 #include <WebCore/CoordinatedImageBackingStore.h>
+#include <WebCore/CoordinatedPlatformLayerBufferDMABuf.h>
 #include <WebCore/CoordinatedTileBuffer.h>
 #include <WebCore/GLContext.h>
 #include <WebCore/NativeImage.h>
@@ -58,6 +60,7 @@ Ref<RemoteCoordinatedCompositor> RemoteCoordinatedCompositor::create(GPUConnecti
 
 RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProcess& connectionToWebProcess, uint64_t identifier, Parameters&& parameters)
     : m_connectionToWebProcess(connectionToWebProcess)
+    , m_webProcessIdentifier(connectionToWebProcess.webProcessIdentifier())
     , m_identifier(identifier)
     , m_workQueue(WorkQueue::create("org.webkit.RemoteCoordinatedCompositor"_s))
     , m_viewportSize(parameters.viewportSize)
@@ -230,6 +233,15 @@ void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& upda
 {
     Ref layer = ensureLayer(update.properties.id);
     applyLayerProperties(layer.get(), update.properties);
+
+    if (update.properties.changes.contains(CoordinatedLayerChange::ContentsBuffer)) {
+        std::unique_ptr<CoordinatedPlatformLayerBuffer> buffer;
+        if (const auto& contents = update.properties.contentsBuffer) {
+            if (auto frame = RemoteCoordinatedContentsRegistry::singleton().takeFrame(m_webProcessIdentifier, contents->identifier))
+                buffer = CoordinatedPlatformLayerBufferDMABuf::create(WTF::move(frame->buffer), contents->alphaMode, contents->origin, WTF::move(frame->fence), m_threadSafeGrContext);
+        }
+        layer->setContentsBuffer(WTF::move(buffer));
+    }
 
     if (update.properties.changes.contains(CoordinatedLayerChange::ContentsImage)) {
         RefPtr<CoordinatedImageBackingStore> imageBackingStore;
