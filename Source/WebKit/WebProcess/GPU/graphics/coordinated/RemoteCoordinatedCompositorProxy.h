@@ -92,6 +92,7 @@ private:
     void connectToGPUProcess(WebPage&);
     RefPtr<IPC::Connection> gpuConnection() const;
     void didComposite();
+    void didCompositeRenderingUpdate();
 
     WeakPtr<WebPage> m_webPage;
     const Ref<CoordinatedSceneState> m_sceneState;

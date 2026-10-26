@@ -233,6 +233,11 @@ void RemoteCoordinatedCompositorProxy::requestCompositionForRenderingUpdate(Func
     ASSERT(!m_didCompositeFunction);
     m_didCompositeFunction = WTF::move(didCompositeFunction);
 
+    if (RefPtr webPage = m_webPage) {
+        if (RefPtr drawingArea = webPage->drawingArea())
+            drawingArea->willStartRenderingUpdateDisplay();
+    }
+
     Locker locker { m_commitLock };
     PendingLayerTreeTransaction pendingTransaction { .rootLayer = m_sceneState->rootLayer().id(), .removedLayers = { }, .layers = { } };
     for (auto& layer : m_sceneState->takePendingLayersToRemove())
@@ -265,8 +270,20 @@ void RemoteCoordinatedCompositorProxy::didComposite()
     ASSERT(RunLoop::isMain());
     if (m_pendingCommits)
         --m_pendingCommits;
-    if (auto didCompositeFunction = std::exchange(m_didCompositeFunction, nullptr))
-        didCompositeFunction();
+    didCompositeRenderingUpdate();
+}
+
+void RemoteCoordinatedCompositorProxy::didCompositeRenderingUpdate()
+{
+    auto didCompositeFunction = std::exchange(m_didCompositeFunction, nullptr);
+    if (!didCompositeFunction)
+        return;
+
+    if (RefPtr webPage = m_webPage) {
+        if (RefPtr drawingArea = webPage->drawingArea())
+            drawingArea->didCompleteRenderingUpdateDisplay();
+    }
+    didCompositeFunction();
 }
 
 void RemoteCoordinatedCompositorProxy::requestComposition(CompositionReason reason)
@@ -326,8 +343,7 @@ void RemoteCoordinatedCompositorProxy::gpuProcessConnectionDidClose(GPUProcessCo
     }
 
     m_pendingCommits = 0;
-    if (auto didCompositeFunction = std::exchange(m_didCompositeFunction, nullptr))
-        didCompositeFunction();
+    didCompositeRenderingUpdate();
 
     RefPtr webPage = m_webPage;
     if (m_isInvalidated || !webPage)
