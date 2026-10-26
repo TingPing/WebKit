@@ -24,3 +24,8 @@ fast/canvas/webgl/simulated-vertexAttrib0-invalid-indicies.html [ Failure ]
 #////////////////////////////////////////////////////////////////////////////////////////
 
 webgl/tex-2d-video-no-change-wrap.html [ Failure ]
+
+# videoconvert turns limited-range white into 253 instead of 255.
+media/track/track-webvtt-no-snap-to-lines-overlap.html [ ImageOnlyFailure ]
+media/track/track-webvtt-snap-to-lines-inline-style.html [ ImageOnlyFailure ]
+media/track/track-webvtt-snap-to-lines-left-right.html [ ImageOnlyFailure ]
