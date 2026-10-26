@@ -2145,9 +2145,12 @@ GRefPtr<GstCaps> buildDMABufCaps()
 #if USE(GSTREAMER_GL)
 static std::optional<GRefPtr<GstContext>> requestGLContext(ASCIILiteral contextType)
 {
-    auto& sharedDisplay = PlatformDisplay::sharedDisplay();
-    auto* gstGLDisplay = sharedDisplay.gstGLDisplay();
-    auto* gstGLContext = sharedDisplay.gstGLContext();
+    auto* sharedDisplay = PlatformDisplay::sharedDisplayIfExists();
+    if (!sharedDisplay)
+        return std::nullopt;
+
+    auto* gstGLDisplay = sharedDisplay->gstGLDisplay();
+    auto* gstGLContext = sharedDisplay->gstGLContext();
 
     if (!gstGLDisplay || !gstGLContext)
         return std::nullopt;

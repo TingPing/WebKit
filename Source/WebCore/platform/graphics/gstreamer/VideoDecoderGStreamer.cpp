@@ -187,10 +187,7 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
     configureVideoDecoderForHarnessing(element);
 
 #if USE(GSTREAMER_GL)
-    if (!setGstElementGLContext(element.get(), GST_GL_DISPLAY_CONTEXT_TYPE))
-        return;
-    if (!setGstElementGLContext(element.get(), "gst.gl.app_context"_s))
-        return;
+    bool hasGLContext = setGstElementGLContext(element.get(), GST_GL_DISPLAY_CONTEXT_TYPE) && setGstElementGLContext(element.get(), "gst.gl.app_context"_s);
 #endif
 
     auto* factory = gst_element_get_factory(element.get());
@@ -252,10 +249,12 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
 
     GRefPtr allowedSinkCaps = adoptGRef(gst_caps_new_empty());
 #if USE(GSTREAMER_GL)
+    if (hasGLContext) {
 #if USE(GBM)
-    gst_caps_append(allowedSinkCaps.get(), buildDMABufCaps().leakRef());
+        gst_caps_append(allowedSinkCaps.get(), buildDMABufCaps().leakRef());
 #endif // USE(GBM)
-    gst_caps_append(allowedSinkCaps.get(), gst_caps_from_string("video/x-raw(memory:GLMemory)"));
+        gst_caps_append(allowedSinkCaps.get(), gst_caps_from_string("video/x-raw(memory:GLMemory)"));
+    }
 #endif // USE(GSTREAMER_GL)
     gst_caps_append(allowedSinkCaps.get(), gst_caps_from_string("video/x-raw"));
 
