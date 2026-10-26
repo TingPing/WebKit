@@ -32,6 +32,7 @@
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/Color.h>
 #include <WebCore/CoordinatedBackingStoreProxy.h>
+#include <WebCore/CoordinatedTileRecordingIdentifier.h>
 #include <WebCore/FloatRect.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/IntSize.h>
@@ -90,7 +91,7 @@ public:
 
     // Called from the rendering backend work queues.
     const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContextForRecording() const { return m_threadSafeGrContextForRecording; }
-    void didRecordTiles(uint64_t recordingIdentifier, Ref<WebCore::SkiaRecordingResult>&&);
+    void didRecordTiles(WebCore::CoordinatedTileRecordingIdentifier, Ref<WebCore::SkiaRecordingResult>&&);
 
 private:
     RemoteCoordinatedCompositor(GPUConnectionToWebProcess&, uint64_t identifier, Parameters&&);
@@ -147,7 +148,7 @@ private:
     // Only accessed in the compositor work queue.
     sk_sp<GrContextThreadSafeProxy> m_threadSafeGrContext;
     std::unique_ptr<WebCore::CoordinatedTileManager> m_tileManager;
-    HashMap<uint64_t, Ref<WebCore::SkiaRecordingResult>> m_recordings;
+    HashMap<WebCore::CoordinatedTileRecordingIdentifier, Ref<WebCore::SkiaRecordingResult>> m_recordings;
     bool m_isWaitingForTiles { false };
     Deque<Function<void()>> m_tasksWaitingForTiles;
     HashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::SkiaCompositingLayer>> m_layers;

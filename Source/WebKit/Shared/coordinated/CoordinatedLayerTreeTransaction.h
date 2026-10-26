@@ -30,6 +30,7 @@
 #include "SharedBufferReference.h"
 #include <WebCore/CoordinatedLayerProperties.h>
 #include <WebCore/CoordinatedPlatformLayerBuffer.h>
+#include <WebCore/CoordinatedTileRecordingIdentifier.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/SharedMemory.h>
 #include <optional>
@@ -48,7 +49,7 @@ struct CoordinatedTileUpdate {
     uint32_t tileID { 0 };
     WebCore::IntRect tileRect;
     WebCore::IntRect dirtyRect;
-    uint64_t recording { 0 };
+    WebCore::CoordinatedTileRecordingIdentifier recording;
 };
 
 struct CoordinatedBackingStoreUpdate {

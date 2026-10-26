@@ -459,6 +459,7 @@ def serialized_identifiers():
         'WebCore::BackgroundFetchRecordIdentifier',
         'WebCore::CoordinatedContentsIdentifier',
         'WebCore::BrowsingContextGroupIdentifier',
+        'WebCore::CoordinatedTileRecordingIdentifier',
         'WebCore::DOMCacheIdentifierID',
         'WebCore::DebuggerPauseSessionIdentifier',
         'WebCore::DictationContext',

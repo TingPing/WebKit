@@ -178,7 +178,7 @@ void RemoteCoordinatedCompositor::invalidate()
     m_surface = nullptr;
 }
 
-void RemoteCoordinatedCompositor::didRecordTiles(uint64_t recordingIdentifier, Ref<SkiaRecordingResult>&& recording)
+void RemoteCoordinatedCompositor::didRecordTiles(CoordinatedTileRecordingIdentifier recordingIdentifier, Ref<SkiaRecordingResult>&& recording)
 {
     // A commit using the recording is sent once the web process knows it was recorded, so it is queued after this.
     m_workQueue->dispatch([protectedThis = Ref { *this }, recordingIdentifier, recording = WTF::move(recording)] mutable {

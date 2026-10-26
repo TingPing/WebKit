@@ -331,12 +331,12 @@ RefPtr<BitmapTexture> CoordinatedAcceleratedTileBuffer::takeTexture()
 }
 #endif
 
-Ref<CoordinatedTileBuffer> CoordinatedRemoteTileBuffer::create(uint64_t recordingIdentifier, const IntSize& size, Flags flags)
+Ref<CoordinatedTileBuffer> CoordinatedRemoteTileBuffer::create(CoordinatedTileRecordingIdentifier recordingIdentifier, const IntSize& size, Flags flags)
 {
     return adoptRef(*new CoordinatedRemoteTileBuffer(recordingIdentifier, size, flags));
 }
 
-CoordinatedRemoteTileBuffer::CoordinatedRemoteTileBuffer(uint64_t recordingIdentifier, const IntSize& size, Flags flags)
+CoordinatedRemoteTileBuffer::CoordinatedRemoteTileBuffer(CoordinatedTileRecordingIdentifier recordingIdentifier, const IntSize& size, Flags flags)
     : CoordinatedTileBuffer(flags)
     , m_recordingIdentifier(recordingIdentifier)
     , m_size(size)

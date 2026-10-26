@@ -28,6 +28,7 @@
 #pragma once
 
 #if USE(COORDINATED_GRAPHICS)
+#include <WebCore/CoordinatedTileRecordingIdentifier.h>
 #include <WebCore/IntRect.h>
 #include <wtf/Function.h>
 #include <wtf/Lock.h>
@@ -77,7 +78,7 @@ public:
 #endif
 
     // Records in another process, which replays the tiles itself. Returns the identifier of the recording.
-    using RemoteRecorder = Function<uint64_t(const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(GraphicsContext&)>& paint)>;
+    using RemoteRecorder = Function<CoordinatedTileRecordingIdentifier(const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(GraphicsContext&)>& paint)>;
     void setRemoteRecorder(RemoteRecorder&& recorder) { m_remoteRecorder = WTF::move(recorder); }
 
     const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext() const;

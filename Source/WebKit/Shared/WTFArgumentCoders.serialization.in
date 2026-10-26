@@ -73,6 +73,7 @@ template: struct WebCore::NodeIdentifierType
 template: struct WebCore::JSHandleIdentifierType
 template: struct WebCore::FetchIdentifierType
 template: struct WebCore::ImageDecoderIdentifierType
+template: struct WebCore::CoordinatedTileRecordingIdentifierType
 template: enum class WebCore::ImageOverlayDataDetectionResultIdentifierType
 template: enum class WebCore::InbandGenericCueIdentifierType
 template: struct WebCore::LayerHostingContextIdentifierType

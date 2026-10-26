@@ -30,6 +30,7 @@
 
 #if USE(COORDINATED_GRAPHICS)
 
+#include "CoordinatedTileRecordingIdentifier.h"
 #include "IntSize.h"
 #include "PixelFormat.h"
 #include <wtf/Condition.h>
@@ -201,13 +202,13 @@ private:
 // Painted by another process from the recording it was given with this identifier.
 class CoordinatedRemoteTileBuffer final : public CoordinatedTileBuffer {
 public:
-    WEBCORE_EXPORT static Ref<CoordinatedTileBuffer> create(uint64_t recordingIdentifier, const IntSize&, Flags);
+    WEBCORE_EXPORT static Ref<CoordinatedTileBuffer> create(CoordinatedTileRecordingIdentifier, const IntSize&, Flags);
     WEBCORE_EXPORT virtual ~CoordinatedRemoteTileBuffer();
 
-    uint64_t recordingIdentifier() const { return m_recordingIdentifier; }
+    CoordinatedTileRecordingIdentifier recordingIdentifier() const { return m_recordingIdentifier; }
 
 private:
-    CoordinatedRemoteTileBuffer(uint64_t recordingIdentifier, const IntSize&, Flags);
+    CoordinatedRemoteTileBuffer(CoordinatedTileRecordingIdentifier, const IntSize&, Flags);
 
     bool isBackedByOpenGL() const final { return false; }
     bool isRemote() const final { return true; }
@@ -219,7 +220,7 @@ private:
 
     SkCanvas* canvas() final { return nullptr; }
 
-    uint64_t m_recordingIdentifier { 0 };
+    CoordinatedTileRecordingIdentifier m_recordingIdentifier;
     IntSize m_size;
 };
 #endif // USE(SKIA)

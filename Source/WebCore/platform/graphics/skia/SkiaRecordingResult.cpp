@@ -51,7 +51,7 @@ Ref<SkiaRecordingResult> SkiaRecordingResult::create(sk_sp<SkPicture>&& picture,
     return adoptRef(*new SkiaRecordingResult(WTF::move(picture), WTF::move(recordingData), recordRect, renderingMode, contentsOpaque, contentsScale));
 }
 
-Ref<SkiaRecordingResult> SkiaRecordingResult::createRemote(uint64_t identifier, const IntRect& recordRect, bool contentsOpaque, float contentsScale)
+Ref<SkiaRecordingResult> SkiaRecordingResult::createRemote(CoordinatedTileRecordingIdentifier identifier, const IntRect& recordRect, bool contentsOpaque, float contentsScale)
 {
     Ref result = adoptRef(*new SkiaRecordingResult(nullptr, { }, recordRect, RenderingMode::Accelerated, contentsOpaque, contentsScale));
     result->m_remoteIdentifier = identifier;

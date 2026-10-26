@@ -473,10 +473,10 @@ void RemoteCoordinatedCompositorProxy::didUpdateFPS(float fps)
         document->addConsoleMessage(MessageSource::Rendering, MessageLevel::Info, makeString("FPS: "_s, fps));
 }
 
-uint64_t RemoteCoordinatedCompositorProxy::recordTiles(const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(GraphicsContext&)>& paint)
+CoordinatedTileRecordingIdentifier RemoteCoordinatedCompositorProxy::recordTiles(const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(GraphicsContext&)>& paint)
 {
     ASSERT(RunLoop::isMain());
-    auto recordingIdentifier = ++m_lastRecordingIdentifier;
+    auto recordingIdentifier = CoordinatedTileRecordingIdentifier::generate();
     RefPtr webPage = m_webPage;
     if (!webPage)
         return recordingIdentifier;

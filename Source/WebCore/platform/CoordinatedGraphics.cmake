@@ -79,6 +79,7 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/coordinated/CoordinatedPlatformLayerBufferSkiaImage.h
     platform/graphics/coordinated/CoordinatedTileBuffer.h
     platform/graphics/coordinated/CoordinatedTileManager.h
+    platform/graphics/coordinated/CoordinatedTileRecordingIdentifier.h
     platform/graphics/coordinated/GraphicsContextGLCoordinated.h
     platform/graphics/coordinated/GraphicsLayerContentsDisplayDelegateCoordinated.h
     platform/graphics/coordinated/GraphicsLayerCoordinated.h

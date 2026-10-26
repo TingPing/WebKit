@@ -219,7 +219,7 @@ header: "CoordinatedLayerTreeTransaction.h"
     uint32_t tileID;
     WebCore::IntRect tileRect;
     WebCore::IntRect dirtyRect;
-    uint64_t recording;
+    WebCore::CoordinatedTileRecordingIdentifier recording;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"

@@ -63,6 +63,10 @@
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include <WebCore/CoordinatedTileRecordingIdentifier.h>
+#endif
+
 namespace WTF {
 enum class Critical : bool;
 enum class Synchronous : bool;
@@ -193,7 +197,7 @@ private:
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     void createCoordinatedTileRecorder(RemoteGraphicsContextIdentifier, uint64_t compositorIdentifier, const WebCore::IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale);
-    void sinkCoordinatedTileRecorder(RemoteGraphicsContextIdentifier, uint64_t recordingIdentifier);
+    void sinkCoordinatedTileRecorder(RemoteGraphicsContextIdentifier, WebCore::CoordinatedTileRecordingIdentifier);
 #endif
 
 #if PLATFORM(COCOA)

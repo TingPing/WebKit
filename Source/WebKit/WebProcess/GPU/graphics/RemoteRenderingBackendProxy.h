@@ -56,6 +56,10 @@
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include <WebCore/CoordinatedTileRecordingIdentifier.h>
+#endif
+
 #if USE(SKIA)
 class SkTypeface;
 #endif
@@ -168,7 +172,7 @@ public:
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     UniqueRef<RemoteGraphicsContextProxy> createCoordinatedTileRecorder(uint64_t compositorIdentifier, const WebCore::IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale);
-    void sinkCoordinatedTileRecorder(UniqueRef<RemoteGraphicsContextProxy>&&, uint64_t recordingIdentifier);
+    void sinkCoordinatedTileRecorder(UniqueRef<RemoteGraphicsContextProxy>&&, WebCore::CoordinatedTileRecordingIdentifier);
 
     // The GPU process uses image buffers in the order of the stream, so waiting for a single flush tells that
     // it is done with all the uses sent before it, whatever the buffer.

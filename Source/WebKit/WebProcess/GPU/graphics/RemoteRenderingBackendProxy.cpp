@@ -828,7 +828,7 @@ UniqueRef<RemoteGraphicsContextProxy> RemoteRenderingBackendProxy::createCoordin
     return recorder;
 }
 
-void RemoteRenderingBackendProxy::sinkCoordinatedTileRecorder(UniqueRef<RemoteGraphicsContextProxy>&& recorder, uint64_t recordingIdentifier)
+void RemoteRenderingBackendProxy::sinkCoordinatedTileRecorder(UniqueRef<RemoteGraphicsContextProxy>&& recorder, CoordinatedTileRecordingIdentifier recordingIdentifier)
 {
     recorder->sendPendingDrawsIfNecessary();
     send(Messages::RemoteRenderingBackend::SinkCoordinatedTileRecorder(recorder->identifier(), recordingIdentifier));

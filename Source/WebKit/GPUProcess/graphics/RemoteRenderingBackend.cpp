@@ -698,7 +698,7 @@ void RemoteRenderingBackend::createCoordinatedTileRecorder(RemoteGraphicsContext
     MESSAGE_CHECK(result.isNewEntry, "Tile recorder already created");
 }
 
-void RemoteRenderingBackend::sinkCoordinatedTileRecorder(RemoteGraphicsContextIdentifier identifier, uint64_t recordingIdentifier)
+void RemoteRenderingBackend::sinkCoordinatedTileRecorder(RemoteGraphicsContextIdentifier identifier, CoordinatedTileRecordingIdentifier recordingIdentifier)
 {
     assertIsCurrent(workQueue());
     RefPtr recorder = m_remoteCoordinatedTileRecorders.take(identifier).get();
