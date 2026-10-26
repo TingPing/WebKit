@@ -604,6 +604,9 @@ void RemoteGraphicsContextProxy::drawVideoFrame(const VideoFrame& frame, const F
     if (!sharedVideoFrame)
         return;
     send(Messages::RemoteGraphicsContext::DrawVideoFrame(WTF::move(*sharedVideoFrame), destination, shouldDiscardAlpha, options));
+#else
+    // Video frames stay in this process, so they are drawn as images.
+    GraphicsContext::drawVideoFrame(frame, destination, shouldDiscardAlpha, options);
 #endif
 }
 #endif
