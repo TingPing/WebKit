@@ -62,8 +62,13 @@ messages -> RemoteRenderingBackend Stream {
     MarkSurfacesVolatile(WebKit::MarkSurfacesAsVolatileRequestIdentifier requestIdentifier, Vector<std::pair<WebKit::ImageBufferSetIdentifier, OptionSet<WebKit::BufferInSetType>>> renderingResourceIdentifiers, bool forcePurge)
     FinalizeRenderingUpdate(WebKit::RenderingUpdateID renderingUpdateID)
 
-#if USE(GRAPHICS_LAYER_WC)
+#if USE(GRAPHICS_LAYER_WC) || (USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER))
     Flush(IPC::Semaphore semaphore) NotStreamEncodable
+#endif
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    CreateCoordinatedTileRecorder(WebKit::RemoteGraphicsContextIdentifier identifier, uint64_t compositorIdentifier, WebCore::IntRect recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale)
+    SinkCoordinatedTileRecorder(WebKit::RemoteGraphicsContextIdentifier identifier, uint64_t recordingIdentifier)
 #endif
 
     MoveToSerializedBuffer(WebCore::RenderingResourceIdentifier identifier, WebKit::RemoteSerializedImageBufferIdentifier serializedIdentifier)

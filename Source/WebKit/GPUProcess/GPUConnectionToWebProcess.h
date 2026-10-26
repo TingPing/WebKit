@@ -189,6 +189,10 @@ public:
     void resignNowPlayingManagerClient();
     Ref<RemoteSharedResourceCache> sharedResourceCache();
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    RefPtr<RemoteCoordinatedCompositor> coordinatedCompositor(uint64_t identifier);
+#endif
+
 #if ENABLE(VIDEO)
     RemoteAudioVideoRendererProxyManager& remoteAudioVideoRendererProxyManager();
     void canDecodeExtendedType(WebCore::PlatformMediaDecodingType, WebCore::ContentType, CompletionHandler<void(bool)>&&) const;
@@ -371,7 +375,7 @@ private:
 #endif
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-    void createCoordinatedCompositor(uint64_t identifier, WebPageProxyIdentifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&&, bool usesHardwareBufferTransport);
+    void createCoordinatedCompositor(uint64_t identifier, WebPageProxyIdentifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&&, bool usesHardwareBufferTransport, CompletionHandler<void()>&&);
     void releaseCoordinatedCompositor(uint64_t identifier);
 #endif
 
@@ -478,7 +482,8 @@ private:
 #endif
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-    HashMap<uint64_t, Ref<RemoteCoordinatedCompositor>> m_remoteCoordinatedCompositors;
+    Lock m_remoteCoordinatedCompositorsLock;
+    HashMap<uint64_t, Ref<RemoteCoordinatedCompositor>> m_remoteCoordinatedCompositors WTF_GUARDED_BY_LOCK(m_remoteCoordinatedCompositorsLock);
 #endif
 
     RefPtr<RemoteRemoteCommandListenerProxy> m_remoteRemoteCommandListener;

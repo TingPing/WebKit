@@ -29,6 +29,7 @@
 
 #if USE(COORDINATED_GRAPHICS)
 #include <WebCore/IntRect.h>
+#include <wtf/Function.h>
 #include <wtf/Lock.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/TZoneMalloc.h>
@@ -44,6 +45,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 namespace WebCore {
 class CoordinatedPlatformLayer;
 class CoordinatedTileBuffer;
+class GraphicsContext;
 class GraphicsLayerCoordinated;
 
 #if USE(SKIA)
@@ -74,9 +76,14 @@ public:
     static unsigned numberOfGPUPaintingThreads();
 #endif
 
+    // Records in another process, which replays the tiles itself. Returns the identifier of the recording.
+    using RemoteRecorder = Function<uint64_t(const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(GraphicsContext&)>& paint)>;
+    void setRemoteRecorder(RemoteRecorder&& recorder) { m_remoteRecorder = WTF::move(recorder); }
+
     const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext() const;
     Ref<SkiaRecordingResult> record(const GraphicsLayerCoordinated&, const IntRect& recordRect, bool contentsOpaque, float contentsScale, unsigned dirtyTilesCount);
     Ref<CoordinatedTileBuffer> scheduleReplay(const GraphicsLayerCoordinated&, const Ref<SkiaRecordingResult>&, const IntRect& tileRect, const IntRect& dirtyRect);
+    WEBCORE_EXPORT Ref<CoordinatedTileBuffer> scheduleReplay(const Ref<SkiaRecordingResult>&, const IntRect& tileRect, const IntRect& dirtyRect);
 #elif USE(CAIRO)
     Ref<CoordinatedTileBuffer> schedulePaint(GraphicsLayerCoordinated&, const IntRect& dirtyRect, bool contentsOpaque, float contentsScale);
 #endif
@@ -84,14 +91,17 @@ public:
 private:
 #if USE(SKIA)
     struct PaintingTask {
-        Ref<CoordinatedPlatformLayer> layer;
+        RefPtr<CoordinatedPlatformLayer> layer;
         Ref<CoordinatedTileBuffer> buffer;
         Ref<SkiaRecordingResult> recording;
         IntRect tileRect;
         IntRect dirtyRect;
     };
 
+    Ref<CoordinatedTileBuffer> scheduleReplay(RefPtr<CoordinatedPlatformLayer>&&, const Ref<SkiaRecordingResult>&, const IntRect& tileRect, const IntRect& dirtyRect);
+
     const std::unique_ptr<SkiaPaintingEngine> m_paintingEngine;
+    RemoteRecorder m_remoteRecorder;
     Lock m_paintingTaskQueueLock;
     Vector<PaintingTask> m_paintingTaskQueue WTF_GUARDED_BY_LOCK(m_paintingTaskQueueLock);
 

@@ -66,7 +66,7 @@ messages -> GPUConnectionToWebProcess WantsDispatchMessage {
     ReleaseWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier) AllowedWhenWaitingForSyncReply
 #endif
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-    CreateCoordinatedCompositor(uint64_t identifier, WebKit::WebPageProxyIdentifier pageIdentifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color> backgroundColor, bool isVisible, Vector<WebKit::RendererBufferFormat> preferredBufferFormats, bool usesHardwareBufferTransport)
+    CreateCoordinatedCompositor(uint64_t identifier, WebKit::WebPageProxyIdentifier pageIdentifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color> backgroundColor, bool isVisible, Vector<WebKit::RendererBufferFormat> preferredBufferFormats, bool usesHardwareBufferTransport) -> () Synchronous
     ReleaseCoordinatedCompositor(uint64_t identifier)
 #endif
 #if ENABLE(VIDEO)

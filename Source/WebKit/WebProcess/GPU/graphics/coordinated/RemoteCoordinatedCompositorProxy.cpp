@@ -33,6 +33,8 @@
 #include "DrawingArea.h"
 #include "GPUConnectionToWebProcessMessages.h"
 #include "RemoteCoordinatedCompositorMessages.h"
+#include "RemoteGraphicsContextProxy.h"
+#include "RemoteRenderingBackendProxy.h"
 #include "RenderProcessInfo.h"
 #include "WebPage.h"
 #include "WebProcess.h"
@@ -64,7 +66,7 @@ static CoordinatedPixels appendPixels(SharedBufferBuilder& pixels, Vector<uint8_
     return result;
 }
 
-static CoordinatedBackingStoreUpdate backingStoreUpdate(const CoordinatedBackingStoreProxy::Update& update, float contentsScale, SharedBufferBuilder& pixels)
+static CoordinatedBackingStoreUpdate backingStoreUpdate(const CoordinatedBackingStoreProxy::Update& update, float contentsScale)
 {
     CoordinatedBackingStoreUpdate backingStore {
         .contentsScale = contentsScale,
@@ -74,21 +76,15 @@ static CoordinatedBackingStoreUpdate backingStoreUpdate(const CoordinatedBacking
     };
 
     for (const auto& tileUpdate : update.tilesToUpdate()) {
-        Ref buffer = tileUpdate.buffer;
-        buffer->waitUntilPaintingFinished();
-        if (buffer->paintingState() != CoordinatedTileBuffer::PaintingState::Complete || buffer->isBackedByOpenGL())
-            continue;
-
-        auto data = static_cast<CoordinatedUnacceleratedTileBuffer&>(buffer.get()).takeData();
-        if (data.isEmpty())
+        RefPtr buffer = dynamicDowncast<CoordinatedRemoteTileBuffer>(tileUpdate.buffer);
+        if (!buffer)
             continue;
 
         backingStore.tilesToUpdate.append({
             .tileID = tileUpdate.tileID,
             .tileRect = tileUpdate.tileRect,
             .dirtyRect = tileUpdate.dirtyRect,
-            .supportsAlpha = buffer->supportsAlpha(),
-            .pixels = appendPixels(pixels, WTF::move(data), buffer->size()),
+            .recording = buffer->recordingIdentifier(),
         });
     }
 
@@ -122,7 +118,7 @@ static CoordinatedLayerTreeTransaction makeTransaction(PendingLayerTreeTransacti
     for (auto& changes : pendingTransaction.layers) {
         CoordinatedLayerUpdate update { .properties = WTF::move(changes.properties), .backingStore = { }, .contentsImage = { }, .contentsBuffer = { } };
         if (changes.backingStoreUpdate)
-            update.backingStore = backingStoreUpdate(*changes.backingStoreUpdate, changes.contentsScale, pixels);
+            update.backingStore = backingStoreUpdate(*changes.backingStoreUpdate, changes.contentsScale);
         if (RefPtr image = changes.contentsImage)
             update.contentsImage = imagePixels(*image, pixels);
         if (RefPtr image = changes.contentsBufferImage)
@@ -157,10 +153,11 @@ void RemoteCoordinatedCompositorProxy::connectToGPUProcess(WebPage& webPage)
     Ref gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
     gpuProcessConnection->addClient(*this);
     Ref connection = gpuProcessConnection->connection();
-    connection->send(Messages::GPUConnectionToWebProcess::CreateCoordinatedCompositor(m_surfaceID, webPage.webPageProxyIdentifier(), webPage.size(), webPage.deviceScaleFactor(), webPage.effectiveBackgroundColor(),
+    // Synchronous, because tile recordings reach the GPU process through another connection and need the compositor.
+    connection->sendSync(Messages::GPUConnectionToWebProcess::CreateCoordinatedCompositor(m_surfaceID, webPage.webPageProxyIdentifier(), webPage.size(), webPage.deviceScaleFactor(), webPage.effectiveBackgroundColor(),
         webPage.activityState().contains(ActivityState::IsVisible), webPage.preferredBufferFormats(), WebProcess::singleton().rendererBufferTransportMode().contains(RendererBufferTransportMode::Hardware)), 0);
 
-    // Only now can the commit queue send to the compositor, which the GPU process creates first.
+    // Only now can the commit queue send to the compositor.
     Locker locker { m_connectionLock };
     m_gpuConnection = connection.ptr();
 }
@@ -233,10 +230,16 @@ void RemoteCoordinatedCompositorProxy::requestCompositionForRenderingUpdate(Func
     ASSERT(!m_didCompositeFunction);
     m_didCompositeFunction = WTF::move(didCompositeFunction);
 
-    if (RefPtr webPage = m_webPage) {
+    RefPtr webPage = m_webPage;
+    if (webPage) {
         if (RefPtr drawingArea = webPage->drawingArea())
             drawingArea->willStartRenderingUpdateDisplay();
     }
+
+    // The GPU process must have the tile recordings before the commit using them.
+    Function<bool()> waitForRecordings;
+    if (std::exchange(m_hasPendingRecordings, false) && webPage)
+        waitForRecordings = webPage->ensureRemoteRenderingBackendProxy().flushImageBuffers();
 
     Locker locker { m_commitLock };
     PendingLayerTreeTransaction pendingTransaction { .rootLayer = m_sceneState->rootLayer().id(), .removedLayers = { }, .layers = { } };
@@ -249,7 +252,9 @@ void RemoteCoordinatedCompositorProxy::requestCompositionForRenderingUpdate(Func
     m_needsFullCommit = false;
 
     ++m_pendingCommits;
-    m_commitQueue->dispatch([protectedThis = Ref { *this }, pendingTransaction = WTF::move(pendingTransaction)] mutable {
+    m_commitQueue->dispatch([protectedThis = Ref { *this }, pendingTransaction = WTF::move(pendingTransaction), waitForRecordings = WTF::move(waitForRecordings)] mutable {
+        if (waitForRecordings)
+            waitForRecordings();
         auto transaction = makeTransaction(WTF::move(pendingTransaction));
         RefPtr connection = protectedThis->gpuConnection();
         if (!connection) {
@@ -284,6 +289,22 @@ void RemoteCoordinatedCompositorProxy::didCompositeRenderingUpdate()
             drawingArea->didCompleteRenderingUpdateDisplay();
     }
     didCompositeFunction();
+}
+
+uint64_t RemoteCoordinatedCompositorProxy::recordTiles(const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(GraphicsContext&)>& paint)
+{
+    ASSERT(RunLoop::isMain());
+    auto recordingIdentifier = ++m_lastRecordingIdentifier;
+    RefPtr webPage = m_webPage;
+    if (!webPage)
+        return recordingIdentifier;
+
+    Ref renderingBackend = webPage->ensureRemoteRenderingBackendProxy();
+    auto recorder = renderingBackend->createCoordinatedTileRecorder(m_surfaceID, recordRect, dirtyTilesCount, contentsOpaque, contentsScale);
+    paint(recorder.get());
+    renderingBackend->sinkCoordinatedTileRecorder(WTF::move(recorder), recordingIdentifier);
+    m_hasPendingRecordings = true;
+    return recordingIdentifier;
 }
 
 void RemoteCoordinatedCompositorProxy::requestComposition(CompositionReason reason)

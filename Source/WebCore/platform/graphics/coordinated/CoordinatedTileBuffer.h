@@ -36,6 +36,7 @@
 #include <wtf/Lock.h>
 #include <wtf/Ref.h>
 #include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/TypeCasts.h>
 #include <wtf/Vector.h>
 
 #if USE(SKIA)
@@ -69,6 +70,7 @@ public:
     virtual IntSize size() const = 0;
     virtual PixelFormat pixelFormat() const = 0;
     virtual bool isBackedByOpenGL() const = 0;
+    virtual bool isRemote() const { return false; }
 
     bool supportsAlpha() const { return m_flags & SupportsAlpha; }
 
@@ -120,10 +122,9 @@ private:
 class CoordinatedUnacceleratedTileBuffer final : public CoordinatedTileBuffer {
 public:
     WEBCORE_EXPORT static Ref<CoordinatedTileBuffer> create(const IntSize&, Flags);
-    WEBCORE_EXPORT static Ref<CoordinatedTileBuffer> createPainted(const IntSize&, Flags, Vector<unsigned char>&&);
     WEBCORE_EXPORT virtual ~CoordinatedUnacceleratedTileBuffer();
 
-    WEBCORE_EXPORT Vector<unsigned char> takeData();
+    Vector<unsigned char> takeData();
     int stride() const { return m_size.width() * 4; }
 
 #if USE(CAIRO)
@@ -196,8 +197,39 @@ private:
     sk_sp<GrDeferredDisplayList> m_displayList;
 #endif
 };
+
+// Painted by another process from the recording it was given with this identifier.
+class CoordinatedRemoteTileBuffer final : public CoordinatedTileBuffer {
+public:
+    WEBCORE_EXPORT static Ref<CoordinatedTileBuffer> create(uint64_t recordingIdentifier, const IntSize&, Flags);
+    WEBCORE_EXPORT virtual ~CoordinatedRemoteTileBuffer();
+
+    uint64_t recordingIdentifier() const { return m_recordingIdentifier; }
+
+private:
+    CoordinatedRemoteTileBuffer(uint64_t recordingIdentifier, const IntSize&, Flags);
+
+    bool isBackedByOpenGL() const final { return false; }
+    bool isRemote() const final { return true; }
+    IntSize size() const final { return m_size; }
+    PixelFormat pixelFormat() const final { return PixelFormat::RGBA8; }
+
+    bool prepareForPainting() final { return false; }
+    void finishPainting() final { }
+
+    SkCanvas* canvas() final { return nullptr; }
+
+    uint64_t m_recordingIdentifier { 0 };
+    IntSize m_size;
+};
 #endif // USE(SKIA)
 
 } // namespace WebCore
+
+#if USE(SKIA)
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::CoordinatedRemoteTileBuffer)
+    static bool isType(const WebCore::CoordinatedTileBuffer& buffer) { return buffer.isRemote(); }
+SPECIALIZE_TYPE_TRAITS_END()
+#endif
 
 #endif // USE(COORDINATED_GRAPHICS)

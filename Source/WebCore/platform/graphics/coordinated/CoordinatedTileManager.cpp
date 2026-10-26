@@ -132,7 +132,7 @@ CoordinatedTileManager::~CoordinatedTileManager()
     }();
 
     for (auto& task : tasks) {
-        if (task.buffer->cancelPainting())
+        if (task.buffer->cancelPainting() && task.layer)
             task.layer->didPaintTile();
     }
 }
@@ -144,10 +144,30 @@ const sk_sp<GrContextThreadSafeProxy>& CoordinatedTileManager::threadSafeGrConte
 
 Ref<SkiaRecordingResult> CoordinatedTileManager::record(const GraphicsLayerCoordinated& layer, const IntRect& recordRect, bool contentsOpaque, float contentsScale, unsigned dirtyTilesCount)
 {
+    if (m_remoteRecorder) {
+        auto identifier = m_remoteRecorder(recordRect, dirtyTilesCount, contentsOpaque, contentsScale, [&](GraphicsContext& context) {
+            m_paintingEngine->paintIntoGraphicsContext(layer, context, recordRect, contentsOpaque, contentsScale);
+        });
+        return SkiaRecordingResult::createRemote(identifier, recordRect, contentsOpaque, contentsScale);
+    }
+
     return m_paintingEngine->record(layer, recordRect, canPerformAcceleratedRendering() ? RenderingMode::Accelerated : RenderingMode::Unaccelerated, contentsOpaque, contentsScale, dirtyTilesCount);
 }
 
 Ref<CoordinatedTileBuffer> CoordinatedTileManager::scheduleReplay(const GraphicsLayerCoordinated& layer, const Ref<SkiaRecordingResult>& recording, const IntRect& tileRect, const IntRect& dirtyRect)
+{
+    if (auto identifier = recording->remoteIdentifier())
+        return CoordinatedRemoteTileBuffer::create(*identifier, dirtyRect.size(), recording->contentsOpaque() ? CoordinatedTileBuffer::NoFlags : CoordinatedTileBuffer::SupportsAlpha);
+
+    return scheduleReplay(&layer.coordinatedPlatformLayer(), recording, tileRect, dirtyRect);
+}
+
+Ref<CoordinatedTileBuffer> CoordinatedTileManager::scheduleReplay(const Ref<SkiaRecordingResult>& recording, const IntRect& tileRect, const IntRect& dirtyRect)
+{
+    return scheduleReplay(nullptr, recording, tileRect, dirtyRect);
+}
+
+Ref<CoordinatedTileBuffer> CoordinatedTileManager::scheduleReplay(RefPtr<CoordinatedPlatformLayer>&& platformLayer, const Ref<SkiaRecordingResult>& recording, const IntRect& tileRect, const IntRect& dirtyRect)
 {
     Ref buffer = [&] -> Ref<CoordinatedTileBuffer> {
         auto flags = recording->contentsOpaque() ? CoordinatedTileBuffer::NoFlags : CoordinatedTileBuffer::SupportsAlpha;
@@ -161,8 +181,8 @@ Ref<CoordinatedTileBuffer> CoordinatedTileManager::scheduleReplay(const Graphics
 #endif
     }();
 
-    Ref platformLayer = layer.coordinatedPlatformLayer();
-    platformLayer->willPaintTile();
+    if (platformLayer)
+        platformLayer->willPaintTile();
 
     {
         Locker locker { m_paintingTaskQueueLock };
@@ -191,7 +211,8 @@ Ref<CoordinatedTileBuffer> CoordinatedTileManager::scheduleReplay(const Graphics
         }
 
         task->buffer->completePainting();
-        task->layer->didPaintTile();
+        if (task->layer)
+            task->layer->didPaintTile();
     });
     return buffer;
 }

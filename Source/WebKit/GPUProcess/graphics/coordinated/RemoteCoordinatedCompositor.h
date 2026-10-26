@@ -44,7 +44,10 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <wtf/WorkQueue.h>
 
 namespace WebCore {
+class CoordinatedTileBuffer;
+class CoordinatedTileManager;
 class SkiaCompositingLayer;
+class SkiaRecordingResult;
 struct CoordinatedLayerProperties;
 }
 
@@ -74,6 +77,10 @@ public:
 
     void invalidate();
 
+    // Called from the rendering backend work queues.
+    const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContextForRecording() const { return m_threadSafeGrContextForRecording; }
+    void didRecordTiles(uint64_t recordingIdentifier, Ref<WebCore::SkiaRecordingResult>&&);
+
 private:
     RemoteCoordinatedCompositor(GPUConnectionToWebProcess&, uint64_t identifier, Parameters&&);
 
@@ -100,9 +107,13 @@ private:
     const uint64_t m_identifier;
     const Ref<WorkQueue> m_workQueue;
     RefPtr<AcceleratedSurface> m_surface;
+    sk_sp<GrContextThreadSafeProxy> m_threadSafeGrContextForRecording;
 
     // Only accessed in the compositor work queue.
     sk_sp<GrContextThreadSafeProxy> m_threadSafeGrContext;
+    std::unique_ptr<WebCore::CoordinatedTileManager> m_tileManager;
+    HashMap<uint64_t, Ref<WebCore::SkiaRecordingResult>> m_recordings;
+    Vector<Ref<WebCore::CoordinatedTileBuffer>> m_paintingTileBuffers;
     HashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::SkiaCompositingLayer>> m_layers;
     RefPtr<WebCore::SkiaCompositingLayer> m_rootLayer;
     WebCore::IntSize m_viewportSize;

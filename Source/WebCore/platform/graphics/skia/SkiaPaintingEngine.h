@@ -64,8 +64,9 @@ public:
     Ref<SkiaRecordingResult> record(const GraphicsLayerCoordinated&, const IntRect& recordRect, RenderingMode, bool contentsOpaque, float contentsScale, unsigned dirtyTilesCount);
     void replay(const Ref<CoordinatedTileBuffer>&, const Ref<SkiaRecordingResult>&, const IntRect& tileRect, const IntRect& dirtyRect) const;
 
-private:
     void paintIntoGraphicsContext(const GraphicsLayer&, GraphicsContext&, const IntRect&, bool contentsOpaque, float contentsScale) const;
+
+private:
     RefPtr<SkiaGPUAtlas> createAtlas(const SkiaImageAtlasLayout&, AtlasUploadCondition&);
     bool tryReuseCachedAtlases(SkiaRecordingResult&, unsigned fingerprint);
 

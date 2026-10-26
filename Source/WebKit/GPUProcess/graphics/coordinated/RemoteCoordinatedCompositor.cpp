@@ -39,10 +39,12 @@
 #include <WebCore/CoordinatedPlatformLayerBufferDMABuf.h>
 #include <WebCore/CoordinatedPlatformLayerBufferSkiaImage.h>
 #include <WebCore/CoordinatedTileBuffer.h>
+#include <WebCore/CoordinatedTileManager.h>
 #include <WebCore/GLContext.h>
 #include <WebCore/NativeImage.h>
 #include <WebCore/PlatformDisplay.h>
 #include <WebCore/SkiaCompositingLayer.h>
+#include <WebCore/SkiaRecordingResult.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkColorSpace.h>
 #include <skia/core/SkData.h>
@@ -96,7 +98,9 @@ RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProce
 
         display.setSkiaGLContextForCurrentThread(WTF::move(context));
         m_threadSafeGrContext = display.skiaGrContext()->threadSafeProxy();
+        m_tileManager = CoordinatedTileManager::create(sk_sp<GrContextThreadSafeProxy> { m_threadSafeGrContext });
     });
+    m_threadSafeGrContextForRecording = m_threadSafeGrContext;
 }
 
 RemoteCoordinatedCompositor::~RemoteCoordinatedCompositor()
@@ -112,6 +116,9 @@ void RemoteCoordinatedCompositor::invalidate()
 
     m_workQueue->dispatchSync([this] {
         m_isInvalidated = true;
+        m_recordings.clear();
+        m_paintingTileBuffers.clear();
+        m_tileManager = nullptr;
         for (Ref layer : m_layers.values())
             layer->invalidate();
         m_layers.clear();
@@ -124,6 +131,15 @@ void RemoteCoordinatedCompositor::invalidate()
 
     m_surface->willDestroyCompositingRunLoop();
     m_surface = nullptr;
+}
+
+void RemoteCoordinatedCompositor::didRecordTiles(uint64_t recordingIdentifier, Ref<SkiaRecordingResult>&& recording)
+{
+    // A commit using the recording is sent once the web process knows it was recorded, so it is queued after this.
+    m_workQueue->dispatch([protectedThis = Ref { *this }, recordingIdentifier, recording = WTF::move(recording)] mutable {
+        if (!protectedThis->m_isInvalidated)
+            protectedThis->m_recordings.set(recordingIdentifier, WTF::move(recording));
+    });
 }
 
 SkiaCompositingLayer& RemoteCoordinatedCompositor::ensureLayer(PlatformLayerIdentifier identifier)
@@ -286,12 +302,14 @@ void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& upda
 
     Vector<CoordinatedBackingStoreProxy::Update::TileUpdate> tilesToUpdate;
     for (auto& tileUpdate : update.backingStore->tilesToUpdate) {
-        auto data = pixelsSpan(pixels, tileUpdate.pixels);
-        if (data.empty())
+        RefPtr recording = m_recordings.get(tileUpdate.recording);
+        if (!recording || !m_tileManager)
             continue;
 
-        auto flags = tileUpdate.supportsAlpha ? CoordinatedTileBuffer::SupportsAlpha : CoordinatedTileBuffer::NoFlags;
-        auto buffer = CoordinatedUnacceleratedTileBuffer::createPainted(tileUpdate.pixels.size, flags, Vector<uint8_t> { data });
+        auto dirtyRect = tileUpdate.dirtyRect;
+        dirtyRect.moveBy(tileUpdate.tileRect.location());
+        Ref buffer = m_tileManager->scheduleReplay(recording.releaseNonNull(), tileUpdate.tileRect, dirtyRect);
+        m_paintingTileBuffers.append(buffer);
         tilesToUpdate.append({ tileUpdate.tileID, tileUpdate.tileRect, tileUpdate.dirtyRect, WTF::move(buffer) });
     }
 
@@ -319,6 +337,11 @@ void RemoteCoordinatedCompositor::commit(CoordinatedLayerTreeTransaction&& trans
             protectedThis->applyLayerUpdate(WTF::move(update), pixels);
 
         protectedThis->m_rootLayer = &protectedThis->ensureLayer(transaction.rootLayer);
+
+        // Every recording arrives before the commit that uses it, and the web process doesn't record again until it is composited.
+        protectedThis->m_recordings.clear();
+        for (Ref buffer : std::exchange(protectedThis->m_paintingTileBuffers, { }))
+            buffer->waitUntilPaintingFinished();
 
         for (Ref layer : protectedThis->m_layers.values()) {
             if (layer->hasPendingBackingStoreTileUpdates())

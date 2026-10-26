@@ -209,8 +209,7 @@ header: "CoordinatedLayerTreeTransaction.h"
     uint32_t tileID;
     WebCore::IntRect tileRect;
     WebCore::IntRect dirtyRect;
-    bool supportsAlpha;
-    WebKit::CoordinatedPixels pixels;
+    uint64_t recording;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"

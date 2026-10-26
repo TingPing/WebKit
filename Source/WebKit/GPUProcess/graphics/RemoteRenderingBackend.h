@@ -89,6 +89,7 @@ struct FaceDetectorOptions;
 namespace WebKit {
 
 class GPUConnectionToWebProcess;
+class RemoteCoordinatedTileRecorder;
 class RemoteDisplayListRecorder;
 class RemoteImageBuffer;
 class RemoteImageBufferSet;
@@ -183,8 +184,13 @@ private:
     void createImageBufferSet(WebKit::ImageBufferSetIdentifier, RemoteGraphicsContextIdentifier);
     void releaseImageBufferSet(WebKit::ImageBufferSetIdentifier);
 
-#if USE(GRAPHICS_LAYER_WC)
+#if USE(GRAPHICS_LAYER_WC) || (USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER))
     void flush(IPC::Semaphore&&);
+#endif
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void createCoordinatedTileRecorder(RemoteGraphicsContextIdentifier, uint64_t compositorIdentifier, const WebCore::IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale);
+    void sinkCoordinatedTileRecorder(RemoteGraphicsContextIdentifier, uint64_t recordingIdentifier);
 #endif
 
 #if PLATFORM(COCOA)
@@ -226,6 +232,9 @@ private:
     const Ref<ShapeDetection::ObjectHeap> m_shapeDetectionObjectHeap;
     HashMap<RemoteDisplayListRecorderIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteDisplayListRecorder>> m_remoteDisplayListRecorders WTF_GUARDED_BY_CAPABILITY(workQueue());
     HashMap<RemoteSnapshotRecorderIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteSnapshotRecorder>> m_remoteSnapshotRecorders WTF_GUARDED_BY_CAPABILITY(workQueue());
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    HashMap<RemoteGraphicsContextIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteCoordinatedTileRecorder>> m_remoteCoordinatedTileRecorders WTF_GUARDED_BY_CAPABILITY(workQueue());
+#endif
 };
 
 bool isSmallLayerBacking(const WebCore::ImageBufferParameters&);

@@ -155,8 +155,13 @@ public:
     Ref<ShapeDetection::RemoteTextDetectorProxy> createTextDetector();
     void releaseTextDetector(ShapeDetection::RemoteTextDetectorProxy&);
 
-#if USE(GRAPHICS_LAYER_WC)
+#if USE(GRAPHICS_LAYER_WC) || (USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER))
     Function<bool()> flushImageBuffers();
+#endif
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    UniqueRef<RemoteGraphicsContextProxy> createCoordinatedTileRecorder(uint64_t compositorIdentifier, const WebCore::IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale);
+    void sinkCoordinatedTileRecorder(UniqueRef<RemoteGraphicsContextProxy>&&, uint64_t recordingIdentifier);
 #endif
 
     struct BufferSet {

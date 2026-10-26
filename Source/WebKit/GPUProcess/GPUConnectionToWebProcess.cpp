@@ -487,7 +487,11 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
     });
 #endif
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-    for (Ref compositor : std::exchange(m_remoteCoordinatedCompositors, { }).values())
+    auto compositors = [&] {
+        Locker locker { m_remoteCoordinatedCompositorsLock };
+        return std::exchange(m_remoteCoordinatedCompositors, { });
+    }();
+    for (Ref compositor : compositors.values())
         compositor->invalidate();
 #if ENABLE(WEBGL) && USE(GBM)
     RemoteCoordinatedContentsRegistry::singleton().removeAll(m_webProcessIdentifier);
@@ -568,12 +572,12 @@ void GPUConnectionToWebProcess::releaseWCLayerTreeHost(WebKit::WCLayerTreeHostId
 #endif
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-void GPUConnectionToWebProcess::createCoordinatedCompositor(uint64_t identifier, WebPageProxyIdentifier pageIdentifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&& preferredBufferFormats, bool usesHardwareBufferTransport)
+void GPUConnectionToWebProcess::createCoordinatedCompositor(uint64_t identifier, WebPageProxyIdentifier pageIdentifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&& preferredBufferFormats, bool usesHardwareBufferTransport, CompletionHandler<void()>&& completionHandler)
 {
     // Surfaces from all web processes share the connection to the UI process, so each one names its own.
-    MESSAGE_CHECK((identifier >> 32) == m_webProcessIdentifier.toUInt64());
-    MESSAGE_CHECK(!m_remoteCoordinatedCompositors.contains(identifier));
-    m_remoteCoordinatedCompositors.add(identifier, RemoteCoordinatedCompositor::create(*this, identifier, {
+    MESSAGE_CHECK_COMPLETION_BASE((identifier >> 32) == m_webProcessIdentifier.toUInt64(), m_connection, completionHandler());
+    MESSAGE_CHECK_COMPLETION_BASE(!coordinatedCompositor(identifier), m_connection, completionHandler());
+    Ref compositor = RemoteCoordinatedCompositor::create(*this, identifier, {
         .pageIdentifier = pageIdentifier,
         .viewportSize = viewportSize,
         .deviceScaleFactor = deviceScaleFactor,
@@ -581,13 +585,28 @@ void GPUConnectionToWebProcess::createCoordinatedCompositor(uint64_t identifier,
         .isVisible = isVisible,
         .preferredBufferFormats = WTF::move(preferredBufferFormats),
         .usesHardwareBufferTransport = usesHardwareBufferTransport,
-    }));
+    });
+    {
+        Locker locker { m_remoteCoordinatedCompositorsLock };
+        m_remoteCoordinatedCompositors.add(identifier, WTF::move(compositor));
+    }
+    completionHandler();
 }
 
 void GPUConnectionToWebProcess::releaseCoordinatedCompositor(uint64_t identifier)
 {
-    if (RefPtr compositor = m_remoteCoordinatedCompositors.take(identifier))
+    RefPtr compositor = [&] {
+        Locker locker { m_remoteCoordinatedCompositorsLock };
+        return m_remoteCoordinatedCompositors.take(identifier);
+    }();
+    if (compositor)
         compositor->invalidate();
+}
+
+RefPtr<RemoteCoordinatedCompositor> GPUConnectionToWebProcess::coordinatedCompositor(uint64_t identifier)
+{
+    Locker locker { m_remoteCoordinatedCompositorsLock };
+    return m_remoteCoordinatedCompositors.get(identifier);
 }
 #endif
 

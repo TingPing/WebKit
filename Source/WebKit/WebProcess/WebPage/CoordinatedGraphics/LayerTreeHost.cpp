@@ -110,10 +110,12 @@ LayerTreeHost::LayerTreeHost(WebPage& webPage)
     }
 
 #if ENABLE(GPU_PROCESS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    RefPtr<RemoteCoordinatedCompositorProxy> remoteCompositor;
     if (webPage.shouldRenderDOMInGPUProcess()) {
         ProcessCapabilities::setCanUseAcceleratedBuffers(false);
         WebProcess::singleton().setUsesGPUProcessForCompositing();
-        lazyInitialize(m_compositor, RemoteCoordinatedCompositorProxy::create(webPage, m_sceneState.get()));
+        remoteCompositor = RemoteCoordinatedCompositorProxy::create(webPage, m_sceneState.get());
+        lazyInitialize(m_compositor, Ref { *remoteCompositor });
     } else
 #endif
         lazyInitialize(m_compositor, ThreadedCompositor::create(webPage, *this, m_sceneState.get()));
@@ -121,6 +123,13 @@ LayerTreeHost::LayerTreeHost(WebPage& webPage)
     m_tileManager = CoordinatedTileManager::create(nullptr);
 #else
     m_tileManager = CoordinatedTileManager::create(m_compositor->threadSafeGrContext());
+#endif
+#if ENABLE(GPU_PROCESS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (remoteCompositor) {
+        m_tileManager->setRemoteRecorder([remoteCompositor = remoteCompositor.releaseNonNull()](const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(GraphicsContext&)>& paint) {
+            return remoteCompositor->recordTiles(recordRect, dirtyTilesCount, contentsOpaque, contentsScale, paint);
+        });
+    }
 #endif
 
 #if ENABLE(DAMAGE_TRACKING)

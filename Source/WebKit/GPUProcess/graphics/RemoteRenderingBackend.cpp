@@ -82,7 +82,10 @@
 #endif
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include "RemoteCoordinatedCompositor.h"
+#include "RemoteCoordinatedTileRecorder.h"
 #include <WebCore/ImageBufferSkiaAcceleratedBackend.h>
+#include <WebCore/SkiaRecordingResult.h>
 #endif
 
 #if HAVE(SHAPE_DETECTION_API_IMPLEMENTATION)
@@ -168,6 +171,9 @@ void RemoteRenderingBackend::workQueueUninitialize()
     m_remoteImageBufferSets.clear();
     m_remoteDisplayListRecorders.clear();
     m_remoteSnapshotRecorders.clear();
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    m_remoteCoordinatedTileRecorders.clear();
+#endif
     // Make sure we destroy the ResourceCache on the WorkQueue since it gets populated on the WorkQueue.
     m_remoteResourceCache.releaseAllResources();
 
@@ -643,10 +649,32 @@ void RemoteRenderingBackend::releaseMemory()
     m_remoteResourceCache.releaseMemory();
 }
 
-#if USE(GRAPHICS_LAYER_WC)
+#if USE(GRAPHICS_LAYER_WC) || (USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER))
 void RemoteRenderingBackend::flush(IPC::Semaphore&& semaphore)
 {
     semaphore.signal();
+}
+#endif
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void RemoteRenderingBackend::createCoordinatedTileRecorder(RemoteGraphicsContextIdentifier identifier, uint64_t compositorIdentifier, const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale)
+{
+    assertIsCurrent(workQueue());
+    MESSAGE_CHECK(!recordRect.isEmpty(), "Empty tile recording");
+    // The web process creates the compositor synchronously before recording into it, but may have released it since.
+    RefPtr compositor = m_gpuConnectionToWebProcess->coordinatedCompositor(compositorIdentifier);
+    auto result = m_remoteCoordinatedTileRecorders.add(identifier, RemoteCoordinatedTileRecorder::create(identifier, *this, WTF::move(compositor), recordRect, dirtyTilesCount, contentsOpaque, contentsScale));
+    MESSAGE_CHECK(result.isNewEntry, "Tile recorder already created");
+}
+
+void RemoteRenderingBackend::sinkCoordinatedTileRecorder(RemoteGraphicsContextIdentifier identifier, uint64_t recordingIdentifier)
+{
+    assertIsCurrent(workQueue());
+    RefPtr recorder = m_remoteCoordinatedTileRecorders.take(identifier).get();
+    MESSAGE_CHECK(recorder, "Tile recorder sunk before being created");
+    auto recording = recorder->finishRecording();
+    if (RefPtr compositor = recorder->compositor())
+        compositor->didRecordTiles(recordingIdentifier, WTF::move(recording));
 }
 #endif
 

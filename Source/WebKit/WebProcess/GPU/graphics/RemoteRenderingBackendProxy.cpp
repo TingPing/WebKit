@@ -764,7 +764,7 @@ RefPtr<RemoteImageBufferProxy> RemoteRenderingBackendProxy::cachedImageBuffer(co
     return cached;
 }
 
-#if USE(GRAPHICS_LAYER_WC)
+#if USE(GRAPHICS_LAYER_WC) || (USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER))
 
 // Because RemoteRenderingBackend and RemoteImageBuffer share a single stream connection at the moment,
 // it is sufficient to flush the single command queue.
@@ -783,7 +783,22 @@ Function<bool()> RemoteRenderingBackendProxy::flushImageBuffers()
     };
 }
 
-#endif // USE(GRAPHICS_LAYER_WC)
+#endif // USE(GRAPHICS_LAYER_WC) || (USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER))
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+UniqueRef<RemoteGraphicsContextProxy> RemoteRenderingBackendProxy::createCoordinatedTileRecorder(uint64_t compositorIdentifier, const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale)
+{
+    auto recorder = makeUniqueRef<RemoteGraphicsContextProxy>(FloatRect { { }, recordRect.size() }, AffineTransform { }, ColorSpace::SRGB(), RenderingMode::Accelerated, *this);
+    send(Messages::RemoteRenderingBackend::CreateCoordinatedTileRecorder(recorder->identifier(), compositorIdentifier, recordRect, dirtyTilesCount, contentsOpaque, contentsScale));
+    return recorder;
+}
+
+void RemoteRenderingBackendProxy::sinkCoordinatedTileRecorder(UniqueRef<RemoteGraphicsContextProxy>&& recorder, uint64_t recordingIdentifier)
+{
+    recorder->sendPendingDrawsIfNecessary();
+    send(Messages::RemoteRenderingBackend::SinkCoordinatedTileRecorder(recorder->identifier(), recordingIdentifier));
+}
+#endif
 
 void RemoteRenderingBackendProxy::getImageBufferResourceLimitsForTesting(CompletionHandler<void(ImageBufferResourceLimits)>&& callback)
 {

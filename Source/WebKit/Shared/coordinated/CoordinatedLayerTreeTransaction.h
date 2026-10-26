@@ -40,12 +40,12 @@ struct CoordinatedPixels {
     WebCore::IntSize size;
 };
 
+// The GPU process paints the tile from the recording the web process made with this identifier.
 struct CoordinatedTileUpdate {
     uint32_t tileID { 0 };
     WebCore::IntRect tileRect;
     WebCore::IntRect dirtyRect;
-    bool supportsAlpha { false };
-    CoordinatedPixels pixels;
+    uint64_t recording { 0 };
 };
 
 struct CoordinatedBackingStoreUpdate {

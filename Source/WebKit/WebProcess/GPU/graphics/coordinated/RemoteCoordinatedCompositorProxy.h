@@ -36,6 +36,8 @@
 #include <wtf/WorkQueue.h>
 
 namespace WebCore {
+class GraphicsContext;
+class IntRect;
 struct CoordinatedLayerProperties;
 }
 
@@ -83,6 +85,9 @@ public:
 
     sk_sp<GrContextThreadSafeProxy> threadSafeGrContext() const final { return nullptr; }
 
+    // Records the drawing of a layer's dirty region in the GPU process, which paints the tiles from it.
+    uint64_t recordTiles(const WebCore::IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(WebCore::GraphicsContext&)>& paint);
+
 private:
     RemoteCoordinatedCompositorProxy(WebPage&, CoordinatedSceneState&);
 
@@ -104,6 +109,8 @@ private:
     bool m_needsFullCommit WTF_GUARDED_BY_LOCK(m_commitLock) { false };
     std::atomic<unsigned> m_pendingCommits { 0 };
     Function<void()> m_didCompositeFunction;
+    uint64_t m_lastRecordingIdentifier { 0 };
+    bool m_hasPendingRecordings { false };
     unsigned m_suspendedCount { 0 };
     mutable int m_maxTextureSize { 0 };
     bool m_isInvalidated { false };

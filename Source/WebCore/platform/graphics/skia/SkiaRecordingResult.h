@@ -59,6 +59,8 @@ class SkiaRecordingResult final : public ThreadSafeRefCounted<SkiaRecordingResul
 public:
     ~SkiaRecordingResult();
     static Ref<SkiaRecordingResult> create(sk_sp<SkPicture>&&, SkiaRecordingData&&, const IntRect& recordRect, RenderingMode, bool contentsOpaque, float contentsScale);
+    // A recording made in another process, which replays it there.
+    static Ref<SkiaRecordingResult> createRemote(uint64_t identifier, const IntRect& recordRect, bool contentsOpaque, float contentsScale);
 
 #if USE(TEXTURE_MAPPER)
     void waitForFenceIfNeeded(const SkImage&);
@@ -66,6 +68,7 @@ public:
 #endif
 
     const sk_sp<SkPicture>& picture() const LIFETIME_BOUND { return m_picture; }
+    std::optional<uint64_t> remoteIdentifier() const { return m_remoteIdentifier; }
     const IntRect& recordRect() const LIFETIME_BOUND { return m_recordRect; }
     RenderingMode renderingMode() const { return m_renderingMode; }
     bool contentsOpaque() const { return m_contentsOpaque; }
@@ -89,6 +92,7 @@ private:
     SkiaRecordingResult(sk_sp<SkPicture>&&, SkiaRecordingData&&, const IntRect& recordRect, RenderingMode, bool contentsOpaque, float contentsScale);
 
     sk_sp<SkPicture> m_picture;
+    std::optional<uint64_t> m_remoteIdentifier;
 #if USE(TEXTURE_MAPPER)
     SkiaImageToFenceMap m_imageToFenceMap WTF_GUARDED_BY_LOCK(m_imageToFenceMapLock);
     Lock m_imageToFenceMapLock;

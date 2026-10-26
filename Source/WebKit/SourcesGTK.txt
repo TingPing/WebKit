@@ -28,6 +28,7 @@ GPUProcess/graphics/RemoteGraphicsContextGLGBM.cpp @no-unify
 
 GPUProcess/graphics/coordinated/RemoteCoordinatedCompositor.cpp
 GPUProcess/graphics/coordinated/RemoteCoordinatedContentsRegistry.cpp
+GPUProcess/graphics/coordinated/RemoteCoordinatedTileRecorder.cpp
 
 GPUProcess/media/RemoteAudioDestinationManager.cpp
 
