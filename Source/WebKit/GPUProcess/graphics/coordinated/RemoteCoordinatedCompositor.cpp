@@ -52,6 +52,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/gpu/ganesh/GrDirectContext.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/StringView.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -100,7 +101,11 @@ RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProce
         m_threadSafeGrContext = display.skiaGrContext()->threadSafeProxy();
         m_tileManager = CoordinatedTileManager::create(sk_sp<GrContextThreadSafeProxy> { m_threadSafeGrContext });
     });
-    m_threadSafeGrContextForRecording = m_threadSafeGrContext;
+
+    // Tiles are painted on the CPU when asked to, as the web process does when it paints them.
+    const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
+    if (!enableCPURendering || StringView::fromLatin1(enableCPURendering) == "0"_s)
+        m_threadSafeGrContextForRecording = m_threadSafeGrContext;
 }
 
 RemoteCoordinatedCompositor::~RemoteCoordinatedCompositor()
