@@ -1,0 +1,38 @@
+<!DOCTYPE html> <!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true UseGPUProcessForWebGLEnabled=true ] -->
+<html>
+<head>
+<link rel="stylesheet" href="../../damage/common.css">
+<style>
+.rect {
+    width: 64px;
+    height: 64px;
+    margin: 50px;
+    background-color: green;
+    animation: fade 5s linear infinite;
+}
+@keyframes fade {
+    from { opacity: 1; }
+    to { opacity: 0.15; }
+}
+</style>
+</head>
+<body>
+<div class="rect"></div>
+<script src="../../damage/common.js"></script>
+<script>
+// The GPU process compositor runs the animation without commits from the web process, and still reports the damage of its frames.
+setupTestCase({ disableConsoleLog: true });
+
+waitForDamagedAnimationFrames(3, (damages) => {
+    for (const damage of damages.filter(damage => damage.rects.length)) {
+        if (!assertRectsEq(damage.rects, [[50, 50, 64, 64]]))
+            break;
+    }
+    if (failure)
+        failTest(`FAIL: ${failure}`);
+    else
+        passTest();
+});
+</script>
+</body>
+</html>

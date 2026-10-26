@@ -1,0 +1,46 @@
+<!DOCTYPE html> <!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true UseGPUProcessForWebGLEnabled=true UnifyDamagedRegions=false ] -->
+<html>
+<head>
+<link rel="stylesheet" href="../../damage/common.css">
+<style>
+.parent {
+    position: fixed;
+    width: 25px;
+    height: 25px;
+    background-color: black;
+}
+.child {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: orange;
+}
+</style>
+</head>
+<body>
+<script src="../../damage/common.js"></script>
+<script>
+// The damage of the tiles the web process records reaches the frame damage of the GPU process compositor.
+setupTestCase({ disableConsoleLog: true });
+
+processAnimationFrameSequence({ skipFirstFrameToEnsureInitialPaintingDone: true }, [
+    () => {
+        const parent = spawnNewElementWithClass("div", "parent");
+        parent.appendChild(createNewElementWithClass("div", "child"));
+        parent.appendChild(createNewElementWithClass("div", "child", (element) => {
+            element.style.left = "15px";
+            element.style.top = "15px";
+        }));
+    },
+    () => {
+        assertRectsEq(latestFrameDamage().rects, [[0, 0, 25, 25]]);
+        for (const child of document.getElementsByClassName("child"))
+            child.style.backgroundColor = "green";
+    },
+    () => {
+        assertRectsEq(latestFrameDamage().rects, [[0, 0, 10, 10], [15, 15, 10, 10]]);
+    },
+], 0);
+</script>
+</body>
+</html>
