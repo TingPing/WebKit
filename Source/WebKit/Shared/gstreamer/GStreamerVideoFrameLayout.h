@@ -31,6 +31,7 @@
 #include <wtf/Vector.h>
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
+#include <WebCore/SharedMemory.h>
 #include <WebCore/VideoFrameGStreamer.h>
 #include <span>
 #include <wtf/Function.h>
@@ -60,6 +61,8 @@ struct GStreamerVideoFrameLayout {
 
     // Returns null when the layout does not fit in the buffer.
     RefPtr<WebCore::VideoFrameGStreamer> createVideoFrame(GRefPtr<GstBuffer>&&, WebCore::VideoFrameGStreamer::CreateOptions&& = { }) const;
+    // The frame keeps the memory mapped, without a copy.
+    RefPtr<WebCore::VideoFrameGStreamer> createVideoFrame(Ref<WebCore::SharedMemory>&&, WebCore::VideoFrameGStreamer::CreateOptions&& = { }) const;
 #endif
 };
 

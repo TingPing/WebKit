@@ -459,6 +459,7 @@
     [DebugOnly] MessageParamReply IPCStreamTester.SyncMessageReturningSharedMemory1 handle
 
     [NotSentFromWebContent] MessageParamReply RemoteAudioVideoRendererProxyManager.Create handle SharedTimebaseHandle
+    [NotSentFromWebContent] MessageParamReply RemoteVideoFrameObjectHeap.ReadVideoFrame memory
 }
 
 [UnsafeWrapper] WebCore::SharedMemoryHandle {

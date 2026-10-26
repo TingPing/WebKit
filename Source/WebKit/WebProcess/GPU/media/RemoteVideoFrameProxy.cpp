@@ -31,6 +31,7 @@
 #include "RemoteVideoFrameObjectHeapMessages.h"
 #include "RemoteVideoFrameObjectHeapProxy.h"
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/threads/BinarySemaphore.h>
 
 #if PLATFORM(COCOA)
 #include "WebProcess.h"
@@ -38,7 +39,13 @@
 #include <WebCore/RealtimeIncomingVideoSourceCocoa.h>
 #include <WebCore/VideoFrameCV.h>
 #include <wtf/MainThread.h>
-#include <wtf/threads/BinarySemaphore.h>
+#endif
+
+#if USE(GSTREAMER)
+#include "GStreamerVideoFrameLayout.h"
+#include <WebCore/VideoFrameGStreamer.h>
+#include <wtf/NeverDestroyed.h>
+#include <wtf/WorkQueue.h>
 #endif
 
 namespace WebKit {
@@ -145,6 +152,42 @@ CVPixelBufferRef RemoteVideoFrameProxy::pixelBuffer() const
     if (!m_pixelBuffer)
         m_pixelBuffer = WebCore::createBlackPixelBuffer(static_cast<size_t>(m_size.width()), static_cast<size_t>(m_size.height()));
     return m_pixelBuffer.get();
+}
+#endif
+
+#if USE(GSTREAMER)
+static WorkQueue& readbackQueueSingleton()
+{
+    static NeverDestroyed queue = WorkQueue::create("org.webkit.RemoteVideoFrameProxy.Readback"_s, WorkQueue::QOS::UserInteractive);
+    return queue.get();
+}
+
+RefPtr<WebCore::VideoFrameGStreamer> RemoteVideoFrameProxy::asVideoFrameGStreamer() const
+{
+    if (m_baseVideoFrame)
+        return m_baseVideoFrame->asVideoFrameGStreamer();
+
+    Locker locker { m_localFrameLock };
+    if (m_localFrame || !m_connection)
+        return m_localFrame;
+
+    WebCore::VideoFrameGStreamer::CreateOptions options;
+    options.presentationTime = presentationTime();
+    options.rotation = rotation();
+    options.isMirrored = isMirrored();
+
+    // The reply is handled on another queue, so this can wait for it on any thread.
+    RefPtr<WebCore::VideoFrameGStreamer> frame;
+    BinarySemaphore semaphore;
+    protect(m_connection)->sendWithAsyncReplyOnDispatcher(Messages::RemoteVideoFrameObjectHeap::ReadVideoFrame(newReadReference()), readbackQueueSingleton(), [&](std::optional<WebCore::SharedMemory::Handle>&& handle, GStreamerVideoFrameLayout&& layout) {
+        if (RefPtr memory = handle ? WebCore::SharedMemory::map(WTF::move(*handle), WebCore::SharedMemory::Protection::ReadOnly) : nullptr)
+            frame = layout.createVideoFrame(memory.releaseNonNull(), WTF::move(options));
+        semaphore.signal();
+    });
+    semaphore.wait();
+
+    m_localFrame = WTF::move(frame);
+    return m_localFrame;
 }
 #endif
 

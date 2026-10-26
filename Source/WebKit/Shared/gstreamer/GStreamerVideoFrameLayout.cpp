@@ -158,6 +158,15 @@ RefPtr<VideoFrameGStreamer> GStreamerVideoFrameLayout::createVideoFrame(GRefPtr<
     return VideoFrameGStreamer::create(WTF::move(sample), options);
 }
 
+RefPtr<VideoFrameGStreamer> GStreamerVideoFrameLayout::createVideoFrame(Ref<SharedMemory>&& memory, VideoFrameGStreamer::CreateOptions&& options) const
+{
+    auto data = memory->span();
+    GRefPtr<GstBuffer> buffer = adoptGRef(gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, const_cast<uint8_t*>(data.data()), data.size(), 0, data.size(), &memory.leakRef(), [](gpointer memory) {
+        static_cast<SharedMemory*>(memory)->deref();
+    }));
+    return createVideoFrame(WTF::move(buffer), WTF::move(options));
+}
+
 } // namespace WebKit
 
 #endif // ENABLE(GPU_PROCESS) && ENABLE(VIDEO) && USE(GSTREAMER)

@@ -38,6 +38,9 @@ namespace WebCore {
 #if PLATFORM(COCOA)
 class VideoFrameCV;
 #endif
+#if USE(GSTREAMER)
+class VideoFrameGStreamer;
+#endif
 }
 
 namespace WebKit {
@@ -75,6 +78,9 @@ public:
 #if PLATFORM(COCOA)
     CVPixelBufferRef pixelBuffer() const final;
 #endif
+#if USE(GSTREAMER)
+    RefPtr<WebCore::VideoFrameGStreamer> asVideoFrameGStreamer() const final;
+#endif
 
 private:
     RemoteVideoFrameProxy(IPC::Connection&, RemoteVideoFrameObjectHeapProxy&, Properties&&);
@@ -98,6 +104,10 @@ private:
 #if PLATFORM(COCOA)
     mutable Lock m_pixelBufferLock;
     mutable RetainPtr<CVPixelBufferRef> m_pixelBuffer;
+#endif
+#if USE(GSTREAMER)
+    mutable Lock m_localFrameLock;
+    mutable RefPtr<WebCore::VideoFrameGStreamer> m_localFrame WTF_GUARDED_BY_LOCK(m_localFrameLock);
 #endif
 };
 

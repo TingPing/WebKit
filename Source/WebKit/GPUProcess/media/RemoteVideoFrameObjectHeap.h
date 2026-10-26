@@ -35,6 +35,11 @@
 #include "SharedVideoFrame.h"
 #endif
 
+#if USE(GSTREAMER)
+#include "GStreamerVideoFrameLayout.h"
+#include <WebCore/SharedMemory.h>
+#endif
+
 namespace WebCore {
 class ColorSpace;
 class PixelBufferConformerCV;
@@ -76,6 +81,9 @@ private:
     void setSharedVideoFrameMemory(WebCore::SharedMemory::Handle&&);
 
     UniqueRef<WebCore::PixelBufferConformerCV> createPixelConformer();
+#endif
+#if USE(GSTREAMER)
+    void readVideoFrame(RemoteVideoFrameReadReference&&, CompletionHandler<void(std::optional<WebCore::SharedMemory::Handle>&&, GStreamerVideoFrameLayout&&)>&&);
 #endif
 
     const Ref<IPC::Connection> m_connection;

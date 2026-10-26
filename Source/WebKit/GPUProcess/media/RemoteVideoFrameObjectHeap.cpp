@@ -35,6 +35,10 @@
 #include <wtf/Scope.h>
 #include <wtf/WorkQueue.h>
 
+#if USE(GSTREAMER)
+#include <WebCore/VideoFrameGStreamer.h>
+#endif
+
 #if PLATFORM(COCOA)
 #include <WebCore/ColorSpaceCG.h>
 #include <WebCore/PixelBufferConformerCV.h>
@@ -201,6 +205,34 @@ RefPtr<WebCore::VideoFrame> RemoteVideoFrameObjectHeap::get(RemoteVideoFrameRead
 {
     return m_heap.read(WTF::move(read), 0_s);
 }
+
+#if USE(GSTREAMER)
+void RemoteVideoFrameObjectHeap::readVideoFrame(RemoteVideoFrameReadReference&& read, CompletionHandler<void(std::optional<SharedMemory::Handle>&&, GStreamerVideoFrameLayout&&)>&& completionHandler)
+{
+    assertIsCurrent(remoteVideoFrameObjectHeapQueueSingleton());
+
+    RefPtr frame = dynamicDowncast<VideoFrameGStreamer>(get(WTF::move(read)));
+    if (frame && frame->memoryType() != VideoFrameGStreamer::MemoryType::System) {
+        auto sample = frame->downloadSample();
+        frame = sample ? RefPtr { VideoFrameGStreamer::createWrappedSample(sample) } : nullptr;
+    }
+    if (!frame) {
+        completionHandler(std::nullopt, { });
+        return;
+    }
+
+    RefPtr<SharedMemory> memory;
+    auto layout = GStreamerVideoFrameLayout::write(*frame, [&](size_t size) -> std::span<uint8_t> {
+        memory = SharedMemory::allocate(size);
+        return memory ? memory->mutableSpan() : std::span<uint8_t> { };
+    });
+    if (!layout) {
+        completionHandler(std::nullopt, { });
+        return;
+    }
+    completionHandler(memory->createHandle(SharedMemory::Protection::ReadOnly), WTF::move(*layout));
+}
+#endif
 
 void RemoteVideoFrameObjectHeap::lowMemoryHandler()
 {

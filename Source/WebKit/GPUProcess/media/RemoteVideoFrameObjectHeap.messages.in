@@ -35,6 +35,9 @@ messages -> RemoteVideoFrameObjectHeap {
     SetSharedVideoFrameMemory(WebCore::SharedMemory::Handle storageHandle)
     ConvertFrameBuffer(struct WebKit::SharedVideoFrame frame) -> (WebCore::ColorSpace space) Synchronous
 #endif
+#if USE(GSTREAMER)
+    ReadVideoFrame(WebKit::RemoteVideoFrameReadReference read) -> (std::optional<WebCore::SharedMemory::Handle> memory, struct WebKit::GStreamerVideoFrameLayout layout)
+#endif
     ReleaseVideoFrame(WebKit::RemoteVideoFrameWriteReference write) AllowedWhenWaitingForSyncReply
 }
 #endif
