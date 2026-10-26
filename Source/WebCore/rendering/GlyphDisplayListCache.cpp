@@ -106,8 +106,10 @@ RefPtr<const DisplayList::DisplayList> GlyphDisplayListCache::get(const InlineDi
     if (font.isLoadingCustomFonts() || !font.fonts())
         return nullptr;
 
-    if (RefPtr result = getIfExists(box))
-        return result;
+    if (box.isInGlyphDisplayListCache()) {
+        if (RefPtr entry = m_entriesForBox.get(&box); entry && entry->canBeDrawnInto(context))
+            return &entry->displayList();
+    }
 
     bool isFrequentlyPainted = paintInfo.enclosingSelfPaintingLayer()->paintingFrequently();
     if (!isFrequentlyPainted && !m_forceUseGlyphDisplayListForTesting) {
@@ -118,7 +120,7 @@ RefPtr<const DisplayList::DisplayList> GlyphDisplayListCache::get(const InlineDi
     }
 
     if (auto iterator = m_entries.findIf([&](auto& weakEntry) {
-        return GlyphDisplayListCacheKeyTranslator::equal(weakEntry, GlyphDisplayListCacheKey { textRun, font, context });
+        return GlyphDisplayListCacheKeyTranslator::equal(weakEntry, GlyphDisplayListCacheKey { textRun, font, context }) && weakEntry->canBeDrawnInto(context);
     }); iterator != m_entries.end()) {
         RefPtr<GlyphDisplayListCacheEntry> entry = iterator->get();
         if (!entry)
@@ -126,7 +128,7 @@ RefPtr<const DisplayList::DisplayList> GlyphDisplayListCache::get(const InlineDi
         else {
             const_cast<InlineDisplay::Box&>(box).setIsInGlyphDisplayListCache();
             RefPtr result = &entry->displayList();
-            m_entriesForBox.add(&box, entry.releaseNonNull());
+            m_entriesForBox.set(&box, entry.releaseNonNull());
             return result;
         }
     }
@@ -140,7 +142,7 @@ RefPtr<const DisplayList::DisplayList> GlyphDisplayListCache::get(const InlineDi
                 m_entries.removeFirst();
         }
         const_cast<InlineDisplay::Box&>(box).setIsInGlyphDisplayListCache();
-        m_entriesForBox.add(&box, WTF::move(entry));
+        m_entriesForBox.set(&box, WTF::move(entry));
         return result;
     }
 

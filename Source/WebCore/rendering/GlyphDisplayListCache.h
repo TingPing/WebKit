@@ -66,6 +66,17 @@ public:
 
     const DisplayList::DisplayList& displayList() const { return m_displayList.get(); }
 
+    bool canBeDrawnInto(const GraphicsContext& context) const
+    {
+#if USE(SKIA)
+        // Text blobs are recorded for contexts with a platform context, and only those can draw them.
+        return m_hasPlatformContext == context.hasPlatformContext();
+#else
+        UNUSED_PARAM(context);
+        return true;
+#endif
+    }
+
 private:
     GlyphDisplayListCacheEntry(Ref<const DisplayList::DisplayList>&& displayList, const TextRun& textRun, const FontCascade& font, GraphicsContext& context)
         : m_displayList(WTF::move(displayList))
@@ -73,6 +84,9 @@ private:
         , m_scaleFactor(context.scaleFactor())
         , m_fontCascadeGeneration(font.generation())
         , m_shouldSubpixelQuantizeFont(context.shouldSubpixelQuantizeFonts())
+#if USE(SKIA)
+        , m_hasPlatformContext(context.hasPlatformContext())
+#endif
     {
     }
 
@@ -82,6 +96,9 @@ private:
     FloatSize m_scaleFactor;
     unsigned m_fontCascadeGeneration;
     bool m_shouldSubpixelQuantizeFont;
+#if USE(SKIA)
+    bool m_hasPlatformContext;
+#endif
 };
 
 inline void add(Hasher& hasher, const GlyphDisplayListCacheEntry& entry)
