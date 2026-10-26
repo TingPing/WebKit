@@ -82,13 +82,15 @@ void RealtimeOutgoingVideoSourceLibWebRTC::videoFrameAvailable(VideoFrame& video
         return videoFrame.colorSpace();
     }();
 
-    auto& gstFrame = downcast<VideoFrameGStreamer>(videoFrame);
-    auto frameSize = gstFrame.presentationSize();
+    RefPtr gstFrame = videoFrame.asVideoFrameGStreamer();
+    if (!gstFrame)
+        return;
+    auto frameSize = gstFrame->presentationSize();
     if (frameSize.isEmpty())
         return;
 
     frameSize.scale(this->videoFrameScaling());
-    auto sample = gstFrame.convert(GST_VIDEO_FORMAT_I420, frameSize, colorSpace);
+    auto sample = gstFrame->convert(GST_VIDEO_FORMAT_I420, frameSize, colorSpace);
     if (!sample)
         return;
 

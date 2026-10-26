@@ -237,7 +237,9 @@ void CanvasCaptureMediaStreamTrack::Source::captureCanvas()
     metadata.captureTime = MonotonicTime::now().secondsSinceEpoch();
 
 #if USE(GSTREAMER)
-    auto& gstVideoFrame = downcast<VideoFrameGStreamer>(*videoFrame);
+    RefPtr gstVideoFrame = videoFrame->asVideoFrameGStreamer();
+    if (!gstVideoFrame)
+        return;
     static const double s_fixedFrameRate = 60.0;
 
     if (!m_clock)
@@ -245,15 +247,16 @@ void CanvasCaptureMediaStreamTrack::Source::captureCanvas()
     RELEASE_ASSERT(m_clock);
 
     if (!m_frameRequestRate)
-        gstVideoFrame.setMaxFrameRate(s_fixedFrameRate);
+        gstVideoFrame->setMaxFrameRate(s_fixedFrameRate);
 
     auto frameRate = s_fixedFrameRate;
     if (m_frameRequestRate && *m_frameRequestRate)
         frameRate = *m_frameRequestRate;
 
-    gstVideoFrame.setFrameRate(frameRate);
-    gstVideoFrame.setPresentationTime(fromGstClockTime(gst_clock_get_time(m_clock.get())));
-    gstVideoFrame.setMetadata({ metadata }, VideoFrameContentHint::Canvas, { });
+    gstVideoFrame->setFrameRate(frameRate);
+    gstVideoFrame->setPresentationTime(fromGstClockTime(gst_clock_get_time(m_clock.get())));
+    gstVideoFrame->setMetadata({ metadata }, VideoFrameContentHint::Canvas, { });
+    videoFrame = WTF::move(gstVideoFrame);
 #endif
 
     videoFrameAvailable(*videoFrame, metadata);

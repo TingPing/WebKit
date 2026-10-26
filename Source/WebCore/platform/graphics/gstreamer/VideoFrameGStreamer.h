@@ -85,6 +85,7 @@ public:
     GRefPtr<GstSample> downloadSample(std::optional<GstVideoFormat> = { });
 
     const GRefPtr<GstSample>& sample() const LIFETIME_BOUND { return m_sample; }
+    RefPtr<VideoFrameGStreamer> asVideoFrameGStreamer() const final { return const_cast<VideoFrameGStreamer*>(this); }
 
     RefPtr<ImageGStreamer> convertToImage();
 #if USE(SKIA)

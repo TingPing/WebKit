@@ -52,6 +52,9 @@ class ProcessIdentity;
 #if USE(AVFOUNDATION) && PLATFORM(COCOA)
 class VideoFrameCV;
 #endif
+#if USE(GSTREAMER)
+class VideoFrameGStreamer;
+#endif
 
 struct ImageOrientation;
 struct PlatformVideoColorSpace;
@@ -100,6 +103,10 @@ public:
 
 #if PLATFORM(COCOA) && USE(AVFOUNDATION)
     WEBCORE_EXPORT RefPtr<VideoFrameCV> asVideoFrameCV();
+#endif
+#if USE(GSTREAMER)
+    // The frame itself, or a copy of it in this process when it lives in another one.
+    virtual RefPtr<VideoFrameGStreamer> asVideoFrameGStreamer() const { return nullptr; }
 #endif
 
     enum class ShouldClone : bool { No, Yes };

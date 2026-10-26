@@ -329,10 +329,12 @@ bool GStreamerInternalVideoEncoder::encode(VideoEncoder::RawFrame&& rawFrame, bo
         m_harness->pushEvent(gst_video_event_new_downstream_force_key_unit(GST_CLOCK_TIME_NONE, GST_CLOCK_TIME_NONE, GST_CLOCK_TIME_NONE, FALSE, 1));
     }
 
-    auto& gstVideoFrame = downcast<VideoFrameGStreamer>(rawFrame.frame.get());
-    GRefPtr sample = gstVideoFrame.sample();
+    RefPtr gstVideoFrame = rawFrame.frame->asVideoFrameGStreamer();
+    if (!gstVideoFrame)
+        return false;
+    GRefPtr sample = gstVideoFrame->sample();
 
-    auto orientation = makeString(gstVideoFrame.isMirrored() ? "flip-"_s : ""_s, "rotate-"_s, gstVideoFrame.rotation());
+    auto orientation = makeString(gstVideoFrame->isMirrored() ? "flip-"_s : ""_s, "rotate-"_s, gstVideoFrame->rotation());
     if (orientation != m_orientation) {
         auto orientationCString = orientation.utf8();
         GST_DEBUG_OBJECT(m_harness->element(), "New orientation: %s", orientationCString);

@@ -366,7 +366,9 @@ public:
         auto videoFrameSize = videoFrame.presentationSize();
         IntSize captureSize(videoFrameSize.width(), videoFrameSize.height());
 
-        auto gstVideoFrame = static_cast<VideoFrameGStreamer*>(&videoFrame);
+        RefPtr gstVideoFrame = videoFrame.asVideoFrameGStreamer();
+        if (!gstVideoFrame)
+            return;
         GRefPtr<GstSample> sample = gstVideoFrame->sample();
 
         // Video encoders require a multiple of two frame size. At least x264enc does anyway.

@@ -629,29 +629,33 @@ static void copyPlane(std::span<uint8_t>& destination, const std::span<uint8_t>&
 void VideoFrame::copyTo(std::span<uint8_t> destination, VideoPixelFormat pixelFormat, ColorSpace, Vector<ComputedPlaneLayout>&& computedPlaneLayout, CompletionHandler<void(std::optional<Vector<PlaneLayout>>&&)>&& callback)
 {
     ensureVideoFrameDebugCategoryInitialized();
-    auto& self = downcast<VideoFrameGStreamer>(*this);
+    RefPtr self = asVideoFrameGStreamer();
+    if (!self) {
+        callback({ });
+        return;
+    }
 
     // Converting the frame to another RGB pixel format is not supported.
-    if (isRGBVideoPixelFormat(pixelFormat) && convertVideoFramePixelFormat(self.pixelFormat()) != pixelFormat) {
+    if (isRGBVideoPixelFormat(pixelFormat) && convertVideoFramePixelFormat(self->pixelFormat()) != pixelFormat) {
         GST_WARNING("Converting a frame to %s is not supported", convertVideoPixelFormatToString(pixelFormat).ascii().data());
         callback({ });
         return;
     }
 
     GRefPtr<GstSample> inputSample;
-    switch (self.memoryType()) {
+    switch (self->memoryType()) {
     case VideoFrameGStreamer::MemoryType::Unsupported:
         callback({ });
         return;
     case VideoFrameGStreamer::MemoryType::System:
-        inputSample = self.sample();
+        inputSample = self->sample();
         break;
 #if USE(GSTREAMER_GL)
     case VideoFrameGStreamer::MemoryType::GL:
 #if USE(GBM)
     case VideoFrameGStreamer::MemoryType::DMABuf:
 #endif
-        inputSample = self.downloadSample();
+        inputSample = self->downloadSample();
         break;
 #endif
     }
@@ -760,8 +764,10 @@ RefPtr<NativeImage> VideoFrame::copyNativeImage() const
 {
     ensureVideoFrameDebugCategoryInitialized();
     GST_CAT_DEBUG(GST_CAT_PERFORMANCE, "Copying native image");
-    auto& gstFrame = downcast<VideoFrameGStreamer>(*this);
-    auto image = convertSampleToImage(gstFrame.sample(), gstFrame.info());
+    RefPtr gstFrame = asVideoFrameGStreamer();
+    if (!gstFrame)
+        return nullptr;
+    auto image = convertSampleToImage(gstFrame->sample(), gstFrame->info());
     if (!image)
         return nullptr;
     return NativeImage::create(image->image());
