@@ -70,6 +70,21 @@ CoordinatedPlatformLayerBufferHolePunch::CoordinatedPlatformLayerBufferHolePunch
     , m_quirksManager(quirksManager)
 {
 }
+
+std::unique_ptr<CoordinatedPlatformLayerBufferHolePunch> CoordinatedPlatformLayerBufferHolePunch::create(const IntSize& size, VideoRectangleClient&& videoRectangleClient)
+{
+    return makeUnique<CoordinatedPlatformLayerBufferHolePunch>(size, WTF::move(videoRectangleClient));
+}
+
+CoordinatedPlatformLayerBufferHolePunch::CoordinatedPlatformLayerBufferHolePunch(const IntSize& size, VideoRectangleClient&& videoRectangleClient)
+#if USE(TEXTURE_MAPPER)
+    : CoordinatedPlatformLayerBuffer(Type::HolePunch, size, { TextureMapperFlags::ShouldNotBlend }, nullptr)
+#else
+    : CoordinatedPlatformLayerBuffer(Type::HolePunch, size)
+#endif
+    , m_videoRectangleClient(WTF::move(videoRectangleClient))
+{
+}
 #endif
 
 CoordinatedPlatformLayerBufferHolePunch::~CoordinatedPlatformLayerBufferHolePunch() = default;
@@ -77,6 +92,14 @@ CoordinatedPlatformLayerBufferHolePunch::~CoordinatedPlatformLayerBufferHolePunc
 #if USE(GSTREAMER)
 void CoordinatedPlatformLayerBufferHolePunch::setHolePunchVideoRectangle(const IntRect& rect)
 {
+    if (m_videoRectangleClient) {
+        if (m_videoRectangle != rect) {
+            m_videoRectangle = rect;
+            m_videoRectangleClient(rect);
+        }
+        return;
+    }
+
     if (m_videoSink && m_quirksManager)
         m_quirksManager->setHolePunchVideoRectangle(m_videoSink.get(), rect);
 }

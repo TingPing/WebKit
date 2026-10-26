@@ -253,6 +253,7 @@ header: "CoordinatedLayerTreeTransaction.h"
     std::optional<WebKit::CoordinatedPixels> contentsImage;
     std::optional<WebKit::CoordinatedPixels> contentsBuffer;
     std::optional<WebKit::CoordinatedVideoFrame> contentsVideoFrame;
+    std::optional<WebCore::IntSize> contentsHolePunch;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"

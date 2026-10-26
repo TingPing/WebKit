@@ -73,6 +73,7 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/coordinated/CoordinatedLayerProperties.h
     platform/graphics/coordinated/CoordinatedPlatformLayer.h
     platform/graphics/coordinated/CoordinatedPlatformLayerBuffer.h
+    platform/graphics/coordinated/CoordinatedPlatformLayerBufferHolePunch.h
     platform/graphics/coordinated/CoordinatedPlatformLayerBufferProxy.h
     platform/graphics/coordinated/CoordinatedPlatformLayerBufferRemote.h
     platform/graphics/coordinated/CoordinatedPlatformLayerBufferSkiaImage.h

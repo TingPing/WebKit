@@ -127,7 +127,7 @@ CoordinatedLayerTreeTransaction RemoteCoordinatedCompositorProxy::makeTransactio
 
     SharedBufferBuilder pixels;
     for (auto& changes : pendingTransaction.layers) {
-        CoordinatedLayerUpdate update { .properties = WTF::move(changes.properties), .backingStore = { }, .contentsImage = { }, .contentsBuffer = { }, .contentsVideoFrame = { } };
+        CoordinatedLayerUpdate update { .properties = WTF::move(changes.properties), .backingStore = { }, .contentsImage = { }, .contentsBuffer = { }, .contentsVideoFrame = { }, .contentsHolePunch = changes.contentsBufferHolePunchSize };
         if (changes.backingStoreUpdate)
             update.backingStore = backingStoreUpdate(*changes.backingStoreUpdate, changes.contentsScale);
         if (RefPtr image = changes.contentsImage)
@@ -238,6 +238,19 @@ std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFram
     UNUSED_PARAM(videoFrame);
     UNUSED_PARAM(rotation);
     return std::nullopt;
+#endif
+}
+
+void RemoteCoordinatedCompositorProxy::didUpdateHolePunchVideoRectangle(PlatformLayerIdentifier identifier, IntRect&& rect)
+{
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    m_sceneState->forEachLayer([&](CoordinatedPlatformLayer& layer) {
+        if (layer.id() == identifier)
+            layer.setHolePunchVideoRectangle(rect);
+    });
+#else
+    UNUSED_PARAM(identifier);
+    UNUSED_PARAM(rect);
 #endif
 }
 

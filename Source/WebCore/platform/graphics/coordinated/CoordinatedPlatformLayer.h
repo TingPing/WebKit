@@ -218,12 +218,17 @@ public:
         RefPtr<NativeImage> contentsBufferImage;
         RefPtr<VideoFrame> contentsBufferVideoFrame;
         CoordinatedPlatformLayerBuffer::Rotation contentsBufferRotation { CoordinatedPlatformLayerBuffer::Rotation::None };
+        std::optional<IntSize> contentsBufferHolePunchSize;
     };
     std::optional<PendingChanges> takePendingChanges();
     // The changes the scrolling thread makes: scrolled positions and scrollbar contents.
     std::optional<PendingChanges> takePendingScrollingChanges();
     // Makes the next pending changes describe the whole layer, for a new compositor.
     void markAllPropertiesChanged();
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    // Where the compositor punched the hole for the video of this layer.
+    void setHolePunchVideoRectangle(const IntRect&);
+#endif
 #endif
 
     bool hasPendingTilesCreation() const { assertIsMainThread(); return m_pendingTilesCreation; }

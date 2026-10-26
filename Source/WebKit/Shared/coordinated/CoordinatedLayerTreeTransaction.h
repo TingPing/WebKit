@@ -81,6 +81,7 @@ struct CoordinatedLayerUpdate {
     std::optional<CoordinatedPixels> contentsImage;
     std::optional<CoordinatedPixels> contentsBuffer;
     std::optional<CoordinatedVideoFrame> contentsVideoFrame;
+    std::optional<WebCore::IntSize> contentsHolePunch;
 };
 
 struct CoordinatedLayerTreeTransaction {

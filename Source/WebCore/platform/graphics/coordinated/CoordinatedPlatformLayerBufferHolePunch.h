@@ -30,6 +30,8 @@
 
 #if USE(GSTREAMER)
 #include "GStreamerCommon.h"
+#include "IntRect.h"
+#include <wtf/Function.h>
 #endif
 
 namespace WebCore {
@@ -44,6 +46,11 @@ public:
 #if USE(GSTREAMER)
     static std::unique_ptr<CoordinatedPlatformLayerBufferHolePunch> create(const IntSize&, GstElement*, RefPtr<GStreamerQuirksManager>&&);
     CoordinatedPlatformLayerBufferHolePunch(const IntSize&, GstElement*, RefPtr<GStreamerQuirksManager>&&);
+
+    // For a compositor in another process than the video sink, which is told of the changes of the rectangle.
+    using VideoRectangleClient = Function<void(const IntRect&)>;
+    static std::unique_ptr<CoordinatedPlatformLayerBufferHolePunch> create(const IntSize&, VideoRectangleClient&&);
+    CoordinatedPlatformLayerBufferHolePunch(const IntSize&, VideoRectangleClient&&);
 #endif
     virtual ~CoordinatedPlatformLayerBufferHolePunch();
 
@@ -59,6 +66,8 @@ private:
 #if USE(GSTREAMER)
     GRefPtr<GstElement> m_videoSink;
     const RefPtr<GStreamerQuirksManager> m_quirksManager;
+    VideoRectangleClient m_videoRectangleClient;
+    std::optional<IntRect> m_videoRectangle;
 #endif
 };
 

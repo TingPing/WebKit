@@ -63,6 +63,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <wtf/text/StringView.h>
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
+#include <WebCore/CoordinatedPlatformLayerBufferHolePunch.h>
 #include <WebCore/CoordinatedPlatformLayerBufferVideo.h>
 #include <WebCore/GStreamerCommon.h>
 #include <WebCore/ImageOrientation.h>
@@ -471,6 +472,11 @@ void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& upda
 #if ENABLE(VIDEO) && USE(GSTREAMER)
         if (update.contentsVideoFrame)
             buffer = videoFrameBuffer(WTF::move(*update.contentsVideoFrame));
+        if (update.contentsHolePunch) {
+            buffer = CoordinatedPlatformLayerBufferHolePunch::create(*update.contentsHolePunch, [connection = m_webProcessConnection, identifier = m_identifier, layer = update.properties.id](const IntRect& rect) {
+                connection->send(Messages::RemoteCoordinatedCompositorProxy::DidUpdateHolePunchVideoRectangle(layer, rect), identifier);
+            });
+        }
 #endif
 #if ENABLE(WEBGL) && USE(GBM)
         if (const auto& contents = update.properties.contentsBuffer) {

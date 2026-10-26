@@ -1797,7 +1797,8 @@ void CoordinatedPlatformLayer::takePendingContentsBuffer(PendingChanges& changes
     else if (auto* videoBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferVideo>(buffer)) {
         changes.contentsBufferVideoFrame = &videoBuffer->videoFrame();
         changes.contentsBufferRotation = videoBuffer->rotation();
-    }
+    } else if (auto* holePunchBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferHolePunch>(buffer))
+        changes.contentsBufferHolePunchSize = holePunchBuffer->size();
 #endif
     else if (auto image = buffer ? buffer->skiaImage() : nullptr; image && !image->isTextureBacked())
         changes.contentsBufferImage = NativeImage::create(WTF::move(image));
@@ -1835,6 +1836,15 @@ void CoordinatedPlatformLayer::markAllPropertiesChanged()
     if (m_backdrop)
         m_backdrop->markAllPropertiesChanged();
 }
+
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+void CoordinatedPlatformLayer::setHolePunchVideoRectangle(const IntRect& rect)
+{
+    Locker locker { m_lock };
+    if (auto* buffer = dynamicDowncast<CoordinatedPlatformLayerBufferHolePunch>(m_contentsBuffer.committed.get()))
+        buffer->setHolePunchVideoRectangle(rect);
+}
+#endif
 #endif
 
 bool CoordinatedPlatformLayer::hasPendingBackingStoreTileUpdates() const

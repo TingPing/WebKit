@@ -31,6 +31,7 @@
 #include "GPUProcessConnection.h"
 #include "MessageReceiver.h"
 #include <WebCore/CoordinatedPlatformLayerBuffer.h>
+#include <WebCore/PlatformLayerIdentifier.h>
 #include <WebCore/SharedMemory.h>
 #include <atomic>
 #include <wtf/CheckedPtr.h>
@@ -114,6 +115,7 @@ private:
     void didCompositeRenderingUpdate();
     void didUpdateFPS(float);
     void releaseVideoFrameSlot(CoordinatedVideoFrameSlotIdentifier);
+    void didUpdateHolePunchVideoRectangle(WebCore::PlatformLayerIdentifier, WebCore::IntRect&&);
 
     // Called on the commit queue.
     CoordinatedLayerTreeTransaction makeTransaction(PendingLayerTreeTransaction&&);
