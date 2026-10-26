@@ -44,6 +44,7 @@
 #if USE(GSTREAMER)
 #include "GStreamerVideoFrameLayout.h"
 #include <WebCore/VideoFrameGStreamer.h>
+#include <wtf/Box.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/WorkQueue.h>
 #endif
@@ -164,11 +165,11 @@ static WorkQueue& readbackQueueSingleton()
 
 RefPtr<WebCore::VideoFrameGStreamer> RemoteVideoFrameProxy::asVideoFrameGStreamer() const
 {
-    if (m_baseVideoFrame)
-        return m_baseVideoFrame->asVideoFrameGStreamer();
+    // A clone reads the frame back itself, since its timestamp or rotation may differ.
+    RefPtr connection = m_baseVideoFrame ? m_baseVideoFrame->m_connection : m_connection;
 
     Locker locker { m_localFrameLock };
-    if (m_localFrame || !m_connection)
+    if (m_localFrame || std::exchange(m_didReadLocalFrame, true) || !connection)
         return m_localFrame;
 
     WebCore::VideoFrameGStreamer::CreateOptions options;
@@ -177,16 +178,15 @@ RefPtr<WebCore::VideoFrameGStreamer> RemoteVideoFrameProxy::asVideoFrameGStreame
     options.isMirrored = isMirrored();
 
     // The reply is handled on another queue, so this can wait for it on any thread.
-    RefPtr<WebCore::VideoFrameGStreamer> frame;
-    BinarySemaphore semaphore;
-    protect(m_connection)->sendWithAsyncReplyOnDispatcher(Messages::RemoteVideoFrameObjectHeap::ReadVideoFrame(newReadReference()), readbackQueueSingleton(), [&](std::optional<WebCore::SharedMemory::Handle>&& handle, GStreamerVideoFrameLayout&& layout) {
+    auto frame = Box<RefPtr<WebCore::VideoFrameGStreamer>>::create();
+    auto semaphore = Box<BinarySemaphore>::create();
+    connection->sendWithAsyncReplyOnDispatcher(Messages::RemoteVideoFrameObjectHeap::ReadVideoFrame(newReadReference()), readbackQueueSingleton(), [frame, semaphore, options = WTF::move(options)](std::optional<WebCore::SharedMemory::Handle>&& handle, GStreamerVideoFrameLayout&& layout) mutable {
         if (RefPtr memory = handle ? WebCore::SharedMemory::map(WTF::move(*handle), WebCore::SharedMemory::Protection::ReadOnly) : nullptr)
-            frame = layout.createVideoFrame(memory.releaseNonNull(), WTF::move(options));
-        semaphore.signal();
+            *frame = layout.createVideoFrame(memory.releaseNonNull(), WTF::move(options));
+        semaphore->signal();
     });
-    semaphore.wait();
-
-    m_localFrame = WTF::move(frame);
+    if (semaphore->waitFor(defaultTimeout))
+        m_localFrame = WTF::move(*frame);
     return m_localFrame;
 }
 #endif

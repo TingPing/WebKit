@@ -60,7 +60,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 namespace WebCore {
 
-std::unique_ptr<CoordinatedPlatformLayerBufferVideo> CoordinatedPlatformLayerBufferVideo::create(Ref<VideoFrameGStreamer>&& frame, std::optional<GstVideoDecoderPlatform> videoDecoderPlatform, bool gstGLEnabled, const ImageOrientation& orientation, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
+std::unique_ptr<CoordinatedPlatformLayerBufferVideo> CoordinatedPlatformLayerBufferVideo::create(Ref<VideoFrame>&& frame, std::optional<GstVideoDecoderPlatform> videoDecoderPlatform, bool gstGLEnabled, const ImageOrientation& orientation, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
 {
     auto size = frame->presentationSize();
     Origin origin = Origin::TopLeft;
@@ -87,7 +87,7 @@ std::unique_ptr<CoordinatedPlatformLayerBufferVideo> CoordinatedPlatformLayerBuf
     return makeUnique<CoordinatedPlatformLayerBufferVideo>(WTF::move(frame), WTF::move(size), videoDecoderPlatform, gstGLEnabled, origin, rotation, threadSafeGrContext);
 }
 
-CoordinatedPlatformLayerBufferVideo::CoordinatedPlatformLayerBufferVideo(Ref<VideoFrameGStreamer>&& frame, IntSize&& size, std::optional<GstVideoDecoderPlatform> videoDecoderPlatform, bool gstGLEnabled, Origin origin, Rotation rotation, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
+CoordinatedPlatformLayerBufferVideo::CoordinatedPlatformLayerBufferVideo(Ref<VideoFrame>&& frame, IntSize&& size, std::optional<GstVideoDecoderPlatform> videoDecoderPlatform, bool gstGLEnabled, Origin origin, Rotation rotation, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
     : CoordinatedPlatformLayerBuffer(Type::Video, WTF::move(size), AlphaMode::Opaque, rotation)
     , m_videoFrame(WTF::move(frame))
     , m_videoDecoderPlatform(videoDecoderPlatform)
@@ -190,19 +190,23 @@ static bool isSinglePlaneGLMemory(GstGLMemory* memory, GstVideoInfo* videoInfo, 
 
 void CoordinatedPlatformLayerBufferVideo::createSkiaImageIfNeeded(const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext, bool gstGLEnabled, Origin origin)
 {
-    const auto& sample = m_videoFrame->sample();
+    RefPtr frame = dynamicDowncast<VideoFrameGStreamer>(m_videoFrame);
+    if (!frame)
+        return;
+
+    const auto& sample = frame->sample();
     auto* buffer = gst_sample_get_buffer(sample.get());
     auto* memory = gst_buffer_peek_memory(buffer, 0);
 
 #if USE(GBM)
     if (gst_is_fd_memory(memory) && m_videoDecoderPlatform && *m_videoDecoderPlatform == GstVideoDecoderPlatform::Qualcomm) {
-        createSkiaImageForQualcommDecoder(threadSafeGrContext, origin);
+        createSkiaImageForQualcommDecoder(*frame, threadSafeGrContext, origin);
         return;
     }
 
 #if GST_CHECK_VERSION(1, 24, 0)
     if (gst_is_dmabuf_memory(memory)) {
-        createSkiaImageForDMABufMemory(threadSafeGrContext, origin);
+        createSkiaImageForDMABufMemory(*frame, threadSafeGrContext, origin);
         return;
     }
 #endif
@@ -239,20 +243,20 @@ void CoordinatedPlatformLayerBufferVideo::createSkiaImageIfNeeded(const sk_sp<Gr
 }
 
 #if USE(GBM)
-void CoordinatedPlatformLayerBufferVideo::createSkiaImageForQualcommDecoder(const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext, Origin origin)
+void CoordinatedPlatformLayerBufferVideo::createSkiaImageForQualcommDecoder(VideoFrameGStreamer& frame, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext, Origin origin)
 {
-    auto dmabuf = m_videoFrame->dmabufForQualcommDecoder(m_size);
+    auto dmabuf = frame.dmabufForQualcommDecoder(m_size);
     m_image = dmabuf->createPromiseImageForQualcommVideoFrame(threadSafeGrContext, kRGBA_8888_SkColorType, toSkiaAlphaType(m_alphaMode), toSkiaOrigin(origin));
 }
 
 #if GST_CHECK_VERSION(1, 24, 0)
-void CoordinatedPlatformLayerBufferVideo::createSkiaImageForDMABufMemory(const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext, Origin origin)
+void CoordinatedPlatformLayerBufferVideo::createSkiaImageForDMABufMemory(VideoFrameGStreamer& frame, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext, Origin origin)
 {
-    const auto& videoInfo = m_videoFrame->info();
+    const auto& videoInfo = frame.info();
     if (GST_VIDEO_INFO_HAS_ALPHA(&videoInfo))
         m_alphaMode = AlphaMode::Premultiplied;
 
-    auto dmabuf = m_videoFrame->getDMABuf();
+    auto dmabuf = frame.getDMABuf();
     ASSERT(dmabuf);
     m_image = dmabuf->createPromiseImage(threadSafeGrContext, kRGBA_8888_SkColorType, toSkiaAlphaType(m_alphaMode), toSkiaOrigin(origin), nullptr, { });
 }
@@ -266,7 +270,9 @@ void CoordinatedPlatformLayerBufferVideo::createSkiaImageForMainMemory(std::uniq
         return;
     }
 
-    auto imageInfo = SkImageInfo::Make(mappedFrame->width(), mappedFrame->height(), kBGRA_8888_SkColorType, toSkiaAlphaType(m_alphaMode), SkColorSpace::MakeSRGB());
+    auto format = GST_VIDEO_INFO_FORMAT(mappedFrame->info());
+    auto colorType = format == GST_VIDEO_FORMAT_RGBA || format == GST_VIDEO_FORMAT_RGBx ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType;
+    auto imageInfo = SkImageInfo::Make(mappedFrame->width(), mappedFrame->height(), colorType, toSkiaAlphaType(m_alphaMode), SkColorSpace::MakeSRGB());
     SkPixmap pixmap(imageInfo, mappedFrame->planeData(0).data(), mappedFrame->planeStride(0));
     m_image = SkImages::RasterFromPixmap(pixmap, [](const void*, void* userData) {
         std::unique_ptr<GstMappedFrame> mappedFrame(static_cast<GstMappedFrame*>(userData));

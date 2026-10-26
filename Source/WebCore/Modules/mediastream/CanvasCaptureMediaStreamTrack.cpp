@@ -237,26 +237,29 @@ void CanvasCaptureMediaStreamTrack::Source::captureCanvas()
     metadata.captureTime = MonotonicTime::now().secondsSinceEpoch();
 
 #if USE(GSTREAMER)
-    RefPtr gstVideoFrame = videoFrame->asVideoFrameGStreamer();
-    if (!gstVideoFrame)
-        return;
     static const double s_fixedFrameRate = 60.0;
 
     if (!m_clock)
         m_clock = adoptGRef(gst_system_clock_obtain());
     RELEASE_ASSERT(m_clock);
 
-    if (!m_frameRequestRate)
-        gstVideoFrame->setMaxFrameRate(s_fixedFrameRate);
+    auto presentationTime = fromGstClockTime(gst_clock_get_time(m_clock.get()));
+    RefPtr gstVideoFrame = dynamicDowncast<VideoFrameGStreamer>(*videoFrame);
+    if (!gstVideoFrame) {
+        // A frame of the GPU process stays there, until a consumer needs its pixels.
+        videoFrame = videoFrame->updateTimestamp(presentationTime, VideoFrame::ShouldClone::Yes);
+    } else {
+        if (!m_frameRequestRate)
+            gstVideoFrame->setMaxFrameRate(s_fixedFrameRate);
 
-    auto frameRate = s_fixedFrameRate;
-    if (m_frameRequestRate && *m_frameRequestRate)
-        frameRate = *m_frameRequestRate;
+        auto frameRate = s_fixedFrameRate;
+        if (m_frameRequestRate && *m_frameRequestRate)
+            frameRate = *m_frameRequestRate;
 
-    gstVideoFrame->setFrameRate(frameRate);
-    gstVideoFrame->setPresentationTime(fromGstClockTime(gst_clock_get_time(m_clock.get())));
-    gstVideoFrame->setMetadata({ metadata }, VideoFrameContentHint::Canvas, { });
-    videoFrame = WTF::move(gstVideoFrame);
+        gstVideoFrame->setFrameRate(frameRate);
+        gstVideoFrame->setPresentationTime(presentationTime);
+        gstVideoFrame->setMetadata({ metadata }, VideoFrameContentHint::Canvas, { });
+    }
 #endif
 
     videoFrameAvailable(*videoFrame, metadata);

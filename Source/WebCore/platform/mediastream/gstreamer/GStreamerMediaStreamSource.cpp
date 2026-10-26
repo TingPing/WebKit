@@ -29,8 +29,10 @@
 #include "AudioTrackPrivateMediaStream.h"
 #include "GStreamerAudioData.h"
 #include "GStreamerCommon.h"
+#include "GStreamerWrappedVideoFrame.h"
 #include "GUniquePtrGStreamer.h"
 #include "MediaStreamPrivate.h"
+#include "ProcessCapabilities.h"
 #include "VideoFrameGStreamer.h"
 #include "VideoFrameMetadataGStreamer.h"
 #include "VideoTrackPrivateMediaStream.h"
@@ -366,10 +368,17 @@ public:
         auto videoFrameSize = videoFrame.presentationSize();
         IntSize captureSize(videoFrameSize.width(), videoFrameSize.height());
 
-        RefPtr gstVideoFrame = videoFrame.asVideoFrameGStreamer();
-        if (!gstVideoFrame)
-            return;
-        GRefPtr<GstSample> sample = gstVideoFrame->sample();
+        GRefPtr<GstSample> sample;
+        RefPtr gstVideoFrame = dynamicDowncast<VideoFrameGStreamer>(videoFrame);
+        if (!gstVideoFrame && m_consumerIsVideoPlayer && ProcessCapabilities::layersCompositedRemotely())
+            sample = sampleWrappingVideoFrame(videoFrame);
+        if (!sample) {
+            if (!gstVideoFrame)
+                gstVideoFrame = videoFrame.asVideoFrameGStreamer();
+            if (!gstVideoFrame)
+                return;
+            sample = gstVideoFrame->sample();
+        }
 
         // Video encoders require a multiple of two frame size. At least x264enc does anyway.
         if (!m_consumerIsVideoPlayer && !m_isIncomingVideoSource && (captureSize.width() % 2 || captureSize.height() % 2)) {

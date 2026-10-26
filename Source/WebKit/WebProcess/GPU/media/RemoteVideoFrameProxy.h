@@ -108,6 +108,7 @@ private:
 #if USE(GSTREAMER)
     mutable Lock m_localFrameLock;
     mutable RefPtr<WebCore::VideoFrameGStreamer> m_localFrame WTF_GUARDED_BY_LOCK(m_localFrameLock);
+    mutable bool m_didReadLocalFrame WTF_GUARDED_BY_LOCK(m_localFrameLock) { false };
 #endif
 };
 

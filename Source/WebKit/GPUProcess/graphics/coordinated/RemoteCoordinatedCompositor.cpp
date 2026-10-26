@@ -35,6 +35,7 @@
 #include "RemoteCoordinatedCompositorMessages.h"
 #include "RemoteCoordinatedCompositorProxyMessages.h"
 #include "RemoteCoordinatedContentsRegistry.h"
+#include "RemoteVideoFrameObjectHeap.h"
 #include <WebCore/CoordinatedBackingStoreProxy.h>
 #include <WebCore/CoordinatedImageBackingStore.h>
 #include <WebCore/CoordinatedPlatformLayerBufferDMABuf.h>
@@ -87,6 +88,9 @@ RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProce
     , m_identifier(identifier)
     , m_workQueue(WorkQueue::create("org.webkit.RemoteCoordinatedCompositor"_s))
     , m_tilePaintingQueue(WorkQueue::create("org.webkit.RemoteCoordinatedCompositor.TilePainting"_s))
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    , m_videoFrameObjectHeap(connectionToWebProcess.videoFrameObjectHeap())
+#endif
     , m_viewportSize(parameters.viewportSize)
     , m_deviceScaleFactor(parameters.deviceScaleFactor)
     , m_isVisible(parameters.isVisible)
@@ -339,7 +343,7 @@ auto RemoteCoordinatedCompositor::scheduleTileReplays(const CoordinatedLayerUpda
 }
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
-RefPtr<SharedMemory> RemoteCoordinatedCompositor::videoFrameSlot(CoordinatedVideoFrame& frame)
+RefPtr<SharedMemory> RemoteCoordinatedCompositor::videoFrameSlot(CoordinatedSharedVideoFrame& frame)
 {
     if (auto handle = std::exchange(frame.slotHandle, std::nullopt)) {
         RefPtr memory = SharedMemory::map(WTF::move(*handle), SharedMemory::Protection::ReadOnly);
@@ -376,7 +380,7 @@ struct VideoFrameSlotUse {
 
 WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(VideoFrameSlotUse);
 
-std::unique_ptr<CoordinatedPlatformLayerBuffer> RemoteCoordinatedCompositor::videoFrameBuffer(CoordinatedVideoFrame&& frame)
+RefPtr<VideoFrameGStreamer> RemoteCoordinatedCompositor::sharedVideoFrame(CoordinatedSharedVideoFrame&& frame)
 {
     RefPtr memory = videoFrameSlot(frame);
     if (!memory)
@@ -390,7 +394,16 @@ std::unique_ptr<CoordinatedPlatformLayerBuffer> RemoteCoordinatedCompositor::vid
         slotUse->connection->send(Messages::RemoteCoordinatedCompositorProxy::ReleaseVideoFrameSlot(slotUse->slot), slotUse->compositorIdentifier);
     }));
 
-    RefPtr videoFrame = frame.layout.createVideoFrame(WTF::move(buffer));
+    return frame.layout.createVideoFrame(WTF::move(buffer));
+}
+
+std::unique_ptr<CoordinatedPlatformLayerBuffer> RemoteCoordinatedCompositor::videoFrameBuffer(CoordinatedVideoFrame&& frame)
+{
+    RefPtr videoFrame = switchOn(WTF::move(frame.frame), [&](CoordinatedSharedVideoFrame&& sharedFrame) -> RefPtr<VideoFrameGStreamer> {
+        return sharedVideoFrame(WTF::move(sharedFrame));
+    }, [&](RemoteVideoFrameReadReference&& reference) -> RefPtr<VideoFrameGStreamer> {
+        return dynamicDowncast<VideoFrameGStreamer>(m_videoFrameObjectHeap->get(WTF::move(reference)));
+    });
     if (!videoFrame)
         return nullptr;
     return CoordinatedPlatformLayerBufferVideo::create(videoFrame.releaseNonNull(), std::nullopt, false, imageOrientation(frame.rotation), m_threadSafeGrContext);
@@ -558,7 +571,7 @@ void RemoteCoordinatedCompositor::updateLayers(CoordinatedLayerTreeTransaction&&
                     protectedThis->applyLayerUpdate(WTF::move(update), pixels, { });
 #if ENABLE(VIDEO) && USE(GSTREAMER)
                 else if (update.contentsVideoFrame) {
-                    // Keeps the slot mapped for the next frames, and gives it back.
+                    // Keeps the slot mapped for the next frames and gives it back, or consumes the read reference.
                     protectedThis->videoFrameBuffer(WTF::move(*update.contentsVideoFrame));
                 }
 #endif

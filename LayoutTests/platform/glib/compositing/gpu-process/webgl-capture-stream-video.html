@@ -1,0 +1,76 @@
+<!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true ] -->
+<html>
+<head>
+<link rel="stylesheet" href="../../damage/common.css">
+</head>
+<body>
+<video style="display: block" width="160" height="120" muted></video>
+<script src="../../damage/common.js"></script>
+<script>
+// The frames that the GPU process makes for a WebGL canvas reach its compositor when a video plays
+// the stream of the canvas.
+setupTestCase({ disableConsoleLog: true });
+
+const canvas = document.createElement("canvas");
+canvas.width = 160;
+canvas.height = 120;
+const gl = canvas.getContext("webgl");
+
+let isDrawing = true;
+let green = 0;
+function draw()
+{
+    green = 1 - green;
+    gl.clearColor(1 - green, green, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    if (isDrawing)
+        requestAnimationFrame(draw);
+}
+
+function isVideoDamage(damage)
+{
+    return damage.rects.every(rect => contains([0, 0, 160, 120], rect));
+}
+
+// The first paint of the page can still be on its way when the video starts playing.
+function waitForDamagedVideoFrames(count)
+{
+    return new Promise(resolve => {
+        const framesBefore = allFramesDamages().length;
+        const checkFrames = () => {
+            let damagedFrames = allFramesDamages().slice(framesBefore).filter(damage => damage.rects.length);
+            const firstVideoFrame = damagedFrames.findIndex(isVideoDamage);
+            damagedFrames = firstVideoFrame < 0 ? [] : damagedFrames.slice(firstVideoFrame);
+            if (damagedFrames.length < count) {
+                requestAnimationFrame(checkFrames);
+                return;
+            }
+            for (const damage of damagedFrames) {
+                for (const rect of damage.rects)
+                    assertContains([0, 0, 160, 120], rect);
+            }
+            resolve();
+        };
+        requestAnimationFrame(checkFrames);
+    });
+}
+
+async function runTest()
+{
+    const video = document.querySelector("video");
+    video.srcObject = canvas.captureStream();
+    draw();
+    await video.play();
+    await waitForDamagedVideoFrames(20);
+    isDrawing = false;
+    video.pause();
+    if (failure)
+        failTest(`FAIL: ${failure}`);
+    else
+        passTest();
+}
+
+runTest().catch(error => failTest(`FAIL: ${error}`));
+</script>
+</body>
+</html>

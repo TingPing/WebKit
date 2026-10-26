@@ -42,6 +42,7 @@ platform/graphics/gstreamer/GStreamerSinksWorkarounds.cpp
 platform/graphics/gstreamer/GStreamerSkiaUtilities.cpp
 platform/graphics/gstreamer/GStreamerVideoFrameConverter.cpp
 platform/graphics/gstreamer/GStreamerVideoSinkCommon.cpp
+platform/graphics/gstreamer/GStreamerWrappedVideoFrame.cpp
 platform/graphics/gstreamer/GraphicsContextGLVideoFrameCopierGStreamer.cpp @no-unify
 platform/graphics/gstreamer/GstAllocatorFastMalloc.cpp
 platform/graphics/gstreamer/ImageDecoderGStreamer.cpp

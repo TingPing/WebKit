@@ -35,6 +35,7 @@
 #include "GStreamerCommon.h"
 #include "GStreamerQuirks.h"
 #include "GStreamerRegistryScanner.h"
+#include "GStreamerWrappedVideoFrame.h"
 #include "GraphicsContext.h"
 #include "HTTPHeaderNames.h"
 #include "ImageGStreamer.h"
@@ -3960,14 +3961,19 @@ void MediaPlayerPrivateGStreamer::pushTextureToCompositor(IsDuplicateSample isDu
     if (!m_videoInfo)
         m_videoInfo = VideoFrameGStreamer::infoFromCaps(GRefPtr(gst_sample_get_caps(m_sample.get())));
 
+#if USE(TEXTURE_MAPPER)
     VideoFrameGStreamer::CreateOptions options;
     options.info = m_videoInfo;
     auto frame = VideoFrameGStreamer::createWrappedSample(m_sample, options);
-
-#if USE(TEXTURE_MAPPER)
     auto buffer = CoordinatedPlatformLayerBufferVideo::create(WTF::move(frame), m_videoDecoderPlatform, !m_isUsingFallbackVideoSink, m_videoSourceOrientation);
 #else
-    auto buffer = CoordinatedPlatformLayerBufferVideo::create(WTF::move(frame), m_videoDecoderPlatform, !m_isUsingFallbackVideoSink, m_videoSourceOrientation, proxy->threadSafeGrContext());
+    RefPtr frame = videoFrameWrappedInSample(m_sample.get());
+    if (!frame) {
+        VideoFrameGStreamer::CreateOptions options;
+        options.info = m_videoInfo;
+        frame = VideoFrameGStreamer::createWrappedSample(m_sample, options);
+    }
+    auto buffer = CoordinatedPlatformLayerBufferVideo::create(frame.releaseNonNull(), m_videoDecoderPlatform, !m_isUsingFallbackVideoSink, m_videoSourceOrientation, proxy->threadSafeGrContext());
 #endif
     if (isInitialBuffer == IsInitialBuffer::Yes)
         proxy->setInitialDisplayBuffer(WTF::move(buffer));
@@ -4393,6 +4399,11 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
         return;
     }
 
+    if (RefPtr frame = videoFrameWrappedInSample(sample.get())) {
+        context.drawVideoFrame(*frame, rect, ShouldDiscardAlpha::No, { m_videoSourceOrientation });
+        return;
+    }
+
     auto caps = gst_sample_get_caps(sample.get());
     auto presentationSize = getVideoResolutionFromCaps(caps);
     if (!presentationSize)
@@ -4413,6 +4424,9 @@ RefPtr<VideoFrame> MediaPlayerPrivateGStreamer::videoFrameForCurrentTime()
 
     if (!GST_IS_SAMPLE(m_sample.get()))
         return nullptr;
+
+    if (RefPtr frame = videoFrameWrappedInSample(m_sample.get()))
+        return frame;
 
     auto frame = VideoFrameGStreamer::createWrappedSample(m_sample);
     auto contentHint = frame->contentHint();

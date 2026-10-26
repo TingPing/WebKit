@@ -29,6 +29,7 @@
 #if ENABLE(GPU_PROCESS) && ENABLE(VIDEO) && USE(GSTREAMER)
 
 #include <WebCore/GStreamerCommon.h>
+#include <WebCore/SharedBuffer.h>
 #include <algorithm>
 #include <gst/video/gstvideometa.h>
 #include <wtf/CheckedArithmetic.h>
@@ -106,6 +107,32 @@ static bool isSupportedSize(const IntSize& size)
     return !size.isEmpty() && size.width() <= maxDimension && size.height() <= maxDimension;
 }
 
+std::optional<size_t> GStreamerVideoFrameLayout::dataSize() const
+{
+    auto videoFormat = static_cast<GstVideoFormat>(format);
+    if (!isSupportedSize(size) || !isSupportedFormat(videoFormat))
+        return std::nullopt;
+
+    auto* formatInfo = gst_video_format_get_info(videoFormat);
+    unsigned planeCount = GST_VIDEO_FORMAT_INFO_N_PLANES(formatInfo);
+    if (offsets.size() != planeCount || strides.size() != planeCount)
+        return std::nullopt;
+
+    size_t dataSize = 0;
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN; // GLib port
+    for (unsigned i = 0; i < planeCount; ++i) {
+        std::array<gint, GST_VIDEO_MAX_COMPONENTS> components;
+        gst_video_format_info_component(formatInfo, i, components.data());
+        size_t planeHeight = GST_VIDEO_FORMAT_INFO_SCALE_HEIGHT(formatInfo, components[0], size.height());
+        auto planeEnd = CheckedSize(strides[i]) * planeHeight + offsets[i];
+        if (strides[i] < 0 || planeEnd.hasOverflowed())
+            return std::nullopt;
+        dataSize = std::max(dataSize, planeEnd.value());
+    }
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END;
+    return dataSize;
+}
+
 RefPtr<VideoFrameGStreamer> GStreamerVideoFrameLayout::createVideoFrame(GRefPtr<GstBuffer>&& buffer, VideoFrameGStreamer::CreateOptions&& options) const
 {
     if (!isSupportedSize(size) || !isSupportedSize(presentationSize))
@@ -152,6 +179,9 @@ RefPtr<VideoFrameGStreamer> GStreamerVideoFrameLayout::createVideoFrame(GRefPtr<
     if (!caps)
         return nullptr;
 
+    if (options.presentationTime.isValid())
+        GST_BUFFER_PTS(buffer.get()) = GST_BUFFER_DTS(buffer.get()) = toGstClockTime(options.presentationTime);
+
     GRefPtr<GstSample> sample = adoptGRef(gst_sample_new(buffer.get(), caps.get(), nullptr, nullptr));
     buffer = nullptr;
     options.presentationSize = presentationSize;
@@ -160,10 +190,9 @@ RefPtr<VideoFrameGStreamer> GStreamerVideoFrameLayout::createVideoFrame(GRefPtr<
 
 RefPtr<VideoFrameGStreamer> GStreamerVideoFrameLayout::createVideoFrame(Ref<SharedMemory>&& memory, VideoFrameGStreamer::CreateOptions&& options) const
 {
-    auto data = memory->span();
-    GRefPtr<GstBuffer> buffer = adoptGRef(gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, const_cast<uint8_t*>(data.data()), data.size(), 0, data.size(), &memory.leakRef(), [](gpointer memory) {
-        static_cast<SharedMemory*>(memory)->deref();
-    }));
+    auto buffer = wrapSharedBuffer(memory->createSharedBuffer(memory->size()));
+    if (!buffer)
+        return nullptr;
     return createVideoFrame(WTF::move(buffer), WTF::move(options));
 }
 

@@ -168,6 +168,12 @@ RefPtr<VideoFrame> SharedVideoFrameReader::readFromSharedMemory(const GStreamerV
     });
 
     auto data = m_storage->span();
+    auto dataSize = layout.dataSize();
+    if (!dataSize || *dataSize > data.size()) {
+        RELEASE_LOG_ERROR(Media, "SharedVideoFrameReader::readFromSharedMemory invalid layout");
+        return nullptr;
+    }
+    data = data.first(*dataSize);
     GRefPtr<GstBuffer> buffer = adoptGRef(gst_buffer_new_memdup(data.data(), data.size()));
     RefPtr videoFrame = layout.createVideoFrame(WTF::move(buffer), createOptions(frame));
     if (!videoFrame)

@@ -46,8 +46,9 @@ public:
     static std::unique_ptr<CoordinatedPlatformLayerBufferVideo> create(Ref<VideoFrameGStreamer>&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, const ImageOrientation&);
     CoordinatedPlatformLayerBufferVideo(Ref<VideoFrameGStreamer>&&, IntSize&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, OptionSet<TextureMapperFlags>);
 #else
-    static std::unique_ptr<CoordinatedPlatformLayerBufferVideo> create(Ref<VideoFrameGStreamer>&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, const ImageOrientation&, const sk_sp<GrContextThreadSafeProxy>&);
-    CoordinatedPlatformLayerBufferVideo(Ref<VideoFrameGStreamer>&&, IntSize&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, Origin, Rotation, const sk_sp<GrContextThreadSafeProxy>&);
+    // The frame has no image when it is not a VideoFrameGStreamer, it is composited by the GPU process that made it.
+    static std::unique_ptr<CoordinatedPlatformLayerBufferVideo> create(Ref<VideoFrame>&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, const ImageOrientation&, const sk_sp<GrContextThreadSafeProxy>&);
+    CoordinatedPlatformLayerBufferVideo(Ref<VideoFrame>&&, IntSize&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, Origin, Rotation, const sk_sp<GrContextThreadSafeProxy>&);
 #endif
     virtual ~CoordinatedPlatformLayerBufferVideo();
 
@@ -55,7 +56,7 @@ public:
     std::unique_ptr<CoordinatedPlatformLayerBuffer> copyBuffer() const;
 #endif
 
-    VideoFrameGStreamer& videoFrame() const { return m_videoFrame.get(); }
+    VideoFrame& videoFrame() const { return m_videoFrame.get(); }
 
 private:
 #if USE(TEXTURE_MAPPER)
@@ -76,9 +77,9 @@ private:
     void createSkiaImageIfNeeded(const sk_sp<GrContextThreadSafeProxy>&, bool gstGLEnabled, Origin);
 
 #if USE(GBM)
-    void createSkiaImageForQualcommDecoder(const sk_sp<GrContextThreadSafeProxy>&, Origin);
+    void createSkiaImageForQualcommDecoder(VideoFrameGStreamer&, const sk_sp<GrContextThreadSafeProxy>&, Origin);
 #if GST_CHECK_VERSION(1, 24, 0)
-    void createSkiaImageForDMABufMemory(const sk_sp<GrContextThreadSafeProxy>&, Origin);
+    void createSkiaImageForDMABufMemory(VideoFrameGStreamer&, const sk_sp<GrContextThreadSafeProxy>&, Origin);
 #endif
 #endif
 
@@ -92,7 +93,11 @@ private:
 #endif
 #endif
 
+#if USE(TEXTURE_MAPPER)
     const Ref<VideoFrameGStreamer> m_videoFrame;
+#else
+    const Ref<VideoFrame> m_videoFrame;
+#endif
     std::optional<GstVideoDecoderPlatform> m_videoDecoderPlatform;
 #if USE(TEXTURE_MAPPER)
     const std::unique_ptr<CoordinatedPlatformLayerBuffer> m_buffer;

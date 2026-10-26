@@ -53,6 +53,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
+#include "RemoteVideoFrameProxy.h"
 #include <WebCore/VideoFrameGStreamer.h>
 #endif
 #include <wtf/TZoneMallocInlines.h>
@@ -150,6 +151,9 @@ CoordinatedLayerTreeTransaction RemoteCoordinatedCompositorProxy::makeTransactio
 std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFrameInSlot(VideoFrame& videoFrame, CoordinatedPlatformLayerBuffer::Rotation rotation)
 {
 #if ENABLE(VIDEO) && USE(GSTREAMER)
+    if (RefPtr remoteFrame = dynamicDowncast<RemoteVideoFrameProxy>(videoFrame))
+        return CoordinatedVideoFrame { .frame = remoteFrame->newReadReference(), .rotation = rotation };
+
     RefPtr frame = dynamicDowncast<VideoFrameGStreamer>(videoFrame);
     if (!frame)
         return std::nullopt;
@@ -199,9 +203,11 @@ std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFram
         return std::nullopt;
 
     return CoordinatedVideoFrame {
-        .slot = *slotIdentifier,
-        .slotHandle = WTF::move(handle),
-        .layout = WTF::move(*layout),
+        .frame = CoordinatedSharedVideoFrame {
+            .slot = *slotIdentifier,
+            .slotHandle = WTF::move(handle),
+            .layout = WTF::move(*layout),
+        },
         .rotation = rotation,
     };
 #else

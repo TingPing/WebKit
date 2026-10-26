@@ -28,6 +28,7 @@
 #if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "CoordinatedVideoFrameSlotIdentifier.h"
 #include "GStreamerVideoFrameLayout.h"
+#include "RemoteVideoFrameIdentifier.h"
 #include "SharedBufferReference.h"
 #include <WebCore/CoordinatedLayerProperties.h>
 #include <WebCore/CoordinatedPlatformLayerBuffer.h>
@@ -61,10 +62,15 @@ struct CoordinatedBackingStoreUpdate {
 };
 
 // A video frame in system memory, copied into a shared memory slot that the GPU process maps once.
-struct CoordinatedVideoFrame {
+struct CoordinatedSharedVideoFrame {
     CoordinatedVideoFrameSlotIdentifier slot;
     std::optional<WebCore::SharedMemory::Handle> slotHandle;
     GStreamerVideoFrameLayout layout;
+};
+
+// A video frame in system memory, or one that the GPU process made.
+struct CoordinatedVideoFrame {
+    Variant<CoordinatedSharedVideoFrame, RemoteVideoFrameReadReference> frame;
     WebCore::CoordinatedPlatformLayerBuffer::Rotation rotation { WebCore::CoordinatedPlatformLayerBuffer::Rotation::None };
 };
 

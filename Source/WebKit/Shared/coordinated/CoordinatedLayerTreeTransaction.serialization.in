@@ -231,10 +231,15 @@ header: "CoordinatedLayerTreeTransaction.h"
 }
 
 header: "CoordinatedLayerTreeTransaction.h"
-[CustomHeader, RValue] struct WebKit::CoordinatedVideoFrame {
+[CustomHeader, RValue] struct WebKit::CoordinatedSharedVideoFrame {
     WebKit::CoordinatedVideoFrameSlotIdentifier slot;
     std::optional<WebCore::SharedMemory::Handle> slotHandle;
     WebKit::GStreamerVideoFrameLayout layout;
+}
+
+header: "CoordinatedLayerTreeTransaction.h"
+[CustomHeader, RValue] struct WebKit::CoordinatedVideoFrame {
+    Variant<WebKit::CoordinatedSharedVideoFrame, WebKit::RemoteVideoFrameReadReference> frame;
     WebCore::CoordinatedPlatformLayerBuffer::Rotation rotation;
 }
 

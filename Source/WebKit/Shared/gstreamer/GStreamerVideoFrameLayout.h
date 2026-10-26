@@ -59,6 +59,9 @@ struct GStreamerVideoFrameLayout {
     // Copies the planes into the memory returned by allocate() for their total size.
     static std::optional<GStreamerVideoFrameLayout> write(const WebCore::VideoFrameGStreamer&, NOESCAPE const Function<std::span<uint8_t>(size_t)>& allocate);
 
+    // The size of the memory that the planes span.
+    std::optional<size_t> dataSize() const;
+
     // Returns null when the layout does not fit in the buffer.
     RefPtr<WebCore::VideoFrameGStreamer> createVideoFrame(GRefPtr<GstBuffer>&&, WebCore::VideoFrameGStreamer::CreateOptions&& = { }) const;
     // The frame keeps the memory mapped, without a copy.

@@ -58,6 +58,7 @@ class CoordinatedTileBuffer;
 class CoordinatedTileManager;
 class SharedMemory;
 class SkiaCompositingLayer;
+class VideoFrameGStreamer;
 class SkiaRecordingResult;
 struct CoordinatedLayerProperties;
 }
@@ -65,8 +66,10 @@ struct CoordinatedLayerProperties;
 namespace WebKit {
 class AcceleratedSurface;
 class GPUConnectionToWebProcess;
+class RemoteVideoFrameObjectHeap;
 struct CoordinatedLayerTreeTransaction;
 struct CoordinatedLayerUpdate;
+struct CoordinatedSharedVideoFrame;
 struct CoordinatedVideoFrame;
 
 class RemoteCoordinatedCompositor final : public IPC::MessageReceiver, public ThreadSafeRefCounted<RemoteCoordinatedCompositor, WTF::DestructionThread::Main> {
@@ -119,7 +122,8 @@ private:
     TileUpdates scheduleTileReplays(const CoordinatedLayerUpdate&, Vector<Ref<WebCore::CoordinatedTileBuffer>>& paintingBuffers);
     void applyLayerUpdate(CoordinatedLayerUpdate&&, std::span<const uint8_t> pixels, TileUpdates&&);
 #if ENABLE(VIDEO) && USE(GSTREAMER)
-    RefPtr<WebCore::SharedMemory> videoFrameSlot(CoordinatedVideoFrame&);
+    RefPtr<WebCore::SharedMemory> videoFrameSlot(CoordinatedSharedVideoFrame&);
+    RefPtr<WebCore::VideoFrameGStreamer> sharedVideoFrame(CoordinatedSharedVideoFrame&&);
     std::unique_ptr<WebCore::CoordinatedPlatformLayerBuffer> videoFrameBuffer(CoordinatedVideoFrame&&);
 #endif
     void runWhenTilesArePainted(Function<void()>&&);
@@ -154,6 +158,7 @@ private:
     HashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::SkiaCompositingLayer>> m_layers;
     RefPtr<WebCore::SkiaCompositingLayer> m_rootLayer;
 #if ENABLE(VIDEO) && USE(GSTREAMER)
+    const Ref<RemoteVideoFrameObjectHeap> m_videoFrameObjectHeap;
     HashMap<CoordinatedVideoFrameSlotIdentifier, Ref<WebCore::SharedMemory>> m_videoFrameSlots;
 #endif
     WebCore::IntSize m_viewportSize;
