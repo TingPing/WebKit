@@ -28,19 +28,12 @@
 #if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "CoordinatedCompositor.h"
 #include "GPUProcessConnection.h"
-#include "MessageReceiver.h"
-#include "RendererBufferFormat.h"
-#include <WebCore/DMABufBufferAttributes.h>
-#include <WebCore/IntRect.h>
-#include <WebCore/ShareableBitmapHandle.h>
 #include <atomic>
-#include <wtf/HashSet.h>
 #include <wtf/Lock.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
-#include <wtf/unix/UnixFileDescriptor.h>
 
 namespace WebCore {
 struct CoordinatedLayerProperties;
@@ -51,7 +44,7 @@ class CoordinatedSceneState;
 class WebPage;
 struct CoordinatedLayerTreeTransaction;
 
-class RemoteCoordinatedCompositorProxy final : public CoordinatedCompositor, public GPUProcessConnection::Client, public IPC::MessageReceiver, public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteCoordinatedCompositorProxy> {
+class RemoteCoordinatedCompositorProxy final : public CoordinatedCompositor, public GPUProcessConnection::Client, public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteCoordinatedCompositorProxy> {
     WTF_MAKE_TZONE_ALLOCATED(RemoteCoordinatedCompositorProxy);
 public:
     static Ref<RemoteCoordinatedCompositorProxy> create(WebPage&, CoordinatedSceneState&);
@@ -93,9 +86,6 @@ public:
 private:
     RemoteCoordinatedCompositorProxy(WebPage&, CoordinatedSceneState&);
 
-    // IPC::MessageReceiver
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
-
     // GPUProcessConnection::Client
     void gpuProcessConnectionDidClose(GPUProcessConnection&) final;
 
@@ -103,24 +93,14 @@ private:
     RefPtr<IPC::Connection> gpuConnection() const;
     void didComposite();
 
-    void didCreateDMABufBuffer(uint64_t, WebCore::DMABufBufferAttributes&&, RendererBufferFormat::Usage);
-    void didCreateSHMBuffer(uint64_t, WebCore::ShareableBitmapHandle&&);
-    void didDestroyBuffer(uint64_t);
-    void frame(uint64_t, Vector<WebCore::IntRect, 1>&&, UnixFileDescriptor&&);
-    void didChangeBufferConfiguration(uint32_t);
-    void releaseBuffer(uint64_t, UnixFileDescriptor&&);
-    void frameDone();
-
     WeakPtr<WebPage> m_webPage;
     const Ref<CoordinatedSceneState> m_sceneState;
     const uint64_t m_surfaceID;
     const Ref<WorkQueue> m_commitQueue;
-    const Ref<WorkQueue> m_relayQueue;
     mutable Lock m_connectionLock;
     RefPtr<IPC::Connection> m_gpuConnection WTF_GUARDED_BY_LOCK(m_connectionLock);
     Lock m_commitLock;
     bool m_needsFullCommit WTF_GUARDED_BY_LOCK(m_commitLock) { false };
-    HashSet<uint64_t> m_bufferIDs;
     std::atomic<unsigned> m_pendingCommits { 0 };
     Function<void()> m_didCompositeFunction;
     unsigned m_suspendedCount { 0 };

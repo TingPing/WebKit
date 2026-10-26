@@ -215,6 +215,9 @@ class WebOpenPanelResultListenerProxy;
 class WebPageProxy;
 class WebPopupMenuProxy;
 class WebProcessProxy;
+#if ENABLE(GPU_PROCESS)
+class GPUProcessProxy;
+#endif
 
 enum class ContinueUnsafeLoad : bool { No, Yes };
 
@@ -473,6 +476,9 @@ public:
 #if ENABLE(GPU_PROCESS)
     virtual void gpuProcessDidFinishLaunching() { }
     virtual void gpuProcessDidExit() { }
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    virtual void didCreateCoordinatedSurfaceInGPUProcess(GPUProcessProxy&, uint64_t /* surfaceID */, bool /* isForProvisionalPage */) { }
+#endif
 #endif
 
 #if ENABLE(MODEL_PROCESS)

@@ -28,6 +28,7 @@
 #if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "MessageReceiver.h"
 #include "RendererBufferFormat.h"
+#include "WebPageProxyIdentifier.h"
 #include <WebCore/Color.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/PlatformLayerIdentifier.h>
@@ -57,6 +58,7 @@ class RemoteCoordinatedCompositor final : public IPC::MessageReceiver, public Th
     WTF_MAKE_TZONE_ALLOCATED(RemoteCoordinatedCompositor);
 public:
     struct Parameters {
+        WebPageProxyIdentifier pageIdentifier;
         WebCore::IntSize viewportSize;
         float deviceScaleFactor { 1 };
         std::optional<WebCore::Color> backgroundColor;

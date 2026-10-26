@@ -371,7 +371,7 @@ private:
 #endif
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-    void createCoordinatedCompositor(uint64_t identifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&&, bool usesHardwareBufferTransport);
+    void createCoordinatedCompositor(uint64_t identifier, WebPageProxyIdentifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&&, bool usesHardwareBufferTransport);
     void releaseCoordinatedCompositor(uint64_t identifier);
 #endif
 

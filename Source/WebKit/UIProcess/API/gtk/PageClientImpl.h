@@ -113,6 +113,10 @@ private:
     void enterAcceleratedCompositingMode(const LayerTreeContext&) override;
     void exitAcceleratedCompositingMode() override;
     void updateAcceleratedCompositingMode(const LayerTreeContext&) override;
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void didCreateCoordinatedSurfaceInGPUProcess(GPUProcessProxy&, uint64_t surfaceID, bool isForProvisionalPage) override;
+    void gpuProcessDidExit() override;
+#endif
 
     void didChangeContentSize(const WebCore::IntSize&) override;
     void didCommitLoadForMainFrame(const String& mimeType, bool useCustomContentProvider) override;

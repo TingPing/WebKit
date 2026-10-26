@@ -35,6 +35,7 @@
 #include <WebCore/GLFence.h>
 #include <WebCore/Page.h>
 #include <WebCore/PlatformDisplay.h>
+#include <WebCore/ProcessIdentifier.h>
 #include <WebCore/Region.h>
 #include <WebCore/Settings.h>
 #include <WebCore/ShareableBitmap.h>
@@ -97,8 +98,9 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(AcceleratedSurface);
 uint64_t AcceleratedSurface::generateSurfaceID()
 {
     ASSERT(RunLoop::isMain());
-    static uint64_t identifier = 0;
-    return ++identifier;
+    // Unique across web processes, because a GPU process sends the frames of all of them to the UI process.
+    static uint32_t identifier = 0;
+    return (WebCore::Process::identifier().toUInt64() << 32) | ++identifier;
 }
 
 Ref<AcceleratedSurface> AcceleratedSurface::create(WebPage& webPage, Function<void()>&& frameCompleteHandler, RenderingPurpose renderingPurpose)

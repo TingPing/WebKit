@@ -142,6 +142,10 @@ private:
     void enterAcceleratedCompositingMode(const LayerTreeContext&) override;
     void exitAcceleratedCompositingMode() override;
     void updateAcceleratedCompositingMode(const LayerTreeContext&) override;
+#if ENABLE(GPU_PROCESS) && ENABLE(WPE_PLATFORM) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void didCreateCoordinatedSurfaceInGPUProcess(GPUProcessProxy&, uint64_t surfaceID, bool isForProvisionalPage) override;
+    void gpuProcessDidExit() override;
+#endif
 
     void didFinishLoadingDataForCustomContentProvider(const String&, std::span<const uint8_t>) override;
 

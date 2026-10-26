@@ -2946,6 +2946,20 @@ void webkitWebViewBaseUpdateAcceleratedCompositingMode(WebKitWebViewBase* webkit
     webkitWebViewBase->priv->acceleratedBackingStore->update(layerTreeContext);
 }
 
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void webkitWebViewBaseDidCreateAcceleratedSurfaceInGPUProcess(WebKitWebViewBase* webkitWebViewBase, GPUProcessProxy& gpuProcess, uint64_t surfaceID, bool isForProvisionalPage)
+{
+    if (RefPtr backingStore = webkitWebViewBase->priv->acceleratedBackingStore)
+        backingStore->didCreateSurfaceInGPUProcess(gpuProcess, surfaceID, isForProvisionalPage);
+}
+
+void webkitWebViewBaseGPUProcessDidExit(WebKitWebViewBase* webkitWebViewBase)
+{
+    if (RefPtr backingStore = webkitWebViewBase->priv->acceleratedBackingStore)
+        backingStore->gpuProcessDidExit();
+}
+#endif
+
 void webkitWebViewBaseExitAcceleratedCompositingMode(WebKitWebViewBase* webkitWebViewBase)
 {
     ASSERT(webkitWebViewBase->priv->acceleratedBackingStore);

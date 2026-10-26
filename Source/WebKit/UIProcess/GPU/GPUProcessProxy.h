@@ -232,6 +232,8 @@ private:
 
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
+    bool dispatchMessage(IPC::Connection&, IPC::Decoder&);
     void didClose(IPC::Connection&) override;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, const Vector<uint32_t>& indicesOfObjectsFailingDecoding) override;
 
@@ -240,6 +242,9 @@ private:
 
     void terminateWebProcess(WebCore::ProcessIdentifier, IPC::MessageName);
     void processIsReadyToExit();
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void didCreateCoordinatedSurface(WebCore::ProcessIdentifier, WebPageProxyIdentifier, uint64_t surfaceID);
+#endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
     void didCreateContextForVisibilityPropagation(WebPageProxyIdentifier, WebCore::PageIdentifier, LayerHostingContextID);

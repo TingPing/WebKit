@@ -568,10 +568,13 @@ void GPUConnectionToWebProcess::releaseWCLayerTreeHost(WebKit::WCLayerTreeHostId
 #endif
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-void GPUConnectionToWebProcess::createCoordinatedCompositor(uint64_t identifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&& preferredBufferFormats, bool usesHardwareBufferTransport)
+void GPUConnectionToWebProcess::createCoordinatedCompositor(uint64_t identifier, WebPageProxyIdentifier pageIdentifier, WebCore::IntSize viewportSize, float deviceScaleFactor, std::optional<WebCore::Color>&& backgroundColor, bool isVisible, Vector<RendererBufferFormat>&& preferredBufferFormats, bool usesHardwareBufferTransport)
 {
+    // Surfaces from all web processes share the connection to the UI process, so each one names its own.
+    MESSAGE_CHECK((identifier >> 32) == m_webProcessIdentifier.toUInt64());
     MESSAGE_CHECK(!m_remoteCoordinatedCompositors.contains(identifier));
     m_remoteCoordinatedCompositors.add(identifier, RemoteCoordinatedCompositor::create(*this, identifier, {
+        .pageIdentifier = pageIdentifier,
         .viewportSize = viewportSize,
         .deviceScaleFactor = deviceScaleFactor,
         .backgroundColor = WTF::move(backgroundColor),

@@ -371,6 +371,20 @@ void PageClientImpl::updateAcceleratedCompositingMode(const LayerTreeContext& co
 #endif
 }
 
+#if ENABLE(GPU_PROCESS) && ENABLE(WPE_PLATFORM) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void PageClientImpl::didCreateCoordinatedSurfaceInGPUProcess(GPUProcessProxy& gpuProcess, uint64_t surfaceID, bool isForProvisionalPage)
+{
+    if (m_view.wpeView())
+        static_cast<WKWPE::ViewPlatform&>(m_view).didCreateAcceleratedSurfaceInGPUProcess(gpuProcess, surfaceID, isForProvisionalPage);
+}
+
+void PageClientImpl::gpuProcessDidExit()
+{
+    if (m_view.wpeView())
+        static_cast<WKWPE::ViewPlatform&>(m_view).gpuProcessDidExit();
+}
+#endif
+
 void PageClientImpl::didFinishLoadingDataForCustomContentProvider(const String&, std::span<const uint8_t>)
 {
 }

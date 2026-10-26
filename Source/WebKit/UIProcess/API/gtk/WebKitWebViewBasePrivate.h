@@ -47,6 +47,10 @@
 #include <WebCore/SelectionData.h>
 #include <WebCore/ShareableBitmap.h>
 
+namespace WebKit {
+class GPUProcessProxy;
+}
+
 WebKitWebViewBase* webkitWebViewBaseCreate(const API::PageConfiguration&);
 WebKit::WebPageProxy* webkitWebViewBaseGetPage(WebKitWebViewBase*);
 double webkitWebViewBaseGetPageScale(WebKitWebViewBase*);
@@ -95,6 +99,10 @@ void webkitWebViewBaseResetClickCounter(WebKitWebViewBase*);
 void webkitWebViewBaseEnterAcceleratedCompositingMode(WebKitWebViewBase*, const WebKit::LayerTreeContext&);
 void webkitWebViewBaseUpdateAcceleratedCompositingMode(WebKitWebViewBase*, const WebKit::LayerTreeContext&);
 void webkitWebViewBaseExitAcceleratedCompositingMode(WebKitWebViewBase*);
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void webkitWebViewBaseDidCreateAcceleratedSurfaceInGPUProcess(WebKitWebViewBase*, WebKit::GPUProcessProxy&, uint64_t surfaceID, bool isForProvisionalPage);
+void webkitWebViewBaseGPUProcessDidExit(WebKitWebViewBase*);
+#endif
 void webkitWebViewBaseWillSwapWebProcess(WebKitWebViewBase*);
 void webkitWebViewBaseDidExitWebProcess(WebKitWebViewBase*);
 void webkitWebViewBaseDidRelaunchWebProcess(WebKitWebViewBase*);

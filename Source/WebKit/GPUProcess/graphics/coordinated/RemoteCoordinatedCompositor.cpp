@@ -30,6 +30,8 @@
 #include "AcceleratedSurface.h"
 #include "CoordinatedLayerTreeTransaction.h"
 #include "GPUConnectionToWebProcess.h"
+#include "GPUProcess.h"
+#include "GPUProcessProxyMessages.h"
 #include "RemoteCoordinatedCompositorMessages.h"
 #include "RemoteCoordinatedContentsRegistry.h"
 #include <WebCore/CoordinatedBackingStoreProxy.h>
@@ -76,7 +78,10 @@ RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProce
         .preferredBufferFormats = WTF::move(parameters.preferredBufferFormats),
         .rendererBufferTransportMode = parameters.usesHardwareBufferTransport ? RendererBufferTransportMode::Hardware : RendererBufferTransportMode::SharedMemory,
     };
-    m_surface = AcceleratedSurface::create(connectionToWebProcess.connection(), m_identifier, WTF::move(surfaceParameters), [this] {
+    // Frames go to the UI process directly. It has to know the surface before any of its buffers.
+    Ref connectionToUIProcess = *GPUProcess::singleton().parentProcessConnection();
+    connectionToUIProcess->send(Messages::GPUProcessProxy::DidCreateCoordinatedSurface(m_webProcessIdentifier, parameters.pageIdentifier, m_identifier), 0);
+    m_surface = AcceleratedSurface::create(connectionToUIProcess, m_identifier, WTF::move(surfaceParameters), [this] {
         frameComplete();
     });
     m_surface->didCreateCompositingRunLoop(m_workQueue->runLoop());

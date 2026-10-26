@@ -328,6 +328,18 @@ void PageClientImpl::updateAcceleratedCompositingMode(const LayerTreeContext& la
     webkitWebViewBaseUpdateAcceleratedCompositingMode(WEBKIT_WEB_VIEW_BASE(m_viewWidget), layerTreeContext);
 }
 
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void PageClientImpl::didCreateCoordinatedSurfaceInGPUProcess(GPUProcessProxy& gpuProcess, uint64_t surfaceID, bool isForProvisionalPage)
+{
+    webkitWebViewBaseDidCreateAcceleratedSurfaceInGPUProcess(WEBKIT_WEB_VIEW_BASE(m_viewWidget), gpuProcess, surfaceID, isForProvisionalPage);
+}
+
+void PageClientImpl::gpuProcessDidExit()
+{
+    webkitWebViewBaseGPUProcessDidExit(WEBKIT_WEB_VIEW_BASE(m_viewWidget));
+}
+#endif
+
 void PageClientImpl::pageClosed()
 {
     webkitWebViewBasePageClosed(WEBKIT_WEB_VIEW_BASE(m_viewWidget));

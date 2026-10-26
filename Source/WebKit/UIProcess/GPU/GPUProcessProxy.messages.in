@@ -27,7 +27,7 @@
     DispatchedTo=UI,
     ExceptionForEnabledBy
 ]
-messages -> GPUProcessProxy {
+messages -> GPUProcessProxy WantsDispatchMessage {
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
     DidCreateContextForVisibilityPropagation(WebKit::WebPageProxyIdentifier pageProxyID, WebCore::PageIdentifier pageID, WebKit::LayerHostingContextID contextID)
@@ -51,6 +51,10 @@ messages -> GPUProcessProxy {
 
     ProcessIsReadyToExit()
     TerminateWebProcess(WebCore::ProcessIdentifier webProcessIdentifier, enum:uint16_t IPC::MessageName invalidMessageName)
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    DidCreateCoordinatedSurface(WebCore::ProcessIdentifier webProcessIdentifier, WebKit::WebPageProxyIdentifier pageIdentifier, uint64_t surfaceID)
+#endif
 }
 
 #endif // ENABLE(GPU_PROCESS)

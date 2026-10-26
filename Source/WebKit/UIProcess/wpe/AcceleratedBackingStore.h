@@ -55,6 +55,7 @@ class UnixFileDescriptor;
 
 namespace WebKit {
 
+class GPUProcessProxy;
 class ViewSnapshot;
 class WebPageProxy;
 class WebProcessProxy;
@@ -72,6 +73,10 @@ public:
     void deref() const final { RefCounted::deref(); }
 
     void updateSurfaceID(uint64_t);
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void didCreateSurfaceInGPUProcess(GPUProcessProxy&, uint64_t surfaceID, bool isForProvisionalPage);
+    void gpuProcessDidExit();
+#endif
 
     std::expected<Ref<ViewSnapshot>, String> takeSnapshot(std::optional<WebCore::IntRect>&&);
 
@@ -98,12 +103,23 @@ private:
     void toplevelChanged();
 
     void notifyBufferConfigurationIfNeeded();
+    template<typename T> void sendToRenderingProcess(T&&);
+    void unregisterFromRenderingProcesses();
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void setGPUProcess(GPUProcessProxy&);
+#endif
 
     WeakPtr<WebPageProxy> m_webPage;
     GRefPtr<WPEView> m_wpeView;
     FenceMonitor m_fenceMonitor;
     uint64_t m_surfaceID { 0 };
     WeakPtr<WebProcessProxy> m_legacyMainFrameProcess;
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    WeakPtr<GPUProcessProxy> m_gpuProcess;
+    // The surface of the provisional page, used once the page commits.
+    WeakPtr<GPUProcessProxy> m_provisionalGPUProcess;
+    uint64_t m_provisionalSurfaceID { 0 };
+#endif
     GRefPtr<WPEBuffer> m_pendingBuffer;
     GRefPtr<WPEBuffer> m_committedBuffer;
     Rects m_pendingDamageRects;

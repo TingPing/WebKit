@@ -80,6 +80,10 @@
 #include "DRMMainDevice.h"
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include "AcceleratedBackingStoreMessages.h"
+#endif
+
 #if ENABLE(EXTENSION_CAPABILITIES)
 #include "ExtensionCapabilityGrant.h"
 #include "ExtensionCapabilityGranter.h"
@@ -791,6 +795,38 @@ void GPUProcessProxy::terminateWebProcess(WebCore::ProcessIdentifier webProcessI
     if (auto process = WebProcessProxy::processForIdentifier(webProcessIdentifier))
         process->requestTermination(ProcessTerminationReason::RequestedByGPUProcess, invalidMessageName);
 }
+
+bool GPUProcessProxy::dispatchMessage(IPC::Connection& connection, IPC::Decoder& decoder)
+{
+    if (AuxiliaryProcessProxy::dispatchMessage(connection, decoder))
+        return true;
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    // A surface stops being shown before its compositor in the GPU process is destroyed.
+    if (decoder.messageReceiverName() == Messages::AcceleratedBackingStore::messageReceiverName())
+        return true;
+#endif
+    return false;
+}
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void GPUProcessProxy::didCreateCoordinatedSurface(WebCore::ProcessIdentifier webProcessIdentifier, WebPageProxyIdentifier pageIdentifier, uint64_t surfaceID)
+{
+    RefPtr page = WebProcessProxy::webPage(pageIdentifier);
+    if (!page)
+        return;
+
+    bool isForProvisionalPage = false;
+    if (page->legacyMainFrameProcess().coreProcessIdentifier() != webProcessIdentifier) {
+        RefPtr provisionalPage = page->provisionalPageProxy();
+        if (!provisionalPage || provisionalPage->process().coreProcessIdentifier() != webProcessIdentifier)
+            return;
+        isForProvisionalPage = true;
+    }
+
+    if (RefPtr pageClient = page->pageClient())
+        pageClient->didCreateCoordinatedSurfaceInGPUProcess(*this, surfaceID, isForProvisionalPage);
+}
+#endif
 
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
 static RefPtr<WebPageProxy> pageForNowPlayingOwner(const WebCore::QualifiedPageIdentifier& owner)

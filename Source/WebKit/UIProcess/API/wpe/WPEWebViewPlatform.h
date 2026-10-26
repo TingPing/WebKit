@@ -37,6 +37,7 @@
 
 namespace WebKit {
 class AcceleratedBackingStore;
+class GPUProcessProxy;
 class ViewSnapshot;
 class WebPlatformTouchPoint;
 }
@@ -66,6 +67,10 @@ public:
     std::expected<Ref<WebKit::ViewSnapshot>, String> takeViewSnapshot(std::optional<WebCore::IntRect>&&);
 
     void updateAcceleratedSurface(uint64_t);
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void didCreateAcceleratedSurfaceInGPUProcess(WebKit::GPUProcessProxy&, uint64_t, bool isForProvisionalPage);
+    void gpuProcessDidExit();
+#endif
     WebKit::RendererBufferDescription renderBufferDescription() const;
 
     void handleGesture(WPEEvent*);

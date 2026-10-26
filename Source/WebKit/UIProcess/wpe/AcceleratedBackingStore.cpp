@@ -34,6 +34,10 @@
 #include "WebProcessProxy.h"
 #include <WebCore/ShareableBitmap.h>
 #include <wpe/wpe-platform.h>
+
+#if ENABLE(GPU_PROCESS)
+#include "GPUProcessProxy.h"
+#endif
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/GLibExtras.h>
 #include <wtf/glib/GSpanExtras.h>
@@ -86,11 +90,34 @@ AcceleratedBackingStore::AcceleratedBackingStore(WebPageProxy& webPage, WPEView*
 
 AcceleratedBackingStore::~AcceleratedBackingStore()
 {
-    if (m_surfaceID) {
-        if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess.get())
-            legacyMainFrameProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
-    }
+    unregisterFromRenderingProcesses();
     g_signal_handlers_disconnect_by_data(m_wpeView.get(), this);
+}
+
+template<typename T>
+void AcceleratedBackingStore::sendToRenderingProcess(T&& message)
+{
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (RefPtr gpuProcess = m_gpuProcess) {
+        gpuProcess->send(std::forward<T>(message), m_surfaceID);
+        return;
+    }
+#endif
+    if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess)
+        legacyMainFrameProcess->send(std::forward<T>(message), m_surfaceID);
+}
+
+void AcceleratedBackingStore::unregisterFromRenderingProcesses()
+{
+    if (!m_surfaceID)
+        return;
+
+    if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess)
+        legacyMainFrameProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (RefPtr gpuProcess = std::exchange(m_gpuProcess, nullptr))
+        gpuProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+#endif
 }
 
 void AcceleratedBackingStore::updateSurfaceID(uint64_t surfaceID)
@@ -106,8 +133,7 @@ void AcceleratedBackingStore::updateSurfaceID(uint64_t surfaceID)
         }
         m_buffers.clear();
         m_bufferIDs.clear();
-        if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess.get())
-            legacyMainFrameProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+        unregisterFromRenderingProcesses();
     }
 
     m_surfaceID = surfaceID;
@@ -115,7 +141,59 @@ void AcceleratedBackingStore::updateSurfaceID(uint64_t surfaceID)
         m_legacyMainFrameProcess = m_webPage->legacyMainFrameProcess();
         protect(*m_legacyMainFrameProcess)->addMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID, *this);
     }
+
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (m_surfaceID && m_surfaceID == m_provisionalSurfaceID) {
+        m_provisionalSurfaceID = 0;
+        if (RefPtr gpuProcess = std::exchange(m_provisionalGPUProcess, nullptr))
+            setGPUProcess(*gpuProcess);
+    }
+#endif
 }
+
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void AcceleratedBackingStore::didCreateSurfaceInGPUProcess(GPUProcessProxy& gpuProcess, uint64_t surfaceID, bool isForProvisionalPage)
+{
+    if (isForProvisionalPage) {
+        m_provisionalGPUProcess = gpuProcess;
+        m_provisionalSurfaceID = surfaceID;
+        return;
+    }
+
+    // The GPU process can announce the surface before the web process does.
+    updateSurfaceID(surfaceID);
+    setGPUProcess(gpuProcess);
+}
+
+void AcceleratedBackingStore::setGPUProcess(GPUProcessProxy& gpuProcess)
+{
+    if (m_gpuProcess.get() == &gpuProcess)
+        return;
+
+    if (RefPtr previousGPUProcess = m_gpuProcess)
+        previousGPUProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+    m_gpuProcess = gpuProcess;
+    gpuProcess.addMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID, *this);
+}
+
+void AcceleratedBackingStore::gpuProcessDidExit()
+{
+    m_provisionalGPUProcess = nullptr;
+    m_provisionalSurfaceID = 0;
+
+    RefPtr gpuProcess = std::exchange(m_gpuProcess, nullptr);
+    if (!gpuProcess)
+        return;
+
+    gpuProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+
+    // The committed buffer stays on screen until the compositor in a new GPU process sends a frame.
+    m_pendingBuffer = nullptr;
+    m_pendingDamageRects = { };
+    m_buffers.clear();
+    m_bufferIDs.clear();
+}
+#endif
 
 void AcceleratedBackingStore::didChangeBufferConfiguration(uint32_t bufferCount)
 {
@@ -300,8 +378,7 @@ void AcceleratedBackingStore::renderPendingBuffer()
 
 void AcceleratedBackingStore::frameDone()
 {
-    if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess.get())
-        legacyMainFrameProcess->send(Messages::AcceleratedSurface::FrameDone(), m_surfaceID);
+    sendToRenderingProcess(Messages::AcceleratedSurface::FrameDone());
 }
 
 void AcceleratedBackingStore::bufferRendered()
@@ -313,9 +390,7 @@ void AcceleratedBackingStore::bufferReleased(WPEBuffer* buffer)
 {
     if (auto id = m_bufferIDs.get(buffer)) {
         auto releaseFence = UnixFileDescriptor { wpe_buffer_take_release_fence(buffer), UnixFileDescriptor::Adopt };
-
-        if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess.get())
-            legacyMainFrameProcess->send(Messages::AcceleratedSurface::ReleaseBuffer(id, WTF::move(releaseFence)), m_surfaceID);
+        sendToRenderingProcess(Messages::AcceleratedSurface::ReleaseBuffer(id, WTF::move(releaseFence)));
     }
 }
 

@@ -54,6 +54,8 @@ class ShareableBitmapHandle;
 }
 
 namespace WebKit {
+class AuxiliaryProcessProxy;
+class GPUProcessProxy;
 class LayerTreeContext;
 class WebPageProxy;
 class WebProcessProxy;
@@ -76,6 +78,10 @@ public:
     void deref() const final { RefCounted::deref(); }
 
     void update(const LayerTreeContext&);
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void didCreateSurfaceInGPUProcess(GPUProcessProxy&, uint64_t surfaceID, bool isForProvisionalPage);
+    void gpuProcessDidExit();
+#endif
 #if USE(GTK4)
     bool snapshot(GtkSnapshot*);
 #else
@@ -98,6 +104,13 @@ private:
     void frame(uint64_t id, Rects&&, WTF::UnixFileDescriptor&&);
     void frameDone();
     void queuePendingDamageDraw();
+
+    void updateSurfaceID(uint64_t);
+    RefPtr<AuxiliaryProcessProxy> renderingProcess() const;
+    void unregisterFromRenderingProcesses();
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void setGPUProcess(GPUProcessProxy&);
+#endif
 
     void ensureGLContext();
     bool swapBuffersIfNeeded();
@@ -133,6 +146,7 @@ private:
         uint64_t id() const { return m_id; }
         float deviceScaleFactor() const;
         void setSurfaceID(uint64_t surfaceID) { m_surfaceID = surfaceID; }
+        void setRenderingProcess(AuxiliaryProcessProxy*);
 #if USE(GTK4)
         void snapshot(GtkSnapshot*) const;
 #else
@@ -144,6 +158,7 @@ private:
         Buffer(WebPageProxy&, uint64_t id, uint64_t surfaceID, const WebCore::IntSize&, RendererBufferFormat::Usage);
 
         WeakPtr<WebPageProxy> m_webPage;
+        WeakPtr<AuxiliaryProcessProxy> m_renderingProcess;
         uint64_t m_id { 0 };
         uint64_t m_surfaceID { 0 };
         WebCore::IntSize m_size;
@@ -264,6 +279,12 @@ private:
     bool m_glContextInitialized { false };
     uint64_t m_surfaceID { 0 };
     WeakPtr<WebProcessProxy> m_legacyMainFrameProcess;
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    WeakPtr<GPUProcessProxy> m_gpuProcess;
+    // The surface of the provisional page, used once the page commits.
+    WeakPtr<GPUProcessProxy> m_provisionalGPUProcess;
+    uint64_t m_provisionalSurfaceID { 0 };
+#endif
     RefPtr<Buffer> m_pendingBuffer;
     RefPtr<Buffer> m_committedBuffer;
     Rects m_pendingDamageRects;

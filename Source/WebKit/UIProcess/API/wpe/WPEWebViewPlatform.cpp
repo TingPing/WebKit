@@ -253,6 +253,18 @@ void ViewPlatform::updateAcceleratedSurface(uint64_t surfaceID)
     m_backingStore->updateSurfaceID(surfaceID);
 }
 
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void ViewPlatform::didCreateAcceleratedSurfaceInGPUProcess(WebKit::GPUProcessProxy& gpuProcess, uint64_t surfaceID, bool isForProvisionalPage)
+{
+    m_backingStore->didCreateSurfaceInGPUProcess(gpuProcess, surfaceID, isForProvisionalPage);
+}
+
+void ViewPlatform::gpuProcessDidExit()
+{
+    m_backingStore->gpuProcessDidExit();
+}
+#endif
+
 RendererBufferDescription ViewPlatform::renderBufferDescription() const
 {
     return m_backingStore->bufferDescription();

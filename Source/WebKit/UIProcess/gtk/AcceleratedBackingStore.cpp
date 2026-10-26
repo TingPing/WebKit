@@ -62,6 +62,10 @@
 #include <gbm.h>
 #endif
 
+#if ENABLE(GPU_PROCESS)
+#include "GPUProcessProxy.h"
+#endif
+
 #if PLATFORM(X11) && USE(GTK4)
 #include <gdk/x11/gdkx.h>
 #endif
@@ -248,10 +252,7 @@ void AcceleratedBackingStore::queuePendingDamageDraw()
 
 AcceleratedBackingStore::~AcceleratedBackingStore()
 {
-    if (m_surfaceID) {
-        if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess.get())
-            legacyMainFrameProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
-    }
+    unregisterFromRenderingProcesses();
 
     if (m_gdkGLContext && m_gdkGLContext.get() == gdk_gl_context_get_current())
         gdk_gl_context_clear_current();
@@ -326,12 +327,18 @@ void AcceleratedBackingStore::Buffer::paint(cairo_t* cr, const IntRect& clipRect
 }
 #endif
 
+void AcceleratedBackingStore::Buffer::setRenderingProcess(AuxiliaryProcessProxy* process)
+{
+    m_renderingProcess = process;
+}
+
 void AcceleratedBackingStore::Buffer::didRelease() const
 {
-    if (!m_surfaceID || !m_webPage)
+    if (!m_surfaceID)
         return;
 
-    m_webPage->legacyMainFrameProcess().send(Messages::AcceleratedSurface::ReleaseBuffer(m_id, { }), m_surfaceID);
+    if (RefPtr renderingProcess = m_renderingProcess)
+        renderingProcess->send(Messages::AcceleratedSurface::ReleaseBuffer(m_id, { }), m_surfaceID);
 }
 
 #if USE(GTK4)
@@ -756,21 +763,26 @@ void AcceleratedBackingStore::didCreateDMABufBuffer(uint64_t id, DMABufBufferAtt
 #if USE(GBM)
     if (!Display::singleton().glDisplayIsSharedWithGtk()) {
         ASSERT(dmaBufAttributes.fds.size() == 1 && dmaBufAttributes.strides.size() == 1);
-        if (RefPtr buffer = BufferGBM::create(*webPage, id, m_surfaceID, size, usage, dmaBufAttributes.fourcc.value, WTF::move(dmaBufAttributes.fds[0]), dmaBufAttributes.strides[0]))
+        if (RefPtr buffer = BufferGBM::create(*webPage, id, m_surfaceID, size, usage, dmaBufAttributes.fourcc.value, WTF::move(dmaBufAttributes.fds[0]), dmaBufAttributes.strides[0])) {
+            buffer->setRenderingProcess(renderingProcess().get());
             m_buffers.add(id, WTF::move(buffer));
+        }
         return;
     }
 #endif
 
 #if GTK_CHECK_VERSION(4, 13, 4)
     if (RefPtr buffer = BufferDMABuf::create(*webPage, id, m_surfaceID, usage, WTF::move(dmaBufAttributes))) {
+        buffer->setRenderingProcess(renderingProcess().get());
         m_buffers.add(id, WTF::move(buffer));
         return;
     }
 #endif
 
-    if (RefPtr buffer = BufferEGLImage::create(*webPage, id, m_surfaceID, size, usage, WTF::move(dmaBufAttributes)))
+    if (RefPtr buffer = BufferEGLImage::create(*webPage, id, m_surfaceID, size, usage, WTF::move(dmaBufAttributes))) {
+        buffer->setRenderingProcess(renderingProcess().get());
         m_buffers.add(id, WTF::move(buffer));
+    }
 }
 
 void AcceleratedBackingStore::didCreateSHMBuffer(uint64_t id, ShareableBitmap::Handle&& handle)
@@ -779,8 +791,10 @@ void AcceleratedBackingStore::didCreateSHMBuffer(uint64_t id, ShareableBitmap::H
     if (!webPage)
         return;
 
-    if (auto buffer = BufferSHM::create(*webPage, id, m_surfaceID, ShareableBitmap::create(WTF::move(handle), SharedMemory::Protection::ReadOnly)))
+    if (auto buffer = BufferSHM::create(*webPage, id, m_surfaceID, ShareableBitmap::create(WTF::move(handle), SharedMemory::Protection::ReadOnly))) {
+        buffer->setRenderingProcess(renderingProcess().get());
         m_buffers.add(id, WTF::move(buffer));
+    }
 }
 
 void AcceleratedBackingStore::didDestroyBuffer(uint64_t id)
@@ -812,8 +826,30 @@ void AcceleratedBackingStore::frame(uint64_t bufferID, Rects&& damageRects, WTF:
 
 void AcceleratedBackingStore::frameDone()
 {
+    if (RefPtr process = renderingProcess())
+        process->send(Messages::AcceleratedSurface::FrameDone(), m_surfaceID);
+}
+
+RefPtr<AuxiliaryProcessProxy> AcceleratedBackingStore::renderingProcess() const
+{
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (RefPtr gpuProcess = m_gpuProcess)
+        return gpuProcess;
+#endif
+    return m_legacyMainFrameProcess.get();
+}
+
+void AcceleratedBackingStore::unregisterFromRenderingProcesses()
+{
+    if (!m_surfaceID)
+        return;
+
     if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess.get())
-        legacyMainFrameProcess->send(Messages::AcceleratedSurface::FrameDone(), m_surfaceID);
+        legacyMainFrameProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (RefPtr gpuProcess = std::exchange(m_gpuProcess, nullptr))
+        gpuProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+#endif
 }
 
 void AcceleratedBackingStore::realize()
@@ -864,7 +900,12 @@ void AcceleratedBackingStore::ensureGLContext()
 
 void AcceleratedBackingStore::update(const LayerTreeContext& context)
 {
-    if (m_surfaceID == context.contextID)
+    updateSurfaceID(context.contextID);
+}
+
+void AcceleratedBackingStore::updateSurfaceID(uint64_t surfaceID)
+{
+    if (m_surfaceID == surfaceID)
         return;
 
     if (m_surfaceID) {
@@ -879,16 +920,69 @@ void AcceleratedBackingStore::update(const LayerTreeContext& context)
             buffer->setSurfaceID(0);
         }
 
-        if (RefPtr legacyMainFrameProcess = m_legacyMainFrameProcess.get())
-            legacyMainFrameProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+        unregisterFromRenderingProcesses();
     }
 
-    m_surfaceID = context.contextID;
+    m_surfaceID = surfaceID;
     if (m_surfaceID && m_webPage) {
         m_legacyMainFrameProcess = m_webPage->legacyMainFrameProcess();
         protect(*m_legacyMainFrameProcess)->addMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID, *this);
     }
+
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (m_surfaceID && m_surfaceID == m_provisionalSurfaceID) {
+        m_provisionalSurfaceID = 0;
+        if (RefPtr gpuProcess = std::exchange(m_provisionalGPUProcess, nullptr))
+            setGPUProcess(*gpuProcess);
+    }
+#endif
 }
+
+#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void AcceleratedBackingStore::didCreateSurfaceInGPUProcess(GPUProcessProxy& gpuProcess, uint64_t surfaceID, bool isForProvisionalPage)
+{
+    if (isForProvisionalPage) {
+        m_provisionalGPUProcess = gpuProcess;
+        m_provisionalSurfaceID = surfaceID;
+        return;
+    }
+
+    // The GPU process can announce the surface before the web process does.
+    updateSurfaceID(surfaceID);
+    setGPUProcess(gpuProcess);
+}
+
+void AcceleratedBackingStore::setGPUProcess(GPUProcessProxy& gpuProcess)
+{
+    if (m_gpuProcess.get() == &gpuProcess)
+        return;
+
+    if (RefPtr previousGPUProcess = m_gpuProcess)
+        previousGPUProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+    m_gpuProcess = gpuProcess;
+    gpuProcess.addMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID, *this);
+}
+
+void AcceleratedBackingStore::gpuProcessDidExit()
+{
+    m_provisionalGPUProcess = nullptr;
+    m_provisionalSurfaceID = 0;
+
+    RefPtr gpuProcess = std::exchange(m_gpuProcess, nullptr);
+    if (!gpuProcess)
+        return;
+
+    gpuProcess->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
+
+    // The committed buffer stays on screen until the compositor in a new GPU process sends a frame.
+    m_pendingBuffer = nullptr;
+    m_pendingDamageRects = { };
+    while (!m_buffers.isEmpty()) {
+        auto buffer = m_buffers.takeFirst();
+        buffer->setSurfaceID(0);
+    }
+}
+#endif
 
 bool AcceleratedBackingStore::swapBuffersIfNeeded()
 {
