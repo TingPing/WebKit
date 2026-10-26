@@ -35,7 +35,14 @@ using namespace WebCore;
 
 Ref<RemoteDisplayListRecorder> RemoteDisplayListRecorder::create(RemoteDisplayListRecorderIdentifier identifier, RemoteRenderingBackend& renderingBackend)
 {
-    Ref instance = adoptRef(*new RemoteDisplayListRecorder(DisplayList::RecorderImpl::create(FloatRect { }), identifier, renderingBackend));
+#if USE(SKIA)
+    // The display list is only replayed in this process, so its text blobs are built once instead of on every
+    // replay. Skia caches the GPU form of text by blob, and new blobs on every frame make that cache churn.
+    Ref recorder = DisplayList::RecorderImpl::create(GraphicsContextState::initialIndeterminate(), FloatRect { }, { }, ColorSpace::SRGB(), DisplayList::Recorder::DrawGlyphsMode::TextBlob);
+#else
+    Ref recorder = DisplayList::RecorderImpl::create(FloatRect { });
+#endif
+    Ref instance = adoptRef(*new RemoteDisplayListRecorder(WTF::move(recorder), identifier, renderingBackend));
     instance->startListeningForIPC();
     return instance;
 }

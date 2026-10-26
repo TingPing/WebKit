@@ -203,7 +203,7 @@ void RecorderImpl::drawGlyphs(const Font& font, std::span<const GlyphBufferGlyph
 
 #if USE(SKIA)
     if (drawGlyphsMode() == Recorder::DrawGlyphsMode::TextBlob) {
-        m_items.append(DrawTextBlob(Ref { font }, Vector(glyphs), Vector(advances), localAnchor, smoothingMode));
+        m_items.append(DrawTextBlob(font, glyphs, advances, localAnchor, smoothingMode));
         return;
     }
 #endif
@@ -214,6 +214,12 @@ void RecorderImpl::drawGlyphs(const Font& font, std::span<const GlyphBufferGlyph
 void RecorderImpl::drawGlyphsImmediate(const FontBase& font, std::span<const GlyphBufferGlyph> glyphs, std::span<const GlyphBufferAdvance> advances, const FloatPoint& localAnchor, FontSmoothingMode smoothingMode)
 {
     appendStateChangeItemIfNecessary();
+#if USE(SKIA)
+    if (drawGlyphsMode() == Recorder::DrawGlyphsMode::TextBlob) {
+        m_items.append(DrawTextBlob(font, glyphs, advances, localAnchor, smoothingMode));
+        return;
+    }
+#endif
     m_items.append(DrawGlyphs(Ref { font }, Vector(glyphs), Vector(advances), localAnchor, smoothingMode));
 }
 

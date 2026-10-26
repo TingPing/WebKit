@@ -527,10 +527,10 @@ class DrawTextBlob {
 public:
     static constexpr char name[] = "draw-text-blob";
 
-    DrawTextBlob(Ref<const Font>&& font, Vector<GlyphBufferGlyph>&& glyphs, Vector<GlyphBufferAdvance>&& advances, const FloatPoint& localAnchor, FontSmoothingMode smoothingMode)
-        : m_textBlob(font->buildTextBlob(glyphs, advances, smoothingMode))
-        , m_enableAntialiasing(font->enableAntialiasing(smoothingMode))
-        , m_isVertical(font->platformData().orientation() == FontOrientation::Vertical)
+    DrawTextBlob(const FontBase& font, std::span<const GlyphBufferGlyph> glyphs, std::span<const GlyphBufferAdvance> advances, const FloatPoint& localAnchor, FontSmoothingMode smoothingMode)
+        : m_textBlob(font.buildTextBlob(glyphs, advances, smoothingMode))
+        , m_enableAntialiasing(font.enableAntialiasing(smoothingMode))
+        , m_isVertical(font.platformData().orientation() == FontOrientation::Vertical)
         , m_localAnchor(localAnchor)
         , m_fontSmoothingMode(smoothingMode)
     {
