@@ -43,6 +43,10 @@ public:
 
     WEBCORE_EXPORT static void LEGACY_NODELETE setCanUseAcceleratedBuffers(bool);
     static bool LEGACY_NODELETE canUseAcceleratedBuffers();
+
+    // The tiles of the layers are painted with the GPU, by the process that composites them.
+    WEBCORE_EXPORT static void setRemoteTilesPaintedWithGPU(bool);
+    static bool remoteTilesPaintedWithGPU();
 };
 
 } // namespace WebCore

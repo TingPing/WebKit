@@ -621,7 +621,7 @@ void LayerTreeHost::fillGLInformation(RenderProcessInfo&& info, CompletionHandle
         info.cpuPaintingThreadsCount = CoordinatedTileManager::numberOfCPUPaintingThreads();
 #else
     auto threadsCount = CoordinatedTileManager::numberOfCPUPaintingThreads();
-    if (ProcessCapabilities::canUseAcceleratedBuffers())
+    if (ProcessCapabilities::canUseAcceleratedBuffers() || ProcessCapabilities::remoteTilesPaintedWithGPU())
         info.gpuPaintingThreadsCount = threadsCount;
     else
         info.cpuPaintingThreadsCount = threadsCount;

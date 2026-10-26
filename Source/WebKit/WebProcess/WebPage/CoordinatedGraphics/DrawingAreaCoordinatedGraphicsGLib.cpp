@@ -128,6 +128,9 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
         ProcessCapabilities::setCanUseAcceleratedBuffers(false);
         WebProcess::singleton().setUsesGPUProcessForCompositing();
         ImageBackingStore::setAllocatesSharedMemory(true);
+        // The tiles are sized for the GPU process, which paints them on the CPU only when asked to.
+        const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
+        ProcessCapabilities::setRemoteTilesPaintedWithGPU(!enableCPURendering || StringView::fromLatin1(enableCPURendering) == "0"_s);
     }
 #endif
     settings.setForceCompositingMode(store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey()));
