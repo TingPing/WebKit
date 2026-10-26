@@ -238,7 +238,7 @@ void GraphicsContextGLCoordinated::prepareForDisplay()
     buffer = CoordinatedPlatformLayerBufferRGB::create(displayTexture->texture->id(), displayTexture->size, flags, WTF::move(displayTexture->fence));
 #else
     auto alphaMode = contextAttributes().alpha ? CoordinatedPlatformLayerBuffer::AlphaMode::Premultiplied : CoordinatedPlatformLayerBuffer::AlphaMode::Opaque;
-    buffer = CoordinatedPlatformLayerBufferSkiaImage::create(WTF::move(displayTexture->texture), displayTexture->size, alphaMode, WTF::move(displayTexture->fence), m_layerContentsDisplayDelegate->threadSafeGrContext());
+    buffer = CoordinatedPlatformLayerBufferSkiaImage::create(WTF::move(displayTexture->texture), displayTexture->size, alphaMode, CoordinatedPlatformLayerBuffer::Origin::BottomLeft, WTF::move(displayTexture->fence), m_layerContentsDisplayDelegate->threadSafeGrContext());
 #endif
     m_layerContentsDisplayDelegate->setDisplayBuffer(WTF::move(buffer));
 }

@@ -62,6 +62,10 @@
 #include "ImageBufferShareableMappedIOSurfaceBackend.h"
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include "ImageBufferRemoteCoordinatedBackend.h"
+#endif
+
 namespace WebKit {
 
 using namespace WebCore;
@@ -282,6 +286,13 @@ RefPtr<RemoteImageBufferProxy> RemoteRenderingBackendProxy::createImageBuffer(co
             imageBuffer = RemoteImageBufferProxy::create<ImageBufferShareableMappedIOSurfaceBackend>(parameters, *this, creationContext);
         else
             imageBuffer = RemoteImageBufferProxy::create<ImageBufferRemoteIOSurfaceBackend>(parameters, *this);
+#elif USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+        if (purpose == RenderingPurpose::Canvas && isMainRunLoop() && WebProcess::singleton().usesGPUProcessForCompositing()) {
+            auto backendSize = ImageBufferBackend::calculateSafeBackendSize(parameters);
+            auto maxSize = WebProcess::singleton().ensureGPUProcessConnection().maxAcceleratedImageBufferSize();
+            if (static_cast<uint32_t>(std::max(backendSize.width(), backendSize.height())) <= maxSize)
+                imageBuffer = RemoteImageBufferProxy::create<ImageBufferRemoteCoordinatedBackend>(parameters, *this);
+        }
 #endif
         [[fallthrough]];
 

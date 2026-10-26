@@ -94,7 +94,7 @@ struct PromiseWebGLImageContext {
 
 WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(PromiseWebGLImageContext);
 
-std::unique_ptr<CoordinatedPlatformLayerBufferSkiaImage> CoordinatedPlatformLayerBufferSkiaImage::create(Ref<CoordinatedWebGLTextureWrapper>&& textureWrapper, const IntSize& size, AlphaMode alphaMode, std::unique_ptr<GLFence>&& fence, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
+std::unique_ptr<CoordinatedPlatformLayerBufferSkiaImage> CoordinatedPlatformLayerBufferSkiaImage::create(Ref<CoordinatedWebGLTextureWrapper>&& textureWrapper, const IntSize& size, AlphaMode alphaMode, Origin origin, std::unique_ptr<GLFence>&& fence, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
 {
     if (!threadSafeGrContext)
         return nullptr;
@@ -104,7 +104,7 @@ std::unique_ptr<CoordinatedPlatformLayerBufferSkiaImage> CoordinatedPlatformLaye
 
     auto context = makeUnique<PromiseWebGLImageContext>(WTF::move(textureWrapper), size, WTF::move(fence));
     auto skiaImage = SkImages::PromiseTextureFrom(threadSafeGrContext, backendFormat, SkISize::Make(size.width(), size.height()), skgpu::Mipmapped::kNo,
-        kBottomLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, toSkiaAlphaType(alphaMode), SkColorSpace::MakeSRGB(),
+        origin == Origin::BottomLeft ? kBottomLeft_GrSurfaceOrigin : kTopLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, toSkiaAlphaType(alphaMode), SkColorSpace::MakeSRGB(),
         +[](void* userData) -> sk_sp<GrPromiseImageTexture> {
             auto& context = *static_cast<PromiseWebGLImageContext*>(userData);
             return context.promiseImageTexture();

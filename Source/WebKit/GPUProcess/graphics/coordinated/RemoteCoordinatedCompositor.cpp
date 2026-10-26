@@ -230,14 +230,28 @@ static std::span<const uint8_t> pixelsSpan(std::span<const uint8_t> pixels, cons
     return pixels.subspan(location.offset, size.value());
 }
 
+static sk_sp<SkImage> rasterImage(std::span<const uint8_t> pixels, const CoordinatedPixels& location)
+{
+    auto data = pixelsSpan(pixels, location);
+    if (data.empty())
+        return nullptr;
+
+    auto info = SkImageInfo::Make(location.size.width(), location.size.height(), kBGRA_8888_SkColorType, kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
+    return SkImages::RasterFromData(info, SkData::MakeWithCopy(data.data(), data.size()), info.minRowBytes());
+}
+
 void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& update, std::span<const uint8_t> pixels)
 {
     Ref layer = ensureLayer(update.properties.id);
     applyLayerProperties(layer.get(), update.properties);
 
-#if ENABLE(WEBGL) && USE(GBM)
     if (update.properties.changes.contains(CoordinatedLayerChange::ContentsBuffer)) {
         std::unique_ptr<CoordinatedPlatformLayerBuffer> buffer;
+        if (update.contentsBuffer) {
+            if (auto image = rasterImage(pixels, *update.contentsBuffer))
+                buffer = CoordinatedPlatformLayerBufferSkiaImage::create(image, m_threadSafeGrContext);
+        }
+#if ENABLE(WEBGL) && USE(GBM)
         if (const auto& contents = update.properties.contentsBuffer) {
             if (auto frame = RemoteCoordinatedContentsRegistry::singleton().takeFrame(m_webProcessIdentifier, contents->identifier)) {
                 buffer = WTF::switchOn(WTF::move(*frame),
@@ -245,23 +259,19 @@ void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& upda
                         return CoordinatedPlatformLayerBufferDMABuf::create(WTF::move(dmabufFrame.buffer), contents->alphaMode, contents->origin, WTF::move(dmabufFrame.fence), m_threadSafeGrContext);
                     },
                     [&](RemoteCoordinatedContentsRegistry::TextureFrame&& textureFrame) -> std::unique_ptr<CoordinatedPlatformLayerBuffer> {
-                        return CoordinatedPlatformLayerBufferSkiaImage::create(WTF::move(textureFrame.texture), textureFrame.size, contents->alphaMode, WTF::move(textureFrame.fence), m_threadSafeGrContext);
+                        return CoordinatedPlatformLayerBufferSkiaImage::create(WTF::move(textureFrame.texture), textureFrame.size, contents->alphaMode, contents->origin, WTF::move(textureFrame.fence), m_threadSafeGrContext);
                     });
             }
         }
+#endif
         layer->setContentsBuffer(WTF::move(buffer));
     }
-#endif
 
     if (update.properties.changes.contains(CoordinatedLayerChange::ContentsImage)) {
         RefPtr<CoordinatedImageBackingStore> imageBackingStore;
         if (update.contentsImage) {
-            if (auto data = pixelsSpan(pixels, *update.contentsImage); !data.empty()) {
-                auto& size = update.contentsImage->size;
-                auto info = SkImageInfo::Make(size.width(), size.height(), kBGRA_8888_SkColorType, kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
-                if (RefPtr image = NativeImage::create(SkImages::RasterFromData(info, SkData::MakeWithCopy(data.data(), data.size()), info.minRowBytes())))
-                    imageBackingStore = CoordinatedImageBackingStore::create(image.releaseNonNull(), m_threadSafeGrContext);
-            }
+            if (RefPtr image = NativeImage::create(rasterImage(pixels, *update.contentsImage)))
+                imageBackingStore = CoordinatedImageBackingStore::create(image.releaseNonNull(), m_threadSafeGrContext);
         }
         layer->setImageBackingStore(imageBackingStore.get());
     }

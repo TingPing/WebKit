@@ -2722,6 +2722,10 @@ bool WebProcess::shouldUseRemoteRenderingFor(RenderingPurpose purpose)
 {
     switch (purpose) {
     case RenderingPurpose::Canvas:
+#if USE(COORDINATED_GRAPHICS)
+        if (m_usesGPUProcessForCompositing)
+            return true;
+#endif
         return m_useGPUProcessForCanvasRendering;
     case RenderingPurpose::DOM:
     case RenderingPurpose::LayerBacking:

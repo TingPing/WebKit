@@ -122,11 +122,13 @@ static CoordinatedLayerTreeTransaction makeTransaction(PendingLayerTreeTransacti
 
     SharedBufferBuilder pixels;
     for (auto& changes : pendingTransaction.layers) {
-        CoordinatedLayerUpdate update { .properties = WTF::move(changes.properties), .backingStore = { }, .contentsImage = { } };
+        CoordinatedLayerUpdate update { .properties = WTF::move(changes.properties), .backingStore = { }, .contentsImage = { }, .contentsBuffer = { } };
         if (changes.backingStoreUpdate)
             update.backingStore = backingStoreUpdate(*changes.backingStoreUpdate, changes.contentsScale, pixels);
         if (RefPtr image = changes.contentsImage)
             update.contentsImage = imagePixels(*image, pixels);
+        if (RefPtr image = changes.contentsBufferImage)
+            update.contentsBuffer = imagePixels(*image, pixels);
         transaction.layers.append(WTF::move(update));
     }
 

@@ -156,6 +156,15 @@ std::optional<audit_token_t> GPUProcessConnection::auditToken()
 }
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+uint32_t GPUProcessConnection::maxAcceleratedImageBufferSize()
+{
+    if (!waitForDidInitialize())
+        return 0;
+    return m_maxAcceleratedImageBufferSize;
+}
+#endif
+
 Ref<RemoteSharedResourceCacheProxy> GPUProcessConnection::sharedResourceCache()
 {
     if (!m_sharedResourceCache)
@@ -299,6 +308,10 @@ void GPUProcessConnection::didInitialize(std::optional<GPUProcessConnectionInfo>
     }
     m_hasInitialized = true;
     RELEASE_LOG_FORWARDABLE(Process, GpuProcessConnectionDidInitialize, identifier().toUInt64());
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    m_maxAcceleratedImageBufferSize = info->maxAcceleratedImageBufferSize;
+#endif
 
 #if PLATFORM(COCOA)
 #if USE(LIBWEBRTC)

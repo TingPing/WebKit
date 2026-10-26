@@ -46,6 +46,20 @@
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <wtf/StdLibExtras.h>
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && ENABLE(WEBGL) && USE(GBM)
+#include "GPUConnectionToWebProcess.h"
+#include "RemoteCoordinatedContentsRegistry.h"
+#include <WebCore/GLFence.h>
+#include <WebCore/GraphicsContextGLCoordinated.h>
+#include <WebCore/PlatformDisplay.h>
+#include <WebCore/SkiaUtilities.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/core/SkImage.h>
+#include <skia/gpu/ganesh/SkImageGanesh.h>
+#include <skia/gpu/ganesh/gl/GrGLBackendSurface.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
+#endif
+
 #define MESSAGE_CHECK(assertion, message) MESSAGE_CHECK_WITH_MESSAGE_BASE(assertion, m_renderingBackend->streamConnection(), message)
 
 namespace WebKit {
@@ -110,8 +124,60 @@ void RemoteImageBuffer::prepareForDisplay(IPC::Semaphore&& finishedSignal, Compl
 }
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+void RemoteImageBuffer::prepareForDisplay(CoordinatedContentsIdentifier contentsIdentifier, CompletionHandler<void(bool)>&& completionHandler)
+{
+    assertIsCurrent(workQueue());
+#if ENABLE(WEBGL) && USE(GBM)
+    Ref imageBuffer = m_imageBuffer;
+    if (imageBuffer->renderingMode() != RenderingMode::Accelerated) {
+        completionHandler(false);
+        return;
+    }
+
+    RefPtr image = imageBuffer->createNativeImageReference();
+    imageBuffer->prepareForDisplay();
+    if (!image || !image->platformImage()->isTextureBacked()) {
+        completionHandler(false);
+        return;
+    }
+
+    auto platformImage = image->platformImage();
+    auto fence = SkiaUtilities::flushAndSubmitImageWithFence(PlatformDisplay::sharedDisplay().skiaGrContext(), platformImage);
+    GrBackendTexture backendTexture;
+    GrGLTextureInfo textureInfo;
+    if (!SkImages::GetBackendTextureFromImage(platformImage.get(), &backendTexture, false) || !GrBackendTextures::GetGLTextureInfo(backendTexture, &textureInfo)) {
+        completionHandler(false);
+        return;
+    }
+
+    m_displayedImages.removeAllMatching([](auto& displayedImage) {
+        return displayedImage.second->hasOneRef();
+    });
+    Ref texture = CoordinatedWebGLTextureWrapper::create(textureInfo.fID);
+    m_displayedImages.append({ platformImage, texture });
+
+    m_contentsIdentifier = contentsIdentifier;
+    RemoteCoordinatedContentsRegistry::singleton().setFrame(m_renderingBackend->gpuConnectionToWebProcess().webProcessIdentifier(), contentsIdentifier,
+        RemoteCoordinatedContentsRegistry::TextureFrame { WTF::move(texture), { platformImage->width(), platformImage->height() }, WTF::move(fence) });
+    completionHandler(true);
+#else
+    UNUSED_PARAM(contentsIdentifier);
+    completionHandler(false);
+#endif
+}
+#endif
+
 RemoteImageBuffer::~RemoteImageBuffer()
 {
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && ENABLE(WEBGL) && USE(GBM)
+    if (!m_displayedImages.isEmpty()) {
+        if (m_contentsIdentifier)
+            RemoteCoordinatedContentsRegistry::singleton().remove(m_renderingBackend->gpuConnectionToWebProcess().webProcessIdentifier(), *m_contentsIdentifier);
+        PlatformDisplay::makeSkiaGLContextCurrentIfExists();
+        m_displayedImages.clear();
+    }
+#endif
     m_renderingBackend->sharedResourceCache().didReleaseImageBuffer(m_imageBuffer->renderingPurpose(), m_imageBuffer->renderingMode());
     // Volatile image buffers do not have contexts.
     if (m_imageBuffer->volatilityState() == WebCore::VolatilityState::Volatile)

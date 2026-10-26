@@ -89,6 +89,9 @@ public:
 #if HAVE(AUDIT_TOKEN)
     std::optional<audit_token_t> auditToken();
 #endif
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    uint32_t maxAcceleratedImageBufferSize();
+#endif
     Ref<RemoteSharedResourceCacheProxy> sharedResourceCache();
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     SampleBufferDisplayLayerManager& sampleBufferDisplayLayerManager() LIFETIME_BOUND;
@@ -167,6 +170,9 @@ private:
     const RefPtr<RemoteSharedResourceCacheProxy> m_sharedResourceCache;
 #if HAVE(AUDIT_TOKEN)
     std::optional<audit_token_t> m_auditToken;
+#endif
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    uint32_t m_maxAcceleratedImageBufferSize { 0 };
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     const std::unique_ptr<SampleBufferDisplayLayerManager> m_sampleBufferDisplayLayerManager;

@@ -51,6 +51,9 @@
 
 #if USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "CoordinatedPlatformLayerBufferRemote.h"
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/core/SkImage.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #endif
 
 namespace WebCore {
@@ -1713,6 +1716,8 @@ std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer
         m_contentsBuffer.hasCommitted = !!buffer;
         if (auto* remoteBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferRemote>(buffer))
             properties.contentsBuffer = CoordinatedRemoteContentsBuffer { remoteBuffer->identifier(), remoteBuffer->alphaMode(), remoteBuffer->origin() };
+        else if (auto image = buffer ? buffer->skiaImage() : nullptr; image && !image->isTextureBacked())
+            changes.contentsBufferImage = NativeImage::create(WTF::move(image));
     });
 
     // FIXME: send damage to the remote compositor.

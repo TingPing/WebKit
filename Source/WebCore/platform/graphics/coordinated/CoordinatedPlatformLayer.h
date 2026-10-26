@@ -213,6 +213,7 @@ public:
         std::optional<CoordinatedBackingStoreProxy::Update> backingStoreUpdate;
         float contentsScale { 1 };
         RefPtr<NativeImage> contentsImage;
+        RefPtr<NativeImage> contentsBufferImage;
     };
     std::optional<PendingChanges> takePendingChanges();
     std::optional<CoordinatedLayerProperties> takePendingPositionChanges();

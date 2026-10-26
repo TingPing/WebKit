@@ -38,6 +38,10 @@
 #include <wtf/Lock.h>
 #include <wtf/TZoneMalloc.h>
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include <WebCore/CoordinatedContentsIdentifier.h>
+#endif
+
 namespace IPC {
 class Connection;
 }
@@ -133,7 +137,7 @@ private:
 
     void LEGACY_NODELETE assertDispatcherIsCurrent() const;
     void prepareForDisplay() final;
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || (USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER))
     RefPtr<WebCore::GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate() final;
     void releaseLayerContentsDisplayDelegate() final;
 #endif
@@ -151,6 +155,9 @@ private:
 #if PLATFORM(COCOA)
     RefPtr<DisplayBufferDisplayDelegate> m_displayDelegate;
     RefPtr<DisplayBufferFence> m_displayBufferFence;
+#elif USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    RefPtr<WebCore::GraphicsLayerContentsDisplayDelegate> m_displayDelegate;
+    const WebCore::CoordinatedContentsIdentifier m_contentsIdentifier { WebCore::CoordinatedContentsIdentifier::generate() };
 #endif
     mutable RemoteGraphicsContextProxy m_context;
     WeakPtr<RemoteRenderingBackendProxy> m_renderingBackend;

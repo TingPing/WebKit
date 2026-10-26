@@ -173,6 +173,11 @@
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "RemoteCoordinatedCompositor.h"
 #include "RemoteCoordinatedContentsRegistry.h"
+#include <WebCore/GLContext.h>
+#include <WebCore/PlatformDisplay.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/gpu/ganesh/GrDirectContext.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #endif
 
 #if ENABLE(IPC_TESTING_API)
@@ -312,6 +317,21 @@ static ProcessIdentity adjustProcessIdentityIfNeeded(ProcessIdentity&& identity)
     return identity;
 }
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+static uint32_t maxAcceleratedImageBufferSize()
+{
+    static uint32_t maxSize = [] -> uint32_t {
+        auto& display = PlatformDisplay::sharedDisplay();
+        auto* glContext = display.skiaGLContext();
+        if (!glContext || !glContext->makeContextCurrent())
+            return 0;
+        auto* grContext = display.skiaGrContext();
+        return grContext ? grContext->maxRenderTargetSize() : 0;
+    }();
+    return maxSize;
+}
+#endif
+
 Ref<GPUConnectionToWebProcess> GPUConnectionToWebProcess::create(GPUProcess& gpuProcess, WebCore::ProcessIdentifier webProcessIdentifier, PAL::SessionID sessionID, IPC::Connection::Handle&& connectionHandle, GPUProcessConnectionParameters&& parameters)
 {
     return adoptRef(*new GPUConnectionToWebProcess(gpuProcess, webProcessIdentifier, sessionID, WTF::move(connectionHandle), WTF::move(parameters)));
@@ -391,7 +411,10 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
 #if HAVE(AUDIT_TOKEN)
         .auditToken = protect(gpuProcess.parentProcessConnection())->getAuditToken(),
 #endif
-        .mediaCodecCapabilities = capabilities
+        .mediaCodecCapabilities = capabilities,
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+        .maxAcceleratedImageBufferSize = maxAcceleratedImageBufferSize(),
+#endif
     };
     m_connection->send(Messages::GPUProcessConnection::DidInitialize(info), 0);
     ++gObjectCountForTesting;

@@ -29,6 +29,9 @@ struct WebKit::GPUProcessConnectionInfo {
 #endif
 
     WebKit::GPUProcessMediaCodecCapabilities mediaCodecCapabilities;
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    uint32_t maxAcceleratedImageBufferSize;
+#endif
 }
 
 #endif

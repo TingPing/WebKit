@@ -42,6 +42,9 @@ struct GPUProcessConnectionInfo {
     std::optional<CoreIPCAuditToken> auditToken { };
 #endif
     GPUProcessMediaCodecCapabilities mediaCodecCapabilities;
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    uint32_t maxAcceleratedImageBufferSize { 0 };
+#endif
 };
 
 } // namespace WebKit

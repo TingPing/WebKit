@@ -81,6 +81,10 @@
 #include <WebCore/IOSurfacePool.h>
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include <WebCore/ImageBufferSkiaAcceleratedBackend.h>
+#endif
+
 #if HAVE(SHAPE_DETECTION_API_IMPLEMENTATION)
 #import <WebCore/BarcodeDetectorImplementation.h>
 #import <WebCore/FaceDetectorImplementation.h>
@@ -311,6 +315,9 @@ static RefPtr<ImageBuffer> allocateImageBufferInternal(const FloatSize& logicalS
             imageBuffer = ImageBuffer::create<ImageBufferShareableMappedIOSurfaceBitmapBackend, ImageBufferType>(logicalSize, resolutionScale, colorSpace, bufferFormat, purpose, creationContext);
         if (!imageBuffer)
             imageBuffer = ImageBuffer::create<ImageBufferShareableMappedIOSurfaceBackend, ImageBufferType>(logicalSize, resolutionScale, colorSpace, bufferFormat, purpose, creationContext);
+#elif USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+        if (purpose == RenderingPurpose::Canvas)
+            imageBuffer = ImageBuffer::create<ImageBufferSkiaAcceleratedBackend, ImageBufferType>(logicalSize, resolutionScale, colorSpace, bufferFormat, purpose, creationContext);
 #endif
         [[fallthrough]];
 

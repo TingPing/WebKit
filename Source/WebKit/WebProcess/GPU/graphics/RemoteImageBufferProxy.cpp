@@ -55,6 +55,9 @@
 #include "DisplayBufferDisplayDelegate.h"
 #include <WebCore/GraphicsLayerCA.h>
 #include <WebCore/IOSurface.h>
+#elif USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include <WebCore/CoordinatedPlatformLayerBufferRemote.h>
+#include <WebCore/GraphicsLayerContentsDisplayDelegateCoordinated.h>
 #endif
 
 namespace WebKit {
@@ -290,6 +293,22 @@ void RemoteImageBufferProxy::prepareForDisplay()
     Ref displayBufferFence = DisplayBufferFence::create(WTF::move(finishedSignal));
     m_displayBufferFence = displayBufferFence.copyRef();
     displayDelegate->setDisplayBuffer(WTF::move(displayBuffer), WTF::move(displayBufferFence));
+#elif USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    RefPtr displayDelegate = m_displayDelegate;
+    if (!displayDelegate) {
+        flushDrawingContextAsync();
+        return;
+    }
+    // Synchronous, so the GPU process compositor has the frame before the layer showing it is committed.
+    sendPendingDrawsIfNecessary();
+    auto sendResult = sendSync(Messages::RemoteImageBuffer::PrepareForDisplay(m_contentsIdentifier));
+    if (!sendResult.succeeded())
+        return;
+    auto [isPrepared] = sendResult.takeReply();
+    if (!isPrepared)
+        return;
+    auto alphaMode = pixelFormatIsOpaque(pixelFormat()) ? CoordinatedPlatformLayerBuffer::AlphaMode::Opaque : CoordinatedPlatformLayerBuffer::AlphaMode::Premultiplied;
+    displayDelegate->setDisplayBuffer(CoordinatedPlatformLayerBufferRemote::create(m_contentsIdentifier, alphaMode, CoordinatedPlatformLayerBuffer::Origin::TopLeft));
 #else
     flushDrawingContextAsync();
 #endif
@@ -302,6 +321,25 @@ RefPtr<GraphicsLayerContentsDisplayDelegate> RemoteImageBufferProxy::layerConten
         Ref displayDelegate = DisplayBufferDisplayDelegate::create(false, GraphicsLayerCA::defaultContentsOrientation);
         displayDelegate->setContentsFormat(convertToContentsFormat(pixelFormat()));
         m_displayDelegate = WTF::move(displayDelegate);
+        // The buffer may already have been prepared for display this frame.
+        prepareForDisplay();
+    }
+    return m_displayDelegate;
+}
+
+void RemoteImageBufferProxy::releaseLayerContentsDisplayDelegate()
+{
+    m_displayDelegate = nullptr;
+}
+#elif USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+RefPtr<GraphicsLayerContentsDisplayDelegate> RemoteImageBufferProxy::layerContentsDisplayDelegate()
+{
+    auto* backend = ImageBuffer::backend();
+    if (!backend || backend->canMapBackingStore() || renderingMode() != RenderingMode::Accelerated)
+        return nullptr;
+
+    if (!m_displayDelegate) {
+        m_displayDelegate = GraphicsLayerContentsDisplayDelegateCoordinated::create();
         // The buffer may already have been prepared for display this frame.
         prepareForDisplay();
     }

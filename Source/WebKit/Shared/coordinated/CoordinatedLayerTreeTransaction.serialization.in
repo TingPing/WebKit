@@ -226,6 +226,7 @@ header: "CoordinatedLayerTreeTransaction.h"
     WebCore::CoordinatedLayerProperties properties;
     std::optional<WebKit::CoordinatedBackingStoreUpdate> backingStore;
     std::optional<WebKit::CoordinatedPixels> contentsImage;
+    std::optional<WebKit::CoordinatedPixels> contentsBuffer;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"

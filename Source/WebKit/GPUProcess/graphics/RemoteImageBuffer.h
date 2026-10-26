@@ -41,6 +41,16 @@
 #include <WebCore/DynamicContentScalingDisplayList.h>
 #endif
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include <WebCore/CoordinatedContentsIdentifier.h>
+#endif
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && ENABLE(WEBGL) && USE(GBM)
+namespace WebCore {
+class CoordinatedWebGLTextureWrapper;
+}
+#endif
+
 namespace IPC {
 class Semaphore;
 class StreamConnectionWorkQueue;
@@ -77,6 +87,9 @@ private:
 #if PLATFORM(COCOA)
     void prepareForDisplay(IPC::Semaphore&& finishedSignal, CompletionHandler<void(MachSendRight&&)>&&);
 #endif
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    void prepareForDisplay(WebCore::CoordinatedContentsIdentifier, CompletionHandler<void(bool)>&&);
+#endif
     void filteredNativeImage(Ref<WebCore::Filter>, CompletionHandler<void(std::optional<WebCore::ShareableBitmap::Handle>&&)>&&);
     void convertToLuminanceMask();
     void transformToColorSpace(const WebCore::ColorSpace&);
@@ -91,6 +104,11 @@ private:
     const Ref<WebCore::ImageBuffer> m_imageBuffer;
 #if PLATFORM(COCOA)
     RefPtr<WebCore::GraphicsLayerContentsDisplayDelegate> m_displayDelegate;
+#endif
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && ENABLE(WEBGL) && USE(GBM)
+    // Frames given to the compositor, kept until it releases their texture so they are destroyed on this thread.
+    Vector<std::pair<WebCore::PlatformImagePtr, Ref<WebCore::CoordinatedWebGLTextureWrapper>>> m_displayedImages;
+    std::optional<WebCore::CoordinatedContentsIdentifier> m_contentsIdentifier;
 #endif
     const WebCore::RenderingResourceIdentifier m_identifier;
     const Ref<RemoteRenderingBackend> m_renderingBackend;

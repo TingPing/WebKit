@@ -44,6 +44,9 @@ messages -> RemoteImageBuffer Stream {
 #if PLATFORM(COCOA)
     PrepareForDisplay(IPC::Semaphore finishedSignal) -> (MachSendRight displayBuffer) Synchronous NotStreamEncodable NotStreamEncodableReply
 #endif
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    PrepareForDisplay(WebCore::CoordinatedContentsIdentifier contentsIdentifier) -> (bool isPrepared) Synchronous
+#endif
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
     DynamicContentScalingDisplayList() -> (std::optional<WebCore::DynamicContentScalingDisplayList> displayList) Synchronous NotStreamEncodableReply

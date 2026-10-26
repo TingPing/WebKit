@@ -13,7 +13,9 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/graphics/skia/FontCascadeSkiaInlines.h
     platform/graphics/skia/GraphicsContextSkia.h
+    platform/graphics/skia/ImageBufferSkiaAcceleratedBackend.h
     platform/graphics/skia/ImageBufferSkiaBackend.h
+    platform/graphics/skia/ImageBufferSkiaSurfaceBackend.h
     platform/graphics/skia/PathSkia.h
     platform/graphics/skia/SkiaBackingStore.h
     platform/graphics/skia/SkiaCompositingLayer.h

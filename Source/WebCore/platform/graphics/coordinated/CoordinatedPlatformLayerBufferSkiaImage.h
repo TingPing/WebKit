@@ -41,7 +41,7 @@ class CoordinatedPlatformLayerBufferSkiaImage final : public CoordinatedPlatform
 public:
     static std::unique_ptr<CoordinatedPlatformLayerBufferSkiaImage> create(const sk_sp<SkImage>&, const sk_sp<GrContextThreadSafeProxy>&);
 #if ENABLE(WEBGL)
-    static std::unique_ptr<CoordinatedPlatformLayerBufferSkiaImage> create(Ref<CoordinatedWebGLTextureWrapper>&&, const IntSize&, AlphaMode, std::unique_ptr<GLFence>&&, const sk_sp<GrContextThreadSafeProxy>&);
+    static std::unique_ptr<CoordinatedPlatformLayerBufferSkiaImage> create(Ref<CoordinatedWebGLTextureWrapper>&&, const IntSize&, AlphaMode, Origin, std::unique_ptr<GLFence>&&, const sk_sp<GrContextThreadSafeProxy>&);
 #endif
     CoordinatedPlatformLayerBufferSkiaImage(sk_sp<SkImage>&&, AlphaMode, Rotation);
     virtual ~CoordinatedPlatformLayerBufferSkiaImage() = default;

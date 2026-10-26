@@ -59,6 +59,7 @@ struct CoordinatedLayerUpdate {
     WebCore::CoordinatedLayerProperties properties;
     std::optional<CoordinatedBackingStoreUpdate> backingStore;
     std::optional<CoordinatedPixels> contentsImage;
+    std::optional<CoordinatedPixels> contentsBuffer;
 };
 
 struct CoordinatedLayerTreeTransaction {
