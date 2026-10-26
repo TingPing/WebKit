@@ -195,8 +195,13 @@ void RemoteCoordinatedCompositorProxy::invalidate()
 
 int RemoteCoordinatedCompositorProxy::maxTextureSize() const
 {
-    // FIXME: get the maximum texture size from the GPU process.
-    return 4096;
+    ASSERT(RunLoop::isMain());
+    if (!m_maxTextureSize) {
+        static constexpr int fallbackMaxTextureSize = 4096;
+        auto maxSize = WebProcess::singleton().ensureGPUProcessConnection().maxAcceleratedImageBufferSize();
+        m_maxTextureSize = maxSize ? std::min<uint32_t>(maxSize, std::numeric_limits<int>::max()) : fallbackMaxTextureSize;
+    }
+    return m_maxTextureSize;
 }
 
 void RemoteCoordinatedCompositorProxy::backgroundColorDidChange()

@@ -120,6 +120,7 @@ private:
     std::atomic<unsigned> m_pendingCommits { 0 };
     Function<void()> m_didCompositeFunction;
     unsigned m_suspendedCount { 0 };
+    mutable int m_maxTextureSize { 0 };
     bool m_isInvalidated { false };
 };
 
