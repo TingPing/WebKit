@@ -168,7 +168,7 @@ ALWAYS_INLINE void RemoteImageBufferProxy::send(T&& message) const
         return;
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-    if (RefPtr renderingBackend = m_renderingBackend.get())
+    if (RefPtr renderingBackend = m_renderingBackend)
         didUse(renderingBackend->imageBufferUseFence());
 #endif
     auto result = connection->send(std::forward<T>(message), renderingResourceIdentifier());
@@ -500,7 +500,7 @@ void RemoteImageBufferProxy::putPixelBuffer(const PixelBufferSourceView& pixelBu
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
         // Without draws of its own to wait for, the write only has to come after the uses of the buffer that were sent,
         // which a fence shared with the other buffers tells without a round trip for every write.
-        if (RefPtr renderingBackend = m_renderingBackend.get(); renderingBackend && !m_context.consumeHasDrawn()) {
+        if (RefPtr renderingBackend = m_renderingBackend; renderingBackend && !m_context.consumeHasDrawn()) {
             renderingBackend->waitForImageBufferUses(m_lastUseFence);
             ImageBuffer::putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
             return;

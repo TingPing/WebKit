@@ -331,7 +331,7 @@ void RemoteGraphicsContextProxy::drawDisplayList(const DisplayList::DisplayList&
     if (!identifier)
         return;
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-    if (RefPtr renderingBackend = m_renderingBackend.get())
+    if (RefPtr renderingBackend = m_renderingBackend)
         renderingBackend->didUseDisplayList();
 #endif
     sendPendingDrawsIfNecessary();
