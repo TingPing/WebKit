@@ -135,6 +135,9 @@ protected:
 #if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
     void surfaceBufferToVideoFrame(WebCore::GraphicsContextGL::SurfaceBuffer, CompletionHandler<void(std::optional<WebKit::RemoteVideoFrameProxy::Properties>&&)>&&);
 #endif
+#if ENABLE(WEBXR) && USE(OPENXR)
+    void exportExternalSync(uint32_t externalSync, CompletionHandler<void(UnixFileDescriptor&&)>&&);
+#endif
 #if ENABLE(VIDEO) && PLATFORM(COCOA)
     void copyTextureFromVideoFrame(SharedVideoFrame&&, PlatformGLObject texture, uint32_t target, int32_t level, uint32_t internalFormat, uint32_t format, uint32_t type, bool premultiplyAlpha, bool flipY, CompletionHandler<void(bool)>&&);
     void setSharedVideoFrameSemaphore(IPC::Semaphore&&);

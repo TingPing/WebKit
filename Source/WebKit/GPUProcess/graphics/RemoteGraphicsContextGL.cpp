@@ -291,6 +291,15 @@ void RemoteGraphicsContextGL::surfaceBufferToVideoFrame(WebCore::GraphicsContext
 }
 #endif
 
+#if ENABLE(WEBXR) && USE(OPENXR)
+void RemoteGraphicsContextGL::exportExternalSync(uint32_t externalSync, CompletionHandler<void(UnixFileDescriptor&&)>&& completionHandler)
+{
+    assertIsCurrent(workQueue());
+    MESSAGE_CHECK_COMPLETION_BASE(webXRPromptAccepted() && m_objectNames.isValidKey(externalSync), m_connection, completionHandler({ }));
+    completionHandler(protect(m_context)->exportExternalSync(m_objectNames.get(externalSync)));
+}
+#endif
+
 bool RemoteGraphicsContextGL::webXREnabled() const
 {
     RefPtr gpuConnectionToWebProcess = m_gpuConnectionToWebProcess.get();

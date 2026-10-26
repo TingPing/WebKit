@@ -259,6 +259,21 @@ RefPtr<WebCore::VideoFrame> RemoteGraphicsContextGLProxy::surfaceBufferToVideoFr
 }
 #endif
 
+#if ENABLE(WEBXR) && USE(OPENXR)
+UnixFileDescriptor RemoteGraphicsContextGLProxy::exportExternalSync(GCGLExternalSync externalSync)
+{
+    if (isContextLost())
+        return { };
+    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::ExportExternalSync(externalSync));
+    if (!sendResult.succeeded()) {
+        markContextLost();
+        return { };
+    }
+    auto [fence] = sendResult.takeReply();
+    return WTF::move(fence);
+}
+#endif
+
 #if ENABLE(VIDEO)
 bool RemoteGraphicsContextGLProxy::copyTextureFromVideoFrame(WebCore::VideoFrame& videoFrame, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY)
 {

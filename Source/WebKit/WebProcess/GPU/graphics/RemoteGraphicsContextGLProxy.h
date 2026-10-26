@@ -98,6 +98,9 @@ public:
 #if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
     RefPtr<WebCore::VideoFrame> surfaceBufferToVideoFrame(SurfaceBuffer) final;
 #endif
+#if ENABLE(WEBXR) && USE(OPENXR)
+    WTF::UnixFileDescriptor exportExternalSync(GCGLExternalSync) final;
+#endif
     GCGLErrorCodeSet getErrors() final;
 #if ENABLE(VIDEO)
     bool copyTextureFromVideoFrame(WebCore::VideoFrame&, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type , bool premultiplyAlpha, bool flipY) final;
