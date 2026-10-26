@@ -1,0 +1,14 @@
+A VideoFrame can be made from a WebGL canvas rendered in the GPU process.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+PASS gl is non-null.
+PASS frame.displayWidth is 16
+PASS frame.displayHeight is 8
+PASS pixel is [0, 255, 0, 255]
+PASS pixel is [0, 255, 0, 255]
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

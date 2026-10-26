@@ -1,0 +1,31 @@
+<!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true UseGPUProcessForWebGLEnabled=true ] -->
+<script src="../../../../resources/js-test-pre.js"></script>
+<script id="worker" type="text/worker">
+self.onmessage = (event) => {
+    const canvas = new OffscreenCanvas(16, 8);
+    const context = canvas.getContext("2d");
+    context.drawImage(event.data, 0, 0);
+    self.postMessage(Array.from(context.getImageData(8, 4, 1, 1).data));
+};
+</script>
+<script>
+description("An image bitmap of a canvas drawn in the GPU process can be transferred to a worker.");
+jsTestIsAsync = true;
+
+const canvas = document.createElement("canvas");
+canvas.width = 16;
+canvas.height = 8;
+const context = canvas.getContext("2d");
+context.fillStyle = "rgb(0, 0, 255)";
+context.fillRect(0, 0, 16, 8);
+
+var pixel;
+const worker = new Worker(URL.createObjectURL(new Blob([document.getElementById("worker").textContent])));
+worker.onmessage = (event) => {
+    pixel = event.data;
+    shouldBe("pixel", "[0, 0, 255, 255]");
+    finishJSTest();
+};
+createImageBitmap(canvas).then((bitmap) => worker.postMessage(bitmap, [bitmap]));
+</script>
+<script src="../../../../resources/js-test-post.js"></script>

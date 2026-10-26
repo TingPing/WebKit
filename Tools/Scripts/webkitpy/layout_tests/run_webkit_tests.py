@@ -507,6 +507,14 @@ def _set_up_derived_options(port, options):
             options.additional_platform_directory = []
         options.additional_platform_directory.insert(0, port.host.filesystem.join(host.scm().checkout_root, 'LayoutTests/platform/mac-gpup'))
 
+    if port.port_name in ("gtk", "wpe") and options.use_gpu_process:
+        # These ports render the DOM, canvases and WebGL in the GPU process, but not media or capture yet.
+        unsupported_features = ('CaptureAudioInGPUProcessEnabled', 'CaptureVideoInGPUProcessEnabled', 'UseGPUProcessForMediaEnabled', 'WebRTCPlatformCodecsInGPUProcessEnabled')
+        options.internal_feature = [feature for feature in options.internal_feature if feature not in unsupported_features]
+        host = Host()
+        host.initialize_scm()
+        options.additional_expectations.insert(0, port.host.filesystem.join(host.scm().checkout_root, 'LayoutTests/platform/glib-gpu-process/TestExpectations'))
+
     if options.load_in_cross_origin_iframe:
         options.additional_header = 'runInCrossOriginFrame=true'
 

@@ -1,0 +1,18 @@
+# Expectations for the glib-based ports, WebKitGTK and WPE, when the GPU process renders the DOM,
+# canvases and WebGL. They apply on top of the port expectations when running tests with
+# run-webkit-tests --use-gpu-process.
+#
+# See http://trac.webkit.org/wiki/TestExpectations for more information on this file.
+
+#////////////////////////////////////////////////////////////////////////////////////////
+# Rendering
+#////////////////////////////////////////////////////////////////////////////////////////
+
+# The end of the arc is drawn a few pixels off.
+fast/canvas/canvas-ellipse-connecting-line.html [ ImageOnlyFailure ]
+
+#////////////////////////////////////////////////////////////////////////////////////////
+# Media. It is still played in the web process, which has no GPU to convert video frames.
+#////////////////////////////////////////////////////////////////////////////////////////
+
+webgl/tex-2d-video-no-change-wrap.html [ Failure ]

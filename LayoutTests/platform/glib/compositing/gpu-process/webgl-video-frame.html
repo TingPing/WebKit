@@ -1,0 +1,38 @@
+<!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true UseGPUProcessForWebGLEnabled=true ] -->
+<script src="../../../../resources/js-test-pre.js"></script>
+<script>
+description("A VideoFrame can be made from a WebGL canvas rendered in the GPU process.");
+jsTestIsAsync = true;
+
+const canvas = document.createElement("canvas");
+canvas.width = 16;
+canvas.height = 8;
+const gl = canvas.getContext("webgl", { preserveDrawingBuffer: true });
+shouldBeNonNull("gl");
+gl.clearColor(0, 1, 0, 1);
+gl.clear(gl.COLOR_BUFFER_BIT);
+
+var frame = new VideoFrame(canvas, { timestamp: 0 });
+shouldBe("frame.displayWidth", "16");
+shouldBe("frame.displayHeight", "8");
+
+var pixel;
+const data = new Uint8Array(frame.allocationSize());
+frame.copyTo(data).then(() => {
+    const offset = (4 * 16 + 8) * 4;
+    pixel = Array.from(data.subarray(offset, offset + 4));
+    shouldBe("pixel", "[0, 255, 0, 255]");
+
+    // Drawing the frame into a canvas also happens in the GPU process.
+    const output = document.createElement("canvas").getContext("2d");
+    output.drawImage(frame, 0, 0);
+    pixel = Array.from(output.getImageData(8, 4, 1, 1).data);
+    shouldBe("pixel", "[0, 255, 0, 255]");
+    frame.close();
+    finishJSTest();
+}, (error) => {
+    testFailed("copyTo failed: " + error);
+    finishJSTest();
+});
+</script>
+<script src="../../../../resources/js-test-post.js"></script>

@@ -1,0 +1,10 @@
+An image bitmap of a canvas drawn in the GPU process can be transferred to a worker.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+PASS pixel is [0, 0, 255, 255]
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

@@ -1,0 +1,33 @@
+<!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true UseGPUProcessForWebGLEnabled=true ] -->
+<canvas id="canvas" width="200" height="100"></canvas>
+<script id="worker" type="text/worker">
+// Frames of an accelerated canvas drawn in a worker are shown in its placeholder.
+self.onmessage = (event) => {
+    const canvas = event.data;
+    const context = canvas.getContext("2d");
+    let frame = 0;
+    function draw() {
+        context.fillStyle = frame < 2 ? "red" : "green";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = "blue";
+        context.fillRect(50, 25, 100, 50);
+        if (++frame == 4)
+            self.postMessage("done");
+        requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
+};
+</script>
+<script>
+if (window.testRunner)
+    testRunner.waitUntilDone();
+const offscreen = document.getElementById("canvas").transferControlToOffscreen();
+const worker = new Worker(URL.createObjectURL(new Blob([document.getElementById("worker").textContent])));
+worker.onmessage = () => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (window.testRunner)
+            testRunner.notifyDone();
+    }));
+};
+worker.postMessage(offscreen, [offscreen]);
+</script>
