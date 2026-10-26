@@ -1769,7 +1769,7 @@ PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo& info)
 GstVideoColorimetry colorimetryFromColorSpace(const PlatformVideoColorSpace& colorSpace)
 {
     ensureGStreamerInitialized();
-    GstVideoColorimetry result;
+    GstVideoColorimetry result { };
     if (colorSpace.matrix) {
         switch (*colorSpace.matrix) {
         case PlatformVideoMatrixCoefficients::Rgb:
@@ -1778,6 +1778,7 @@ GstVideoColorimetry colorimetryFromColorSpace(const PlatformVideoColorSpace& col
         case PlatformVideoMatrixCoefficients::Bt709:
             result.matrix = GST_VIDEO_COLOR_MATRIX_BT709;
             break;
+        case PlatformVideoMatrixCoefficients::Bt470bg:
         case PlatformVideoMatrixCoefficients::Smpte170m:
             result.matrix = GST_VIDEO_COLOR_MATRIX_BT601;
             break;
