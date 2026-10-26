@@ -31,6 +31,8 @@
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/Color.h>
 #include <WebCore/CoordinatedBackingStoreProxy.h>
+#include <WebCore/FloatRect.h>
+#include <WebCore/IntRect.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/PlatformLayerIdentifier.h>
 #include <WebCore/ProcessIdentifier.h>
@@ -44,6 +46,9 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
+#include <wtf/text/CString.h>
+
+class SkCanvas;
 
 namespace WebCore {
 class CoordinatedTileBuffer;
@@ -114,6 +119,11 @@ private:
     void scheduleRender();
     void render();
     void updateFPSCounter();
+    void updateFPSCounterGeometry();
+#if ENABLE(DAMAGE_TRACKING)
+    WebCore::IntRect takeFPSCounterDamage();
+#endif
+    void drawFPSCounter(SkCanvas&);
     void frameComplete();
     void didComposite();
 
@@ -142,9 +152,17 @@ private:
     bool m_needsRender { false };
     Vector<CompletionHandler<void()>> m_pendingCommitCompletionHandlers;
     struct {
-        std::optional<Seconds> calculationInterval;
+        bool exposesFPS { false };
+        bool drawsFPS { false };
+        Seconds calculationInterval { 1_s };
         MonotonicTime lastCalculationTimestamp;
         unsigned frameCount { 0 };
+        int lastFPS { 0 };
+        int displayedFPS { -1 };
+        ASCIICString text;
+        WebCore::FloatRect rect;
+        float textBaseline { 0 };
+        WebCore::IntRect lastDrawnRect;
     } m_fpsCounter;
 #if ENABLE(DAMAGE_TRACKING)
     struct {

@@ -42,6 +42,7 @@
 #include <WebCore/CoordinatedTileBuffer.h>
 #include <WebCore/CoordinatedTileManager.h>
 #include <WebCore/Damage.h>
+#include <WebCore/FontCache.h>
 #include <WebCore/GLContext.h>
 #include <WebCore/NativeImage.h>
 #include <WebCore/PlatformDisplay.h>
@@ -49,8 +50,11 @@
 #include <WebCore/SkiaDamageRegion.h>
 #include <WebCore/SkiaRecordingResult.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/core/SkCanvas.h>
 #include <skia/core/SkColorSpace.h>
 #include <skia/core/SkData.h>
+#include <skia/core/SkFont.h>
+#include <skia/core/SkFontMgr.h>
 #include <skia/core/SkImage.h>
 #include <skia/gpu/ganesh/GrDirectContext.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
@@ -113,13 +117,18 @@ RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProce
     if (!enableCPURendering || StringView::fromLatin1(enableCPURendering) == "0"_s)
         m_threadSafeGrContextForRecording = m_threadSafeGrContext;
 
-    // Like the compositor of the web process, which logs the FPS to the console of the page.
+    // Like the compositor of the web process, which logs the FPS to the console of the page and draws it.
     bool ok = false;
     Seconds fpsCalculationInterval(String::fromLatin1(getenv("WEBKIT_SHOW_FPS")).toDouble(&ok));
     if (ok && fpsCalculationInterval) {
+        m_fpsCounter.exposesFPS = true;
         m_fpsCounter.calculationInterval = fpsCalculationInterval;
-        m_fpsCounter.lastCalculationTimestamp = MonotonicTime::now();
     }
+    if (const char* drawFPS = getenv("WEBKIT_DRAW_FPS")) {
+        if (auto value = parseInteger<unsigned>(StringView::fromLatin1(drawFPS)); value && *value)
+            m_fpsCounter.drawsFPS = true;
+    }
+    m_fpsCounter.lastCalculationTimestamp = MonotonicTime::now();
 
 #if ENABLE(DAMAGE_TRACKING)
     if (const char* showDamage = getenv("WEBKIT_SHOW_DAMAGE")) {
@@ -540,17 +549,87 @@ static void drawDamageOverlay(SkCanvas& canvas, const Damage& damage, const IntS
 
 void RemoteCoordinatedCompositor::updateFPSCounter()
 {
-    if (!m_fpsCounter.calculationInterval)
+    if (!m_fpsCounter.exposesFPS && !m_fpsCounter.drawsFPS)
         return;
 
     ++m_fpsCounter.frameCount;
     auto delta = MonotonicTime::now() - m_fpsCounter.lastCalculationTimestamp;
-    if (delta < *m_fpsCounter.calculationInterval)
+    if (delta < m_fpsCounter.calculationInterval)
         return;
 
-    m_webProcessConnection->send(Messages::RemoteCoordinatedCompositorProxy::DidUpdateFPS(m_fpsCounter.frameCount / delta.seconds()), m_identifier);
+    float fps = m_fpsCounter.frameCount / delta.seconds();
+    m_fpsCounter.lastFPS = std::round(fps);
+    if (m_fpsCounter.exposesFPS)
+        m_webProcessConnection->send(Messages::RemoteCoordinatedCompositorProxy::DidUpdateFPS(fps), m_identifier);
     m_fpsCounter.frameCount = 0;
     m_fpsCounter.lastCalculationTimestamp += delta;
+}
+
+static const SkFont& fpsCounterFont()
+{
+    static SkFont font = [] {
+        unsigned fontSize = 14;
+        if (const char* fontSizeEnvironment = getenv("WEBKIT_DRAW_FPS_FONT_SIZE")) {
+            if (auto value = parseInteger<unsigned>(StringView::fromLatin1(fontSizeEnvironment)); value && *value)
+                fontSize = *value;
+        }
+        SkFont font(FontCache::forCurrentThread().fontManager().matchFamilyStyle("monospace", SkFontStyle::Bold()), fontSize);
+        font.setEdging(SkFont::Edging::kAntiAlias);
+        font.setSubpixel(true);
+        return font;
+    }();
+    return font;
+}
+
+static float fpsCounterPadding()
+{
+    return fpsCounterFont().getSize() * 0.2f;
+}
+
+void RemoteCoordinatedCompositor::updateFPSCounterGeometry()
+{
+    if (m_fpsCounter.lastFPS == m_fpsCounter.displayedFPS)
+        return;
+
+    m_fpsCounter.displayedFPS = m_fpsCounter.lastFPS;
+    m_fpsCounter.text = String::number(m_fpsCounter.lastFPS).ascii();
+
+    SkRect textBounds;
+    fpsCounterFont().measureText(m_fpsCounter.text.data(), m_fpsCounter.text.length(), SkTextEncoding::kUTF8, &textBounds);
+    float padding = fpsCounterPadding();
+    m_fpsCounter.rect = { 0, 0, textBounds.width() + padding * 2, textBounds.height() + padding * 2 };
+    m_fpsCounter.textBaseline = -textBounds.fTop + padding;
+}
+
+#if ENABLE(DAMAGE_TRACKING)
+IntRect RemoteCoordinatedCompositor::takeFPSCounterDamage()
+{
+    if (m_fpsCounter.lastFPS == m_fpsCounter.displayedFPS)
+        return { };
+
+    updateFPSCounterGeometry();
+    // The box drawn last frame is damaged too, since it shrinks when the count gets shorter.
+    auto damage = enclosingIntRect(m_fpsCounter.rect);
+    damage.unite(std::exchange(m_fpsCounter.lastDrawnRect, damage));
+    return damage;
+}
+#endif
+
+void RemoteCoordinatedCompositor::drawFPSCounter(SkCanvas& canvas)
+{
+    updateFPSCounterGeometry();
+
+    SkAutoCanvasRestore autoRestore(&canvas, true);
+    canvas.resetMatrix();
+
+    SkPaint backgroundPaint;
+    backgroundPaint.setColor(SK_ColorBLACK);
+    canvas.drawRect(SkRect(m_fpsCounter.rect), backgroundPaint);
+
+    SkPaint textPaint;
+    textPaint.setColor(SK_ColorWHITE);
+    textPaint.setAntiAlias(true);
+    canvas.drawString(m_fpsCounter.text.data(), fpsCounterPadding(), m_fpsCounter.textBaseline, fpsCounterFont(), textPaint);
 }
 
 void RemoteCoordinatedCompositor::scheduleRender()
@@ -599,6 +678,9 @@ void RemoteCoordinatedCompositor::render()
 #if ENABLE(DAMAGE_TRACKING)
     if (m_damage.propagationEnabled)
         frameDamage = Damage(scaledSize, m_damage.unified ? Damage::Mode::BoundingBox : Damage::Mode::Rectangles);
+    // No layer damages the box of the FPS counter.
+    if (frameDamage && m_fpsCounter.drawsFPS)
+        frameDamage->add(takeFPSCounterDamage());
     // The overlay is drawn over the damage, so the frame is repainted in full instead.
     if (m_damage.usedForCompositing && !m_damage.showsOverlay)
         priorTargetDamage = m_surface->renderTargetDamage();
@@ -627,6 +709,9 @@ void RemoteCoordinatedCompositor::render()
         m_surface->setFrameDamageForPlatformOnly(Damage(scaledSize, Damage::Mode::Full));
     }
 #endif
+
+    if (m_fpsCounter.drawsFPS)
+        drawFPSCounter(*canvas);
 
     if (auto* surface = canvas->getSurface())
         grContext->flushAndSubmit(surface, GrSyncCpu::kNo);
