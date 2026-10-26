@@ -67,7 +67,6 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <WebCore/CoordinatedPlatformLayerBufferHolePunch.h>
 #include <WebCore/CoordinatedPlatformLayerBufferVideo.h>
 #include <WebCore/GStreamerCommon.h>
-#include <WebCore/ImageOrientation.h>
 #include <WebCore/VideoFrameGStreamer.h>
 #endif
 
@@ -354,21 +353,6 @@ RefPtr<SharedMemory> RemoteCoordinatedCompositor::videoFrameSlot(CoordinatedShar
     return m_videoFrameSlots.get(frame.slot);
 }
 
-static ImageOrientation imageOrientation(CoordinatedPlatformLayerBuffer::Rotation rotation)
-{
-    switch (rotation) {
-    case CoordinatedPlatformLayerBuffer::Rotation::None:
-        break;
-    case CoordinatedPlatformLayerBuffer::Rotation::Right:
-        return ImageOrientation::Orientation::OriginRightTop;
-    case CoordinatedPlatformLayerBuffer::Rotation::UpsideDown:
-        return ImageOrientation::Orientation::OriginBottomRight;
-    case CoordinatedPlatformLayerBuffer::Rotation::Left:
-        return ImageOrientation::Orientation::OriginLeftBottom;
-    }
-    return ImageOrientation::Orientation::OriginTopLeft;
-}
-
 struct VideoFrameSlotUse {
     WTF_MAKE_STRUCT_TZONE_ALLOCATED(VideoFrameSlotUse);
 
@@ -406,7 +390,7 @@ std::unique_ptr<CoordinatedPlatformLayerBuffer> RemoteCoordinatedCompositor::vid
     });
     if (!videoFrame)
         return nullptr;
-    return CoordinatedPlatformLayerBufferVideo::create(videoFrame.releaseNonNull(), std::nullopt, false, imageOrientation(frame.rotation), m_threadSafeGrContext);
+    return CoordinatedPlatformLayerBufferVideo::create(videoFrame.releaseNonNull(), std::nullopt, false, frame.orientation, m_threadSafeGrContext);
 }
 #endif
 

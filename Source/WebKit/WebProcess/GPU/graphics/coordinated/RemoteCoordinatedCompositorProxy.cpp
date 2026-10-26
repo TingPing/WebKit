@@ -135,7 +135,7 @@ CoordinatedLayerTreeTransaction RemoteCoordinatedCompositorProxy::makeTransactio
         if (RefPtr image = changes.contentsBufferImage)
             update.contentsBuffer = imagePixels(*image, pixels);
         if (RefPtr videoFrame = changes.contentsBufferVideoFrame)
-            update.contentsVideoFrame = videoFrameInSlot(*videoFrame, changes.contentsBufferRotation);
+            update.contentsVideoFrame = videoFrameInSlot(*videoFrame, changes.contentsBufferOrientation);
         transaction.layers.append(WTF::move(update));
     }
 
@@ -148,11 +148,11 @@ CoordinatedLayerTreeTransaction RemoteCoordinatedCompositorProxy::makeTransactio
     return transaction;
 }
 
-std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFrameInSlot(VideoFrame& videoFrame, CoordinatedPlatformLayerBuffer::Rotation rotation)
+std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFrameInSlot(VideoFrame& videoFrame, const ImageOrientation& orientation)
 {
 #if ENABLE(VIDEO) && USE(GSTREAMER)
     if (RefPtr remoteFrame = dynamicDowncast<RemoteVideoFrameProxy>(videoFrame))
-        return CoordinatedVideoFrame { .frame = remoteFrame->newReadReference(), .rotation = rotation };
+        return CoordinatedVideoFrame { .frame = remoteFrame->newReadReference(), .orientation = orientation };
 
     RefPtr frame = dynamicDowncast<VideoFrameGStreamer>(videoFrame);
     if (!frame)
@@ -208,11 +208,11 @@ std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFram
             .slotHandle = WTF::move(handle),
             .layout = WTF::move(*layout),
         },
-        .rotation = rotation,
+        .orientation = orientation,
     };
 #else
     UNUSED_PARAM(videoFrame);
-    UNUSED_PARAM(rotation);
+    UNUSED_PARAM(orientation);
     return std::nullopt;
 #endif
 }

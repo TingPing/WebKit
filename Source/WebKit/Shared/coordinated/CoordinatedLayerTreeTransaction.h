@@ -33,6 +33,7 @@
 #include <WebCore/CoordinatedLayerProperties.h>
 #include <WebCore/CoordinatedPlatformLayerBuffer.h>
 #include <WebCore/CoordinatedTileRecordingIdentifier.h>
+#include <WebCore/ImageOrientation.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/SharedMemory.h>
 #include <optional>
@@ -71,7 +72,7 @@ struct CoordinatedSharedVideoFrame {
 // A video frame in system memory, or one that the GPU process made.
 struct CoordinatedVideoFrame {
     Variant<CoordinatedSharedVideoFrame, RemoteVideoFrameReadReference> frame;
-    WebCore::CoordinatedPlatformLayerBuffer::Rotation rotation { WebCore::CoordinatedPlatformLayerBuffer::Rotation::None };
+    WebCore::ImageOrientation orientation { WebCore::ImageOrientation::Orientation::None };
 };
 
 struct CoordinatedLayerUpdate {

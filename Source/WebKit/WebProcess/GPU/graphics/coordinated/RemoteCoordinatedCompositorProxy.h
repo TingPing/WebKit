@@ -48,6 +48,7 @@ class GraphicsContext;
 class IntRect;
 class Region;
 class VideoFrame;
+struct ImageOrientation;
 struct CoordinatedLayerProperties;
 }
 
@@ -120,7 +121,7 @@ private:
 
     // Called on the commit queue.
     CoordinatedLayerTreeTransaction makeTransaction(PendingLayerTreeTransaction&&);
-    std::optional<CoordinatedVideoFrame> videoFrameInSlot(WebCore::VideoFrame&, WebCore::CoordinatedPlatformLayerBuffer::Rotation);
+    std::optional<CoordinatedVideoFrame> videoFrameInSlot(WebCore::VideoFrame&, const WebCore::ImageOrientation&);
 #if ENABLE(DAMAGE_TRACKING)
     void sendDamageSettings();
     void didRenderFrameForTesting(WebCore::Region&&);

@@ -75,14 +75,6 @@ header: <WebCore/CoordinatedPlatformLayerBuffer.h>
 header: <WebCore/CoordinatedPlatformLayerBuffer.h>
 [CustomHeader, Nested] enum class WebCore::CoordinatedPlatformLayerBuffer::Origin : bool
 
-header: <WebCore/CoordinatedPlatformLayerBuffer.h>
-[CustomHeader, Nested] enum class WebCore::CoordinatedPlatformLayerBuffer::Rotation : uint8_t {
-    None,
-    Right,
-    UpsideDown,
-    Left,
-}
-
 header: <WebCore/CoordinatedLayerProperties.h>
 [CustomHeader] struct WebCore::CoordinatedRemoteContentsBuffer {
     WebCore::CoordinatedContentsIdentifier identifier;
@@ -240,7 +232,7 @@ header: "CoordinatedLayerTreeTransaction.h"
 header: "CoordinatedLayerTreeTransaction.h"
 [CustomHeader, RValue] struct WebKit::CoordinatedVideoFrame {
     Variant<WebKit::CoordinatedSharedVideoFrame, WebKit::RemoteVideoFrameReadReference> frame;
-    WebCore::CoordinatedPlatformLayerBuffer::Rotation rotation;
+    WebCore::ImageOrientation orientation;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"

@@ -28,6 +28,7 @@
 #if USE(COORDINATED_GRAPHICS) && ENABLE(VIDEO) && USE(GSTREAMER)
 #include "CoordinatedPlatformLayerBuffer.h"
 #include "GStreamerCommon.h"
+#include "ImageOrientation.h"
 #include "VideoFrameGStreamer.h"
 
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
@@ -38,8 +39,6 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 namespace WebCore {
 
-struct ImageOrientation;
-
 class CoordinatedPlatformLayerBufferVideo final : public CoordinatedPlatformLayerBuffer {
 public:
 #if USE(TEXTURE_MAPPER)
@@ -48,7 +47,7 @@ public:
 #else
     // The frame has no image when it is not a VideoFrameGStreamer, it is composited by the GPU process that made it.
     static std::unique_ptr<CoordinatedPlatformLayerBufferVideo> create(Ref<VideoFrame>&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, const ImageOrientation&, const sk_sp<GrContextThreadSafeProxy>&);
-    CoordinatedPlatformLayerBufferVideo(Ref<VideoFrame>&&, IntSize&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, Origin, Rotation, const sk_sp<GrContextThreadSafeProxy>&);
+    CoordinatedPlatformLayerBufferVideo(Ref<VideoFrame>&&, std::optional<GstVideoDecoderPlatform>, bool gstGLEnabled, const ImageOrientation&, const sk_sp<GrContextThreadSafeProxy>&);
 #endif
     virtual ~CoordinatedPlatformLayerBufferVideo();
 
@@ -57,6 +56,9 @@ public:
 #endif
 
     VideoFrame& videoFrame() const { return m_videoFrame.get(); }
+#if !USE(TEXTURE_MAPPER)
+    const ImageOrientation& orientation() const { return m_orientation; }
+#endif
 
 private:
 #if USE(TEXTURE_MAPPER)
@@ -83,7 +85,7 @@ private:
 #endif
 #endif
 
-    void createSkiaImageForMainMemory(std::unique_ptr<GstMappedFrame>&&);
+    void createSkiaImageForMainMemory(std::unique_ptr<GstMappedFrame>&&, Origin);
     void createYUVAPixmapsForMainMemory(std::unique_ptr<GstMappedFrame>&&);
 
 #if USE(GSTREAMER_GL)
@@ -103,10 +105,12 @@ private:
     const std::unique_ptr<CoordinatedPlatformLayerBuffer> m_buffer;
     std::optional<GstMappedFrame> m_mappedVideoFrame;
 #else
+    ImageOrientation m_orientation;
     sk_sp<SkImage> m_image;
     std::unique_ptr<GstMappedFrame> m_mappedFrame;
     SkYUVAPixmaps m_yuvaPixmaps;
     sk_sp<SkColorSpace> m_yuvaColorSpace;
+    SkPixmap m_bottomLeftPixmap;
 #endif
 };
 

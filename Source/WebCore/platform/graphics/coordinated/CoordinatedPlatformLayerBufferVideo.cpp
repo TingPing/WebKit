@@ -39,6 +39,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkImage.h>
 #include <skia/core/SkPixmap.h>
 #include <skia/core/SkSurface.h>
+#include <skia/gpu/ganesh/GrDirectContext.h>
 #include <skia/gpu/ganesh/GrYUVABackendTextures.h>
 #include <skia/gpu/ganesh/SkImageGanesh.h>
 #include <skia/gpu/ganesh/SkSurfaceGanesh.h>
@@ -62,37 +63,31 @@ namespace WebCore {
 
 std::unique_ptr<CoordinatedPlatformLayerBufferVideo> CoordinatedPlatformLayerBufferVideo::create(Ref<VideoFrame>&& frame, std::optional<GstVideoDecoderPlatform> videoDecoderPlatform, bool gstGLEnabled, const ImageOrientation& orientation, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
 {
-    auto size = frame->presentationSize();
-    Origin origin = Origin::TopLeft;
-    Rotation rotation = Rotation::None;
-    switch (orientation.orientation()) {
-    case ImageOrientation::Orientation::OriginTopLeft:
-        break;
-    case ImageOrientation::Orientation::OriginRightTop:
-        rotation = Rotation::Right;
-        break;
-    case ImageOrientation::Orientation::OriginBottomRight:
-        rotation = Rotation::UpsideDown;
-        break;
-    case ImageOrientation::Orientation::OriginLeftBottom:
-        rotation = Rotation::Left;
-        break;
-    case ImageOrientation::Orientation::OriginBottomLeft:
-        origin = Origin::BottomLeft;
-        break;
-    default:
-        // FIXME: Handle OriginTopRight, OriginLeftTop and OriginRightBottom.
-        break;
-    }
-    return makeUnique<CoordinatedPlatformLayerBufferVideo>(WTF::move(frame), WTF::move(size), videoDecoderPlatform, gstGLEnabled, origin, rotation, threadSafeGrContext);
+    return makeUnique<CoordinatedPlatformLayerBufferVideo>(WTF::move(frame), videoDecoderPlatform, gstGLEnabled, orientation, threadSafeGrContext);
 }
 
-CoordinatedPlatformLayerBufferVideo::CoordinatedPlatformLayerBufferVideo(Ref<VideoFrame>&& frame, IntSize&& size, std::optional<GstVideoDecoderPlatform> videoDecoderPlatform, bool gstGLEnabled, Origin origin, Rotation rotation, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
-    : CoordinatedPlatformLayerBuffer(Type::Video, WTF::move(size), AlphaMode::Opaque, rotation)
+static CoordinatedPlatformLayerBuffer::Rotation rotationFromOrientation(const ImageOrientation& orientation)
+{
+    switch (orientation.orientation()) {
+    case ImageOrientation::Orientation::OriginRightTop:
+        return CoordinatedPlatformLayerBuffer::Rotation::Right;
+    case ImageOrientation::Orientation::OriginBottomRight:
+        return CoordinatedPlatformLayerBuffer::Rotation::UpsideDown;
+    case ImageOrientation::Orientation::OriginLeftBottom:
+        return CoordinatedPlatformLayerBuffer::Rotation::Left;
+    default:
+        // FIXME: Handle OriginTopRight, OriginLeftTop and OriginRightBottom.
+        return CoordinatedPlatformLayerBuffer::Rotation::None;
+    }
+}
+
+CoordinatedPlatformLayerBufferVideo::CoordinatedPlatformLayerBufferVideo(Ref<VideoFrame>&& frame, std::optional<GstVideoDecoderPlatform> videoDecoderPlatform, bool gstGLEnabled, const ImageOrientation& orientation, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext)
+    : CoordinatedPlatformLayerBuffer(Type::Video, frame->presentationSize(), AlphaMode::Opaque, rotationFromOrientation(orientation))
     , m_videoFrame(WTF::move(frame))
     , m_videoDecoderPlatform(videoDecoderPlatform)
+    , m_orientation(orientation)
 {
-    createSkiaImageIfNeeded(threadSafeGrContext, gstGLEnabled, origin);
+    createSkiaImageIfNeeded(threadSafeGrContext, gstGLEnabled, orientation.orientation() == ImageOrientation::Orientation::OriginBottomLeft ? Origin::BottomLeft : Origin::TopLeft);
 }
 
 CoordinatedPlatformLayerBufferVideo::~CoordinatedPlatformLayerBufferVideo() = default;
@@ -230,7 +225,7 @@ void CoordinatedPlatformLayerBufferVideo::createSkiaImageIfNeeded(const sk_sp<Gr
         m_alphaMode = AlphaMode::Unpremultiplied;
 
     if (mapFlags == GST_MAP_READ) {
-        createSkiaImageForMainMemory(WTF::move(mappedFrame));
+        createSkiaImageForMainMemory(WTF::move(mappedFrame), origin);
         return;
     }
 
@@ -263,7 +258,7 @@ void CoordinatedPlatformLayerBufferVideo::createSkiaImageForDMABufMemory(VideoFr
 #endif
 #endif // USE(GBM)
 
-void CoordinatedPlatformLayerBufferVideo::createSkiaImageForMainMemory(std::unique_ptr<GstMappedFrame>&& mappedFrame)
+void CoordinatedPlatformLayerBufferVideo::createSkiaImageForMainMemory(std::unique_ptr<GstMappedFrame>&& mappedFrame, Origin origin)
 {
     if (GST_VIDEO_INFO_IS_YUV(mappedFrame->info())) {
         createYUVAPixmapsForMainMemory(WTF::move(mappedFrame));
@@ -274,6 +269,13 @@ void CoordinatedPlatformLayerBufferVideo::createSkiaImageForMainMemory(std::uniq
     auto colorType = format == GST_VIDEO_FORMAT_RGBA || format == GST_VIDEO_FORMAT_RGBx ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType;
     auto imageInfo = SkImageInfo::Make(mappedFrame->width(), mappedFrame->height(), colorType, toSkiaAlphaType(m_alphaMode), SkColorSpace::MakeSRGB());
     SkPixmap pixmap(imageInfo, mappedFrame->planeData(0).data(), mappedFrame->planeStride(0));
+    if (origin == Origin::BottomLeft) {
+        // A raster image has no origin, so the rows are uploaded as they are to a texture read from the bottom.
+        m_bottomLeftPixmap = pixmap;
+        m_mappedFrame = WTF::move(mappedFrame);
+        return;
+    }
+
     m_image = SkImages::RasterFromPixmap(pixmap, [](const void*, void* userData) {
         std::unique_ptr<GstMappedFrame> mappedFrame(static_cast<GstMappedFrame*>(userData));
     }, mappedFrame.release());
@@ -370,6 +372,17 @@ sk_sp<SkImage> CoordinatedPlatformLayerBufferVideo::skiaImage()
         // The planes are uploaded with the context of the thread painting the layer, then are no longer needed.
         m_image = SkImages::TextureFromYUVAPixmaps(PlatformDisplay::sharedDisplay().skiaGrContext(), m_yuvaPixmaps, skgpu::Mipmapped::kNo, false, m_yuvaColorSpace);
         m_yuvaPixmaps = { };
+        m_mappedFrame = nullptr;
+    }
+    if (!m_image && m_bottomLeftPixmap.addr()) {
+        auto* grContext = PlatformDisplay::sharedDisplay().skiaGrContext();
+        auto texture = grContext->createBackendTexture(m_bottomLeftPixmap, kTopLeft_GrSurfaceOrigin, GrRenderable::kNo, GrProtected::kNo);
+        if (texture.isValid()) {
+            m_image = SkImages::AdoptTextureFrom(grContext, texture, kBottomLeft_GrSurfaceOrigin, m_bottomLeftPixmap.colorType(), m_bottomLeftPixmap.alphaType(), m_bottomLeftPixmap.refColorSpace());
+            if (!m_image)
+                grContext->deleteBackendTexture(texture);
+        }
+        m_bottomLeftPixmap = { };
         m_mappedFrame = nullptr;
     }
     return m_image;

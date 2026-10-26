@@ -1796,7 +1796,7 @@ void CoordinatedPlatformLayer::takePendingContentsBuffer(PendingChanges& changes
 #if ENABLE(VIDEO) && USE(GSTREAMER)
     else if (auto* videoBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferVideo>(buffer)) {
         changes.contentsBufferVideoFrame = &videoBuffer->videoFrame();
-        changes.contentsBufferRotation = videoBuffer->rotation();
+        changes.contentsBufferOrientation = videoBuffer->orientation();
     } else if (auto* holePunchBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferHolePunch>(buffer))
         changes.contentsBufferHolePunchSize = holePunchBuffer->size();
 #endif

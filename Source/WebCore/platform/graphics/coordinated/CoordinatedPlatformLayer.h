@@ -46,6 +46,7 @@
 #include "CoordinatedBackingStoreProxy.h"
 #include "CoordinatedLayerProperties.h"
 #include "CoordinatedPlatformLayerBuffer.h"
+#include "ImageOrientation.h"
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/gpu/ganesh/GrContextThreadSafeProxy.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
@@ -217,7 +218,7 @@ public:
         RefPtr<NativeImage> contentsImage;
         RefPtr<NativeImage> contentsBufferImage;
         RefPtr<VideoFrame> contentsBufferVideoFrame;
-        CoordinatedPlatformLayerBuffer::Rotation contentsBufferRotation { CoordinatedPlatformLayerBuffer::Rotation::None };
+        ImageOrientation contentsBufferOrientation { ImageOrientation::Orientation::None };
         std::optional<IntSize> contentsBufferHolePunchSize;
     };
     std::optional<PendingChanges> takePendingChanges();
