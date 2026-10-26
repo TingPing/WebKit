@@ -218,6 +218,8 @@ public:
     std::optional<PendingChanges> takePendingChanges();
     // The changes the scrolling thread makes: scrolled positions and scrollbar contents.
     std::optional<PendingChanges> takePendingScrollingChanges();
+    // Makes the next pending changes describe the whole layer, for a new compositor.
+    void markAllPropertiesChanged();
 #endif
 
     bool hasPendingTilesCreation() const { assertIsMainThread(); return m_pendingTilesCreation; }

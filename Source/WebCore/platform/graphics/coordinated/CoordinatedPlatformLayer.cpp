@@ -1784,6 +1784,37 @@ void CoordinatedPlatformLayer::takePendingContentsBuffer(PendingChanges& changes
         changes.properties.contentsBuffer = CoordinatedRemoteContentsBuffer { remoteBuffer->identifier(), remoteBuffer->alphaMode(), remoteBuffer->origin() };
     else if (auto image = buffer ? buffer->skiaImage() : nullptr; image && !image->isTextureBacked())
         changes.contentsBufferImage = NativeImage::create(WTF::move(image));
+    // Kept so it can be sent again to a new compositor.
+    m_contentsBuffer.committed = WTF::move(buffer);
+}
+
+void CoordinatedPlatformLayer::markAllPropertiesChanged()
+{
+    assertIsMainThread();
+    Locker locker { m_lock };
+    m_pendingChanges.add({
+        Change::AnchorPoint, Change::Animations, Change::Backdrop, Change::BackdropRect, Change::BackdropRoot, Change::BackdropShapePath,
+        Change::BackfaceVisibility, Change::BackgroundColor, Change::BackingStore, Change::BlendMode, Change::BoundsOrigin, Change::Children,
+        Change::ChildrenTransform, Change::ClipPath, Change::ContentsClippingRect, Change::ContentsClipShapePath, Change::ContentsColor,
+        Change::ContentsImage, Change::ContentsOpaque, Change::ContentsRect, Change::ContentsRectClipsDescendants, Change::ContentsTiling,
+        Change::ContentsVisible, Change::DebugIndicators, Change::Filters, Change::Mask, Change::MasksToBounds, Change::Opacity, Change::Position,
+        Change::Preserves3D, Change::Replica, Change::Size, Change::Transform,
+    });
+
+    if (!m_contentsBuffer.pending && m_contentsBuffer.committed) {
+        m_contentsBuffer.pending = std::exchange(m_contentsBuffer.committed, nullptr);
+        m_pendingChanges.add(Change::ContentsBuffer);
+    }
+
+    if (RefPtr backingStoreProxy = std::exchange(m_backingStoreProxy, nullptr)) {
+        backingStoreProxy->invalidate(*this);
+        m_backingStoreProxy = CoordinatedBackingStoreProxy::create();
+        m_backingStoreProxy->setAffectedByTransformAnimation(!!backingStoreProxy->animatedBackingStoreClient());
+        m_needsTilesUpdate = true;
+    }
+
+    if (m_backdrop)
+        m_backdrop->markAllPropertiesChanged();
 }
 #endif
 

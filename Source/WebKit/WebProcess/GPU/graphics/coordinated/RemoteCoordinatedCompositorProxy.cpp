@@ -32,6 +32,7 @@
 #include "AcceleratedSurfaceMessages.h"
 #include "CoordinatedLayerTreeTransaction.h"
 #include "CoordinatedSceneState.h"
+#include "DrawingArea.h"
 #include "GPUConnectionToWebProcessMessages.h"
 #include "HandleMessage.h"
 #include "RemoteCoordinatedCompositorMessages.h"
@@ -151,7 +152,13 @@ RemoteCoordinatedCompositorProxy::RemoteCoordinatedCompositorProxy(WebPage& webP
     , m_relayQueue(WorkQueue::create("org.webkit.RemoteCoordinatedCompositorRelay"_s))
 {
     ASSERT(RunLoop::isMain());
+    WebProcess::singleton().parentProcessConnection()->addMessageReceiver(m_relayQueue.get(), *this, Messages::AcceleratedSurface::messageReceiverName(), m_surfaceID);
+    connectToGPUProcess(webPage);
+}
 
+void RemoteCoordinatedCompositorProxy::connectToGPUProcess(WebPage& webPage)
+{
+    ASSERT(RunLoop::isMain());
     Ref gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
     gpuProcessConnection->addClient(*this);
     Ref connection = gpuProcessConnection->connection();
@@ -161,8 +168,6 @@ RemoteCoordinatedCompositorProxy::RemoteCoordinatedCompositorProxy(WebPage& webP
     }
 
     connection->addMessageReceiver(m_relayQueue.get(), *this, Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
-    WebProcess::singleton().parentProcessConnection()->addMessageReceiver(m_relayQueue.get(), *this, Messages::AcceleratedSurface::messageReceiverName(), m_surfaceID);
-
     connection->send(Messages::GPUConnectionToWebProcess::CreateCoordinatedCompositor(m_surfaceID, webPage.size(), webPage.deviceScaleFactor(), webPage.effectiveBackgroundColor(),
         webPage.activityState().contains(ActivityState::IsVisible), webPage.preferredBufferFormats(), WebProcess::singleton().rendererBufferTransportMode().contains(RendererBufferTransportMode::Hardware)), 0);
 }
@@ -246,6 +251,7 @@ void RemoteCoordinatedCompositorProxy::requestCompositionForRenderingUpdate(Func
         if (auto changes = layer.takePendingChanges())
             pendingTransaction.layers.append(WTF::move(*changes));
     });
+    m_needsFullCommit = false;
 
     ++m_pendingCommits;
     m_commitQueue->dispatch([protectedThis = Ref { *this }, pendingTransaction = WTF::move(pendingTransaction)] mutable {
@@ -279,6 +285,10 @@ void RemoteCoordinatedCompositorProxy::requestComposition(CompositionReason reas
         return;
 
     Locker locker { m_commitLock };
+    // A new compositor doesn't have the layers yet, so these changes wait for the full commit.
+    if (m_needsFullCommit)
+        return;
+
     PendingLayerTreeTransaction pendingTransaction { .rootLayer = m_sceneState->rootLayer().id(), .removedLayers = { }, .layers = { } };
     m_sceneState->forEachLayer([&](CoordinatedPlatformLayer& layer) {
         if (auto changes = layer.takePendingScrollingChanges())
@@ -319,15 +329,45 @@ void RemoteCoordinatedCompositorProxy::fillGLInformation(RenderProcessInfo&& inf
 
 void RemoteCoordinatedCompositorProxy::gpuProcessConnectionDidClose(GPUProcessConnection&)
 {
+    ASSERT(RunLoop::isMain());
+    RefPtr<IPC::Connection> connection;
     {
         Locker locker { m_connectionLock };
-        m_gpuConnection = nullptr;
+        connection = std::exchange(m_gpuConnection, nullptr);
     }
+    if (connection)
+        connection->removeMessageReceiver(Messages::AcceleratedBackingStore::messageReceiverName(), m_surfaceID);
 
-    // FIXME: recreate the compositor in a new GPU process.
     m_pendingCommits = 0;
     if (auto didCompositeFunction = std::exchange(m_didCompositeFunction, nullptr))
         didCompositeFunction();
+
+    RefPtr webPage = m_webPage;
+    if (m_isInvalidated || !webPage)
+        return;
+
+    // The new GPU process reuses the buffer identifiers, so the UI process has to forget the old
+    // buffers first. It keeps showing the last frame until the new compositor produces one.
+    m_relayQueue->dispatch([protectedThis = Ref { *this }] {
+        for (auto bufferID : std::exchange(protectedThis->m_bufferIDs, { }))
+            WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidDestroyBuffer(bufferID), protectedThis->m_surfaceID);
+    });
+
+    {
+        Locker locker { m_commitLock };
+        m_needsFullCommit = true;
+        m_sceneState->forEachLayer([](CoordinatedPlatformLayer& layer) {
+            layer.markAllPropertiesChanged();
+        });
+    }
+
+    connectToGPUProcess(*webPage);
+    if (m_suspendedCount) {
+        if (RefPtr connection = gpuConnection())
+            connection->send(Messages::RemoteCoordinatedCompositor::SetVisible(false), m_surfaceID);
+    }
+    if (RefPtr drawingArea = webPage->drawingArea())
+        drawingArea->triggerRenderingUpdate();
 }
 
 void RemoteCoordinatedCompositorProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
@@ -367,16 +407,19 @@ void RemoteCoordinatedCompositorProxy::didReceiveMessage(IPC::Connection& connec
 
 void RemoteCoordinatedCompositorProxy::didCreateDMABufBuffer(uint64_t id, DMABufBufferAttributes&& attributes, RendererBufferFormat::Usage usage)
 {
+    m_bufferIDs.add(id);
     WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidCreateDMABufBuffer(id, WTF::move(attributes), usage), m_surfaceID);
 }
 
 void RemoteCoordinatedCompositorProxy::didCreateSHMBuffer(uint64_t id, ShareableBitmapHandle&& handle)
 {
+    m_bufferIDs.add(id);
     WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidCreateSHMBuffer(id, WTF::move(handle)), m_surfaceID);
 }
 
 void RemoteCoordinatedCompositorProxy::didDestroyBuffer(uint64_t id)
 {
+    m_bufferIDs.remove(id);
     WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStore::DidDestroyBuffer(id), m_surfaceID);
 }
 

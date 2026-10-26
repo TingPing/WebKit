@@ -34,6 +34,7 @@
 #include <WebCore/IntRect.h>
 #include <WebCore/ShareableBitmapHandle.h>
 #include <atomic>
+#include <wtf/HashSet.h>
 #include <wtf/Lock.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
@@ -98,6 +99,7 @@ private:
     // GPUProcessConnection::Client
     void gpuProcessConnectionDidClose(GPUProcessConnection&) final;
 
+    void connectToGPUProcess(WebPage&);
     RefPtr<IPC::Connection> gpuConnection() const;
     void didComposite();
 
@@ -117,6 +119,8 @@ private:
     mutable Lock m_connectionLock;
     RefPtr<IPC::Connection> m_gpuConnection WTF_GUARDED_BY_LOCK(m_connectionLock);
     Lock m_commitLock;
+    bool m_needsFullCommit WTF_GUARDED_BY_LOCK(m_commitLock) { false };
+    HashSet<uint64_t> m_bufferIDs;
     std::atomic<unsigned> m_pendingCommits { 0 };
     Function<void()> m_didCompositeFunction;
     unsigned m_suspendedCount { 0 };
