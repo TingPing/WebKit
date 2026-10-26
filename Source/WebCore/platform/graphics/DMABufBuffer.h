@@ -88,6 +88,13 @@ public:
     CoordinatedPlatformLayerBuffer* buffer() const LIFETIME_BOUND { return m_buffer.get(); }
     void setBuffer(std::unique_ptr<CoordinatedPlatformLayerBuffer>&&);
 #else
+    struct YUVPlane {
+        Attributes attributes;
+        unsigned glFormat { 0 };
+    };
+    // The planes of a YUV buffer as single-plane buffers that borrow its file descriptors, or none when it can't be split.
+    static Vector<YUVPlane> yuvPlanes(const Attributes&);
+
     bool importIfNeeded();
     sk_sp<SkColorSpace> skiaColorSpace() const;
     SkYUVAInfo yuvaInfo() const;

@@ -36,8 +36,8 @@ namespace WebCore {
 
 class VideoFrameGStreamer;
 
-// Converts YUV frames in system memory to RGB into WebGL textures, with a context that shares
-// the textures of the WebGL one but not its state.
+// Converts YUV frames in system memory or DMA-BUFs to RGB into WebGL textures, with a context that
+// shares the textures of the WebGL one but not its state.
 class GraphicsContextGLVideoFrameCopierGStreamer {
     WTF_MAKE_TZONE_ALLOCATED(GraphicsContextGLVideoFrameCopierGStreamer);
     WTF_MAKE_NONCOPYABLE(GraphicsContextGLVideoFrameCopierGStreamer);
@@ -46,7 +46,7 @@ public:
     ~GraphicsContextGLVideoFrameCopierGStreamer();
 
     // The owner context must be current, and is current again when this returns.
-    bool copy(const VideoFrameGStreamer&, GCGLuint outputTexture, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY);
+    bool copy(VideoFrameGStreamer&, GCGLuint outputTexture, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY);
 
 private:
     GraphicsContextGLVideoFrameCopierGStreamer(GCGLDisplay, GCGLContext ownerContext, GCEGLSurface ownerSurface);
@@ -54,6 +54,14 @@ private:
     bool initialize(GCGLConfig, bool isForWebGL2);
     bool makeContextCurrent();
     void restoreOwnerContext();
+
+    struct Planes {
+        unsigned count { 0 };
+        bool swapUV { false };
+        bool chromaInRedGreen { false };
+    };
+    std::optional<Planes> uploadPlanes(const VideoFrameGStreamer&);
+    std::optional<Planes> importPlanes(VideoFrameGStreamer&, std::array<GCGLuint, 3>& textures);
 
     GCGLDisplay m_display { nullptr };
     GCGLContext m_ownerContext { nullptr };
@@ -65,10 +73,13 @@ private:
     std::array<GCGLuint, 4> m_planeTextures { };
     GCGLint m_planeCountLocation { -1 };
     GCGLint m_swapUVLocation { -1 };
+    GCGLint m_chromaInRedGreenLocation { -1 };
     GCGLint m_flipYLocation { -1 };
     GCGLint m_premultiplyAlphaLocation { -1 };
     GCGLint m_colorMatrixLocation { -1 };
     bool m_canUnpackRowLength { false };
+    bool m_canImportDMABuf { false };
+    bool m_canImportDMABufModifiers { false };
 };
 
 } // namespace WebCore

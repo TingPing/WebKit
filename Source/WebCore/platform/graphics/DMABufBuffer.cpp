@@ -320,6 +320,22 @@ static const HashMap<uint32_t, Vector<YUVPlaneInfo>>& yuvFormatPlaneInfo()
     return yuvFormatsMap;
 }
 
+Vector<DMABufBuffer::YUVPlane> DMABufBuffer::yuvPlanes(const Attributes& attributes)
+{
+    auto iter = yuvFormatPlaneInfo().find(attributes.fourcc.value);
+    if (iter == yuvFormatPlaneInfo().end() || iter->value.size() > attributes.fds.size())
+        return { };
+
+    Vector<YUVPlane> planes;
+    for (unsigned i = 0; i < iter->value.size(); ++i) {
+        const auto& plane = iter->value[i];
+        IntSize planeSize { attributes.size.width() / plane.subsampling.width(), attributes.size.height() / plane.subsampling.height() };
+        auto planeFds = Vector<UnixFileDescriptor>::from(attributes.fds[i].borrow());
+        planes.append({ Attributes { planeSize, plane.fourcc, WTF::move(planeFds), { attributes.offsets[i] }, { attributes.strides[i] }, attributes.modifier }, plane.glFormat });
+    }
+    return planes;
+}
+
 bool DMABufBuffer::importIfNeeded()
 {
     if (!m_importedTextures.isEmpty())
@@ -352,17 +368,12 @@ bool DMABufBuffer::importIfNeeded()
     };
 
     if (!isQualcommVideoFrameBuffer() && formatIsYUV(m_attributes.fourcc.value)) {
-        const auto& iter = yuvFormatPlaneInfo().find(m_attributes.fourcc.value);
-        if (iter == yuvFormatPlaneInfo().end())
+        auto planes = yuvPlanes(m_attributes);
+        if (planes.isEmpty())
             return false;
 
-        const auto& planeInfo = iter->value;
-        for (unsigned i = 0; i < planeInfo.size(); ++i) {
-            const auto& plane = planeInfo[i];
-            IntSize planeSize { m_attributes.size.width() / plane.subsampling.width(), m_attributes.size.height() / plane.subsampling.height() };
-            auto planeFds = Vector<UnixFileDescriptor>::from(m_attributes.fds[i].borrow());
-            Attributes planeAttributes { planeSize, plane.fourcc, WTF::move(planeFds), { m_attributes.offsets[i] }, { m_attributes.strides[i] }, m_attributes.modifier };
-            if (!importPlane(planeAttributes, plane.glFormat)) {
+        for (unsigned i = 0; i < planes.size(); ++i) {
+            if (!importPlane(planes[i].attributes, planes[i].glFormat)) {
                 LOG_ERROR("Failed to import DMA-BUF YUV buffer: could not create an EGL image for plane %u", i);
                 m_importedTextures.clear();
                 m_importedBackendTextures.clear();
