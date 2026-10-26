@@ -29,7 +29,7 @@
 ]
 messages -> RemoteCoordinatedCompositor {
     Commit(struct WebKit::CoordinatedLayerTreeTransaction transaction) -> ()
-    UpdatePositions(Vector<WebCore::CoordinatedLayerProperties> layers)
+    UpdateLayers(struct WebKit::CoordinatedLayerTreeTransaction transaction)
     SetSize(WebCore::IntSize size, float deviceScaleFactor)
     SetVisible(bool visible)
     BackgroundColorDidChange(std::optional<WebCore::Color> color)

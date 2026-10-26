@@ -47,6 +47,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include "CoordinatedPlatformLayerBufferRGB.h"
 #else
 #include "CoordinatedPlatformLayerBufferSkiaDeferredImage.h"
+#include "CoordinatedPlatformLayerBufferSkiaImage.h"
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/private/chromium/GrDeferredDisplayList.h>
 #include <skia/private/chromium/GrDeferredDisplayListRecorder.h>
@@ -171,30 +172,41 @@ void ScrollerCoordinated::updateValues()
     grContext->flushAndSubmit(surface.get(), GLFence::isSupported(display.glDisplay()) ? GrSyncCpu::kNo : GrSyncCpu::kYes);
     auto buffer = CoordinatedPlatformLayerBufferRGB::create(WTF::move(texture), { TextureMapperFlags::ShouldBlend }, GLFence::create(display.glDisplay()));
 #else
-    const auto& threadSafeGrContext = hostLayer->threadSafeGrContext();
-    if (!threadSafeGrContext)
-        return;
-
     auto imageInfo = SkImageInfo::Make(frameRect.size().width(), frameRect.size().height(), kRGBA_8888_SkColorType, kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
-    auto backendFormat = threadSafeGrContext->defaultBackendFormat(kRGBA_8888_SkColorType, GrRenderable::kYes);
-    ASSERT(backendFormat.isValid());
     auto properties = FontRenderOptions::singleton().createSurfaceProps();
-    auto maxResourceCacheBytes = PlatformDisplay::sharedDisplay().maxSkiaResourceCacheBytes();
-    auto characterization = threadSafeGrContext->createCharacterization(maxResourceCacheBytes, imageInfo, backendFormat, 0, kTopLeft_GrSurfaceOrigin, properties, skgpu::Mipmapped::kNo);
-    GrDeferredDisplayListRecorder ddlRecorder(characterization);
-    auto* canvas = ddlRecorder.getCanvas();
-    if (!canvas)
-        return;
+    std::unique_ptr<CoordinatedPlatformLayerBuffer> buffer;
+    if (const auto& threadSafeGrContext = hostLayer->threadSafeGrContext()) {
+        auto backendFormat = threadSafeGrContext->defaultBackendFormat(kRGBA_8888_SkColorType, GrRenderable::kYes);
+        ASSERT(backendFormat.isValid());
+        auto maxResourceCacheBytes = PlatformDisplay::sharedDisplay().maxSkiaResourceCacheBytes();
+        auto characterization = threadSafeGrContext->createCharacterization(maxResourceCacheBytes, imageInfo, backendFormat, 0, kTopLeft_GrSurfaceOrigin, properties, skgpu::Mipmapped::kNo);
+        GrDeferredDisplayListRecorder ddlRecorder(characterization);
+        auto* canvas = ddlRecorder.getCanvas();
+        if (!canvas)
+            return;
 
-    canvas->clear(SK_ColorTRANSPARENT);
+        canvas->clear(SK_ColorTRANSPARENT);
 
-    GraphicsContextSkia recordingContext(*canvas, RenderingMode::Accelerated, RenderingPurpose::LayerBacking);
-    recordingContext.beginRecording(GraphicsContextSkia::RecordingMode::Scrollbar, threadSafeGrContext);
-    recordingContext.scale(contentsScale);
-    scrollerImp->paint(recordingContext, state.frameRect, state);
-    recordingContext.endRecording();
+        GraphicsContextSkia recordingContext(*canvas, RenderingMode::Accelerated, RenderingPurpose::LayerBacking);
+        recordingContext.beginRecording(GraphicsContextSkia::RecordingMode::Scrollbar, threadSafeGrContext);
+        recordingContext.scale(contentsScale);
+        scrollerImp->paint(recordingContext, state.frameRect, state);
+        recordingContext.endRecording();
 
-    auto buffer = CoordinatedPlatformLayerBufferSkiaDeferredImage::create(ddlRecorder.detach());
+        buffer = CoordinatedPlatformLayerBufferSkiaDeferredImage::create(ddlRecorder.detach());
+    } else {
+        // Without a compositor in this process, paint on the CPU so the pixels can be sent to it.
+        auto surface = SkSurfaces::Raster(imageInfo, &properties);
+        if (!surface)
+            return;
+
+        surface->getCanvas()->clear(SK_ColorTRANSPARENT);
+        GraphicsContextSkia context(*surface->getCanvas(), RenderingMode::Unaccelerated, RenderingPurpose::LayerBacking);
+        context.scale(contentsScale);
+        scrollerImp->paint(context, state.frameRect, state);
+
+        buffer = CoordinatedPlatformLayerBufferSkiaImage::create(surface->makeImageSnapshot(), nullptr);
+    }
 #endif
 
     Locker layerLocker { hostLayer->lock() };

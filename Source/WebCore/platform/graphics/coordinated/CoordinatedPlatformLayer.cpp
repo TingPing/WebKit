@@ -1712,12 +1712,7 @@ std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer
 
     takeChange(Change::ContentsBuffer, CoordinatedLayerChange::ContentsBuffer, [&] {
         assertIsHeld(m_lock);
-        auto buffer = std::exchange(m_contentsBuffer.pending, nullptr);
-        m_contentsBuffer.hasCommitted = !!buffer;
-        if (auto* remoteBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferRemote>(buffer))
-            properties.contentsBuffer = CoordinatedRemoteContentsBuffer { remoteBuffer->identifier(), remoteBuffer->alphaMode(), remoteBuffer->origin() };
-        else if (auto image = buffer ? buffer->skiaImage() : nullptr; image && !image->isTextureBacked())
-            changes.contentsBufferImage = NativeImage::create(WTF::move(image));
+        takePendingContentsBuffer(changes);
     });
 
     // FIXME: send damage to the remote compositor.
@@ -1740,13 +1735,14 @@ std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer
     return changes;
 }
 
-std::optional<CoordinatedLayerProperties> CoordinatedPlatformLayer::takePendingPositionChanges()
+std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer::takePendingScrollingChanges()
 {
     Locker locker { m_lock };
-    if (!m_pendingChanges.containsAny({ Change::Position, Change::BoundsOrigin }))
+    if (!m_pendingChanges.containsAny({ Change::Position, Change::BoundsOrigin, Change::ContentsRect, Change::ContentsClippingRect, Change::ContentsBuffer }))
         return std::nullopt;
 
-    CoordinatedLayerProperties properties { .id = m_id };
+    PendingChanges changes { .properties = { .id = m_id } };
+    auto& properties = changes.properties;
     if (m_pendingChanges.contains(Change::Position)) {
         properties.position = m_position;
         properties.changes.add(CoordinatedLayerChange::Position);
@@ -1759,7 +1755,35 @@ std::optional<CoordinatedLayerProperties> CoordinatedPlatformLayer::takePendingP
         m_pendingChanges.remove(Change::BoundsOrigin);
     }
 
-    return properties;
+    if (m_pendingChanges.contains(Change::ContentsRect)) {
+        properties.contentsRect = m_contentsRect;
+        properties.changes.add(CoordinatedLayerChange::ContentsRect);
+        m_pendingChanges.remove(Change::ContentsRect);
+    }
+
+    if (m_pendingChanges.contains(Change::ContentsClippingRect)) {
+        properties.contentsClippingRect = m_contentsClippingRect;
+        properties.changes.add(CoordinatedLayerChange::ContentsClippingRect);
+        m_pendingChanges.remove(Change::ContentsClippingRect);
+    }
+
+    if (m_pendingChanges.contains(Change::ContentsBuffer)) {
+        takePendingContentsBuffer(changes);
+        properties.changes.add(CoordinatedLayerChange::ContentsBuffer);
+        m_pendingChanges.remove(Change::ContentsBuffer);
+    }
+
+    return changes;
+}
+
+void CoordinatedPlatformLayer::takePendingContentsBuffer(PendingChanges& changes)
+{
+    auto buffer = std::exchange(m_contentsBuffer.pending, nullptr);
+    m_contentsBuffer.hasCommitted = !!buffer;
+    if (auto* remoteBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferRemote>(buffer))
+        changes.properties.contentsBuffer = CoordinatedRemoteContentsBuffer { remoteBuffer->identifier(), remoteBuffer->alphaMode(), remoteBuffer->origin() };
+    else if (auto image = buffer ? buffer->skiaImage() : nullptr; image && !image->isTextureBacked())
+        changes.contentsBufferImage = NativeImage::create(WTF::move(image));
 }
 #endif
 

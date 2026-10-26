@@ -79,7 +79,7 @@ private:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
     void commit(CoordinatedLayerTreeTransaction&&, CompletionHandler<void()>&&);
-    void updatePositions(Vector<WebCore::CoordinatedLayerProperties>&&);
+    void updateLayers(CoordinatedLayerTreeTransaction&&);
     void setSize(WebCore::IntSize, float deviceScaleFactor);
     void setVisible(bool);
     void backgroundColorDidChange(std::optional<WebCore::Color>&&);

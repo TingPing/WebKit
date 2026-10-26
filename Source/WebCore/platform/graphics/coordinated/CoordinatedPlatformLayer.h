@@ -216,7 +216,8 @@ public:
         RefPtr<NativeImage> contentsBufferImage;
     };
     std::optional<PendingChanges> takePendingChanges();
-    std::optional<CoordinatedLayerProperties> takePendingPositionChanges();
+    // The changes the scrolling thread makes: scrolled positions and scrollbar contents.
+    std::optional<PendingChanges> takePendingScrollingChanges();
 #endif
 
     bool hasPendingTilesCreation() const { assertIsMainThread(); return m_pendingTilesCreation; }
@@ -245,6 +246,10 @@ private:
     void addDamage(Damage&&) WTF_REQUIRES_LOCK(m_lock);
 #endif
     void damageWholeLayer() WTF_REQUIRES_LOCK(m_lock);
+
+#if !USE(TEXTURE_MAPPER)
+    void takePendingContentsBuffer(PendingChanges&) WTF_REQUIRES_LOCK(m_lock);
+#endif
 
 #if USE(TEXTURE_MAPPER)
     void flushCompositingStateOnTarget(const OptionSet<CompositionReason>&, TextureMapperLayer&);

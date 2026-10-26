@@ -324,15 +324,16 @@ void RemoteCoordinatedCompositor::commit(CoordinatedLayerTreeTransaction&& trans
     });
 }
 
-void RemoteCoordinatedCompositor::updatePositions(Vector<CoordinatedLayerProperties>&& layers)
+void RemoteCoordinatedCompositor::updateLayers(CoordinatedLayerTreeTransaction&& transaction)
 {
-    m_workQueue->dispatch([protectedThis = Ref { *this }, layers = WTF::move(layers)] {
+    m_workQueue->dispatch([protectedThis = Ref { *this }, transaction = WTF::move(transaction)] mutable {
         if (protectedThis->m_isInvalidated)
             return;
 
-        for (const auto& properties : layers) {
-            if (auto layer = protectedThis->m_layers.get(properties.id))
-                protectedThis->applyLayerProperties(*layer, properties);
+        auto pixels = transaction.pixels.span();
+        for (auto& update : transaction.layers) {
+            if (protectedThis->m_layers.contains(update.properties.id))
+                protectedThis->applyLayerUpdate(WTF::move(update), pixels);
         }
         protectedThis->scheduleRender();
     });

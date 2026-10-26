@@ -274,17 +274,17 @@ void RemoteCoordinatedCompositorProxy::requestComposition(CompositionReason reas
         return;
 
     Locker locker { m_commitLock };
-    Vector<CoordinatedLayerProperties> layers;
+    PendingLayerTreeTransaction pendingTransaction { .rootLayer = m_sceneState->rootLayer().id(), .removedLayers = { }, .layers = { } };
     m_sceneState->forEachLayer([&](CoordinatedPlatformLayer& layer) {
-        if (auto properties = layer.takePendingPositionChanges())
-            layers.append(WTF::move(*properties));
+        if (auto changes = layer.takePendingScrollingChanges())
+            pendingTransaction.layers.append(WTF::move(*changes));
     });
-    if (layers.isEmpty())
+    if (pendingTransaction.layers.isEmpty())
         return;
 
-    m_commitQueue->dispatch([protectedThis = Ref { *this }, layers = WTF::move(layers)] mutable {
+    m_commitQueue->dispatch([protectedThis = Ref { *this }, pendingTransaction = WTF::move(pendingTransaction)] mutable {
         if (RefPtr connection = protectedThis->gpuConnection())
-            connection->send(Messages::RemoteCoordinatedCompositor::UpdatePositions(WTF::move(layers)), protectedThis->m_surfaceID);
+            connection->send(Messages::RemoteCoordinatedCompositor::UpdateLayers(makeTransaction(WTF::move(pendingTransaction))), protectedThis->m_surfaceID);
     });
 }
 
