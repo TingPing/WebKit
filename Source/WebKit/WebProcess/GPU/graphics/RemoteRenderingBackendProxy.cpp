@@ -135,6 +135,9 @@ void RemoteRenderingBackendProxy::ensureGPUProcessConnection()
         gpuProcessConnection->createRenderingBackend(m_identifier, WTF::move(serverHandle));
         m_gpuProcessConnection = gpuProcessConnection.get();
         m_sharedResourceCache = gpuProcessConnection->sharedResourceCache();
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+        m_maxAcceleratedImageBufferSize = gpuProcessConnection->maxAcceleratedImageBufferSize();
+#endif
     });
 }
 
@@ -294,10 +297,10 @@ RefPtr<RemoteImageBufferProxy> RemoteRenderingBackendProxy::createImageBuffer(co
         else
             imageBuffer = RemoteImageBufferProxy::create<ImageBufferRemoteIOSurfaceBackend>(parameters, *this);
 #elif USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-        if (purpose == RenderingPurpose::Canvas && isMainRunLoop() && WebProcess::singleton().usesGPUProcessForCompositing()) {
+        if (purpose == RenderingPurpose::Canvas && WebProcess::singleton().usesGPUProcessForCompositing()) {
+            ensureGPUProcessConnection();
             auto backendSize = ImageBufferBackend::calculateSafeBackendSize(parameters);
-            auto maxSize = WebProcess::singleton().ensureGPUProcessConnection().maxAcceleratedImageBufferSize();
-            if (static_cast<uint32_t>(std::max(backendSize.width(), backendSize.height())) <= maxSize)
+            if (static_cast<uint32_t>(std::max(backendSize.width(), backendSize.height())) <= m_maxAcceleratedImageBufferSize)
                 imageBuffer = RemoteImageBufferProxy::create<ImageBufferRemoteCoordinatedBackend>(parameters, *this);
         }
 #endif
@@ -380,6 +383,9 @@ static std::unique_ptr<ImageBufferBackend> createBackendForSerializedBuffer(cons
             return ImageBufferShareableMappedIOSurfaceBackend::create(parameters, WTF::move(*handle));
         if (!handle)
             return ImageBufferRemoteIOSurfaceBackend::create(parameters);
+#elif USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+        if (!handle)
+            return ImageBufferRemoteCoordinatedBackend::create(parameters);
 #endif
         [[fallthrough]];
     case RenderingMode::Unaccelerated:

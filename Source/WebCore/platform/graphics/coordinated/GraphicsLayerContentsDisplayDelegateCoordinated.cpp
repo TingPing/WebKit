@@ -48,6 +48,17 @@ void GraphicsLayerContentsDisplayDelegateCoordinated::display(CoordinatedPlatfor
         layer.setContentsBuffer(WTF::move(m_displayBuffer), WTF::move(dirtyRegion));
 }
 
+std::unique_ptr<CoordinatedPlatformLayerBuffer> GraphicsLayerContentsDisplayDelegateCoordinated::takeRemoteDisplayBuffer()
+{
+#if USE(TEXTURE_MAPPER)
+    return nullptr;
+#else
+    if (!m_displayBuffer || m_displayBuffer->type() != CoordinatedPlatformLayerBuffer::Type::Remote)
+        return nullptr;
+    return WTF::move(m_displayBuffer);
+#endif
+}
+
 } // namespace WebCore
 
 #endif // USE(COORDINATED_GRAPHICS)

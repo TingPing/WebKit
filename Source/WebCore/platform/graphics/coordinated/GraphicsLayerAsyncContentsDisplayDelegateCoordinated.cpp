@@ -50,6 +50,17 @@ GraphicsLayerAsyncContentsDisplayDelegateCoordinated::~GraphicsLayerAsyncContent
 
 bool GraphicsLayerAsyncContentsDisplayDelegateCoordinated::tryCopyToLayer(ImageBuffer& imageBuffer, bool, PlaceholderFrameIdentifier)
 {
+    // A buffer drawn in the process that composites the layer shows its frame there, without a copy.
+    if (imageBuffer.isRemoteImageBufferProxy() && imageBuffer.renderingMode() == RenderingMode::Accelerated) {
+        if (RefPtr contentsDelegate = imageBuffer.layerContentsDisplayDelegate()) {
+            imageBuffer.prepareForDisplay();
+            if (auto buffer = contentsDelegate->takeRemoteDisplayBuffer()) {
+                m_delegate->setDisplayBuffer(WTF::move(buffer));
+                return true;
+            }
+        }
+    }
+
     auto image = ImageBuffer::sinkIntoNativeImage(imageBuffer.clone());
     if (!image)
         return false;
