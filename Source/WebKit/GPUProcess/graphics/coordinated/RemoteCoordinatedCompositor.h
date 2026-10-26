@@ -30,6 +30,7 @@
 #include "RendererBufferFormat.h"
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/Color.h>
+#include <WebCore/CoordinatedBackingStoreProxy.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/PlatformLayerIdentifier.h>
 #include <WebCore/ProcessIdentifier.h>
@@ -37,6 +38,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/gpu/ganesh/GrContextThreadSafeProxy.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <wtf/CompletionHandler.h>
+#include <wtf/Deque.h>
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
@@ -100,9 +102,15 @@ private:
     void enableFrameDamageNotificationForTesting();
 #endif
 
+    using TileUpdates = Vector<WebCore::CoordinatedBackingStoreProxy::Update::TileUpdate>;
+
     WebCore::SkiaCompositingLayer& ensureLayer(WebCore::PlatformLayerIdentifier);
     void applyLayerProperties(WebCore::SkiaCompositingLayer&, const WebCore::CoordinatedLayerProperties&);
-    void applyLayerUpdate(CoordinatedLayerUpdate&&, std::span<const uint8_t> pixels);
+    TileUpdates scheduleTileReplays(const CoordinatedLayerUpdate&, Vector<Ref<WebCore::CoordinatedTileBuffer>>& paintingBuffers);
+    void applyLayerUpdate(CoordinatedLayerUpdate&&, std::span<const uint8_t> pixels, TileUpdates&&);
+    void runWhenTilesArePainted(Function<void()>&&);
+    void commitWhenTilesArePainted(CoordinatedLayerTreeTransaction&&, CompletionHandler<void()>&&);
+    void applyCommit(CoordinatedLayerTreeTransaction&&, Vector<TileUpdates>&&, CompletionHandler<void()>&&);
     void scheduleRender();
     void render();
     void frameComplete();
@@ -113,6 +121,7 @@ private:
     const WebCore::ProcessIdentifier m_webProcessIdentifier;
     const uint64_t m_identifier;
     const Ref<WorkQueue> m_workQueue;
+    const Ref<WorkQueue> m_tilePaintingQueue;
     RefPtr<AcceleratedSurface> m_surface;
     sk_sp<GrContextThreadSafeProxy> m_threadSafeGrContextForRecording;
 
@@ -120,7 +129,8 @@ private:
     sk_sp<GrContextThreadSafeProxy> m_threadSafeGrContext;
     std::unique_ptr<WebCore::CoordinatedTileManager> m_tileManager;
     HashMap<uint64_t, Ref<WebCore::SkiaRecordingResult>> m_recordings;
-    Vector<Ref<WebCore::CoordinatedTileBuffer>> m_paintingTileBuffers;
+    bool m_isWaitingForTiles { false };
+    Deque<Function<void()>> m_tasksWaitingForTiles;
     HashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::SkiaCompositingLayer>> m_layers;
     RefPtr<WebCore::SkiaCompositingLayer> m_rootLayer;
     WebCore::IntSize m_viewportSize;

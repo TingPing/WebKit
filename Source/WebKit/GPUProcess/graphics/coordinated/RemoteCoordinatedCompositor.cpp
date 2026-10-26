@@ -72,6 +72,7 @@ RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProce
     , m_webProcessIdentifier(connectionToWebProcess.webProcessIdentifier())
     , m_identifier(identifier)
     , m_workQueue(WorkQueue::create("org.webkit.RemoteCoordinatedCompositor"_s))
+    , m_tilePaintingQueue(WorkQueue::create("org.webkit.RemoteCoordinatedCompositor.TilePainting"_s))
     , m_viewportSize(parameters.viewportSize)
     , m_deviceScaleFactor(parameters.deviceScaleFactor)
     , m_isVisible(parameters.isVisible)
@@ -125,7 +126,6 @@ void RemoteCoordinatedCompositor::invalidate()
     m_workQueue->dispatchSync([this] {
         m_isInvalidated = true;
         m_recordings.clear();
-        m_paintingTileBuffers.clear();
         m_tileManager = nullptr;
         for (Ref layer : m_layers.values())
             layer->invalidate();
@@ -277,7 +277,27 @@ static sk_sp<SkImage> rasterImage(std::span<const uint8_t> pixels, const Coordin
     return SkImages::RasterFromData(info, SkData::MakeWithCopy(data.data(), data.size()), info.minRowBytes());
 }
 
-void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& update, std::span<const uint8_t> pixels)
+auto RemoteCoordinatedCompositor::scheduleTileReplays(const CoordinatedLayerUpdate& update, Vector<Ref<CoordinatedTileBuffer>>& paintingBuffers) -> TileUpdates
+{
+    TileUpdates tilesToUpdate;
+    if (!update.backingStore || !m_tileManager)
+        return tilesToUpdate;
+
+    for (auto& tileUpdate : update.backingStore->tilesToUpdate) {
+        RefPtr recording = m_recordings.get(tileUpdate.recording);
+        if (!recording)
+            continue;
+
+        auto dirtyRect = tileUpdate.dirtyRect;
+        dirtyRect.moveBy(tileUpdate.tileRect.location());
+        Ref buffer = m_tileManager->scheduleReplay(recording.releaseNonNull(), tileUpdate.tileRect, dirtyRect);
+        paintingBuffers.append(buffer);
+        tilesToUpdate.append({ tileUpdate.tileID, tileUpdate.tileRect, tileUpdate.dirtyRect, WTF::move(buffer) });
+    }
+    return tilesToUpdate;
+}
+
+void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& update, std::span<const uint8_t> pixels, TileUpdates&& tilesToUpdate)
 {
     Ref layer = ensureLayer(update.properties.id);
     applyLayerProperties(layer.get(), update.properties);
@@ -316,70 +336,110 @@ void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& upda
     if (!update.backingStore)
         return;
 
-    Vector<CoordinatedBackingStoreProxy::Update::TileUpdate> tilesToUpdate;
-    for (auto& tileUpdate : update.backingStore->tilesToUpdate) {
-        RefPtr recording = m_recordings.get(tileUpdate.recording);
-        if (!recording || !m_tileManager)
-            continue;
-
-        auto dirtyRect = tileUpdate.dirtyRect;
-        dirtyRect.moveBy(tileUpdate.tileRect.location());
-        Ref buffer = m_tileManager->scheduleReplay(recording.releaseNonNull(), tileUpdate.tileRect, dirtyRect);
-        m_paintingTileBuffers.append(buffer);
-        tilesToUpdate.append({ tileUpdate.tileID, tileUpdate.tileRect, tileUpdate.dirtyRect, WTF::move(buffer) });
-    }
-
     CoordinatedBackingStoreProxy::Update backingStoreUpdate;
     backingStoreUpdate.appendUpdate(WTF::move(update.backingStore->tilesToCreate), WTF::move(tilesToUpdate), WTF::move(update.backingStore->tilesToRemove));
     layer->updateBackingStore(WTF::move(backingStoreUpdate), update.backingStore->contentsScale);
 }
 
+void RemoteCoordinatedCompositor::runWhenTilesArePainted(Function<void()>&& task)
+{
+    ASSERT(m_workQueue->runLoop().isCurrent());
+    if (m_isWaitingForTiles) {
+        m_tasksWaitingForTiles.append(WTF::move(task));
+        return;
+    }
+    task();
+}
+
 void RemoteCoordinatedCompositor::commit(CoordinatedLayerTreeTransaction&& transaction, CompletionHandler<void()>&& completionHandler)
 {
     m_workQueue->dispatch([protectedThis = Ref { *this }, transaction = WTF::move(transaction), completionHandler = WTF::move(completionHandler)] mutable {
-        protectedThis->m_pendingCommitCompletionHandlers.append(WTF::move(completionHandler));
-        if (protectedThis->m_isInvalidated) {
-            protectedThis->didComposite();
-            return;
-        }
+        protectedThis->runWhenTilesArePainted([protectedThis, transaction = WTF::move(transaction), completionHandler = WTF::move(completionHandler)] mutable {
+            protectedThis->commitWhenTilesArePainted(WTF::move(transaction), WTF::move(completionHandler));
+        });
+    });
+}
 
-        for (auto identifier : transaction.removedLayers) {
-            if (auto layer = protectedThis->m_layers.take(identifier))
-                layer->invalidate();
-        }
+void RemoteCoordinatedCompositor::commitWhenTilesArePainted(CoordinatedLayerTreeTransaction&& transaction, CompletionHandler<void()>&& completionHandler)
+{
+    ASSERT(m_workQueue->runLoop().isCurrent());
+    if (m_isInvalidated) {
+        applyCommit(WTF::move(transaction), { }, WTF::move(completionHandler));
+        return;
+    }
 
-        auto pixels = transaction.pixels.span();
-        for (auto& update : transaction.layers)
-            protectedThis->applyLayerUpdate(WTF::move(update), pixels);
+    // The tiles start painting now, but the commit waits for them, so that the frames rendered
+    // meanwhile, like those of animations, show the previous commit rather than missing tiles.
+    Vector<Ref<CoordinatedTileBuffer>> paintingBuffers;
+    auto tilesToUpdate = WTF::map(transaction.layers, [&](const auto& update) {
+        return scheduleTileReplays(update, paintingBuffers);
+    });
 
-        protectedThis->m_rootLayer = &protectedThis->ensureLayer(transaction.rootLayer);
+    // Every recording arrives before the commit that uses it, and the web process doesn't record again until it is composited.
+    m_recordings.clear();
 
-        // Every recording arrives before the commit that uses it, and the web process doesn't record again until it is composited.
-        protectedThis->m_recordings.clear();
-        for (Ref buffer : std::exchange(protectedThis->m_paintingTileBuffers, { }))
+    if (paintingBuffers.isEmpty()) {
+        applyCommit(WTF::move(transaction), WTF::move(tilesToUpdate), WTF::move(completionHandler));
+        return;
+    }
+
+    m_isWaitingForTiles = true;
+    m_tilePaintingQueue->dispatch([protectedThis = Ref { *this }, paintingBuffers = WTF::move(paintingBuffers), transaction = WTF::move(transaction), tilesToUpdate = WTF::move(tilesToUpdate), completionHandler = WTF::move(completionHandler)] mutable {
+        for (Ref buffer : paintingBuffers)
             buffer->waitUntilPaintingFinished();
 
-        for (Ref layer : protectedThis->m_layers.values()) {
-            if (layer->hasPendingBackingStoreTileUpdates())
-                layer->processPendingTileUpdates();
-        }
-
-        protectedThis->scheduleRender();
+        protectedThis->m_workQueue->dispatch([protectedThis, transaction = WTF::move(transaction), tilesToUpdate = WTF::move(tilesToUpdate), completionHandler = WTF::move(completionHandler)] mutable {
+            protectedThis->m_isWaitingForTiles = false;
+            protectedThis->applyCommit(WTF::move(transaction), WTF::move(tilesToUpdate), WTF::move(completionHandler));
+            while (!protectedThis->m_isWaitingForTiles && !protectedThis->m_tasksWaitingForTiles.isEmpty())
+                protectedThis->m_tasksWaitingForTiles.takeFirst()();
+        });
     });
+}
+
+void RemoteCoordinatedCompositor::applyCommit(CoordinatedLayerTreeTransaction&& transaction, Vector<TileUpdates>&& tilesToUpdate, CompletionHandler<void()>&& completionHandler)
+{
+    ASSERT(m_workQueue->runLoop().isCurrent());
+    m_pendingCommitCompletionHandlers.append(WTF::move(completionHandler));
+    if (m_isInvalidated) {
+        didComposite();
+        return;
+    }
+
+    for (auto identifier : transaction.removedLayers) {
+        if (auto layer = m_layers.take(identifier))
+            layer->invalidate();
+    }
+
+    auto pixels = transaction.pixels.span();
+    for (size_t i = 0; i < transaction.layers.size(); ++i)
+        applyLayerUpdate(WTF::move(transaction.layers[i]), pixels, WTF::move(tilesToUpdate[i]));
+
+    m_rootLayer = &ensureLayer(transaction.rootLayer);
+
+    for (Ref layer : m_layers.values()) {
+        if (layer->hasPendingBackingStoreTileUpdates())
+            layer->processPendingTileUpdates();
+    }
+
+    scheduleRender();
 }
 
 void RemoteCoordinatedCompositor::updateLayers(CoordinatedLayerTreeTransaction&& transaction)
 {
     m_workQueue->dispatch([protectedThis = Ref { *this }, transaction = WTF::move(transaction)] mutable {
-        if (protectedThis->m_isInvalidated)
-            return;
+        // Applied after a commit waiting for its tiles, which would otherwise undo these newer changes.
+        protectedThis->runWhenTilesArePainted([protectedThis, transaction = WTF::move(transaction)] mutable {
+            if (protectedThis->m_isInvalidated)
+                return;
 
-        auto pixels = transaction.pixels.span();
-        for (auto& update : transaction.layers) {
-            if (protectedThis->m_layers.contains(update.properties.id))
-                protectedThis->applyLayerUpdate(WTF::move(update), pixels);
-        }
-        protectedThis->scheduleRender();
+            auto pixels = transaction.pixels.span();
+            for (auto& update : transaction.layers) {
+                if (protectedThis->m_layers.contains(update.properties.id))
+                    protectedThis->applyLayerUpdate(WTF::move(update), pixels, { });
+            }
+            protectedThis->scheduleRender();
+        });
     });
 }
 
