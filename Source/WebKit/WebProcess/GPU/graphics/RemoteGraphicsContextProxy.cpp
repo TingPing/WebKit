@@ -50,6 +50,10 @@
 #include <wtf/URL.h>
 #include <wtf/text/TextStream.h>
 
+#if USE(THEME_ADWAITA)
+#include <WebCore/Adwaita.h>
+#endif
+
 #if USE(SYSTEM_PREVIEW)
 #include <WebCore/ARKitBadgeSystemImage.h>
 #endif
@@ -693,6 +697,15 @@ void RemoteGraphicsContextProxy::drawControlPart(ControlPart& part, const FloatR
 {
     sendPendingDrawsIfNecessary();
     appendStateChangeItemIfNecessary();
+#if USE(THEME_ADWAITA)
+    // The system accent color is only known to this process.
+    if (!style.accentColor.isValid()) {
+        auto styleWithAccentColor = style;
+        styleWithAccentColor.accentColor = Adwaita::systemAccentColor();
+        send(Messages::RemoteGraphicsContext::DrawControlPart(part, borderRect, deviceScaleFactor, styleWithAccentColor));
+        return;
+    }
+#endif
     send(Messages::RemoteGraphicsContext::DrawControlPart(part, borderRect, deviceScaleFactor, style));
 }
 
