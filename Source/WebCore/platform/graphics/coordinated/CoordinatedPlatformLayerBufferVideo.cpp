@@ -187,6 +187,24 @@ static bool isSinglePlaneGLMemory(GstGLMemory* memory, GstVideoInfo* videoInfo, 
 }
 #endif // USE(GSTREAMER_GL)
 
+static SkYUVColorSpace skiaYUVColorSpace(const GstVideoColorimetry& colorimetry)
+{
+    bool isFullRange = colorimetry.range == GST_VIDEO_COLOR_RANGE_0_255;
+    switch (colorimetry.matrix) {
+    case GST_VIDEO_COLOR_MATRIX_BT709:
+        return isFullRange ? kRec709_Full_SkYUVColorSpace : kRec709_Limited_SkYUVColorSpace;
+    case GST_VIDEO_COLOR_MATRIX_BT2020:
+        return isFullRange ? kBT2020_8bit_Full_SkYUVColorSpace : kBT2020_8bit_Limited_SkYUVColorSpace;
+    case GST_VIDEO_COLOR_MATRIX_SMPTE240M:
+        return isFullRange ? kSMPTE240_Full_SkYUVColorSpace : kSMPTE240_Limited_SkYUVColorSpace;
+    case GST_VIDEO_COLOR_MATRIX_FCC:
+        return isFullRange ? kFCC_Full_SkYUVColorSpace : kFCC_Limited_SkYUVColorSpace;
+    default:
+        // Default to bt601. This is the same behaviour as GStreamer's glcolorconvert element.
+        return isFullRange ? kJPEG_Full_SkYUVColorSpace : kRec601_Limited_SkYUVColorSpace;
+    }
+}
+
 static std::optional<SkYUVAInfo> buildYUVAInfoFromMappedFrame(GstMappedFrame& mappedFrame)
 {
     auto planeConfig = SkYUVAInfo::PlaneConfig::kUnknown;
@@ -241,20 +259,7 @@ static std::optional<SkYUVAInfo> buildYUVAInfoFromMappedFrame(GstMappedFrame& ma
         return std::nullopt;
     }
 
-    const auto& colorimetry = GST_VIDEO_INFO_COLORIMETRY(mappedFrame.info());
-
-    // Default to bt601. This is the same behaviour as GStreamer's glcolorconvert element.
-    SkYUVColorSpace yuvaColorSpace = kRec601_Limited_SkYUVColorSpace;
-    if (gst_video_colorimetry_matches(&colorimetry, GST_VIDEO_COLORIMETRY_BT709))
-        yuvaColorSpace = kRec709_Full_SkYUVColorSpace;
-    else if (gst_video_colorimetry_matches(&colorimetry, GST_VIDEO_COLORIMETRY_BT2020))
-        yuvaColorSpace = kBT2020_8bit_Full_SkYUVColorSpace;
-    else if (gst_video_colorimetry_matches(&colorimetry, GST_VIDEO_COLORIMETRY_BT2100_PQ))
-        yuvaColorSpace = kBT2020_8bit_Full_SkYUVColorSpace;
-    else if (gst_video_colorimetry_matches(&colorimetry, GST_VIDEO_COLORIMETRY_SMPTE240M))
-        yuvaColorSpace = kSMPTE240_Full_SkYUVColorSpace;
-
-    return SkYUVAInfo(SkISize::Make(mappedFrame.width(), mappedFrame.height()), planeConfig, subsampling, yuvaColorSpace);
+    return SkYUVAInfo(SkISize::Make(mappedFrame.width(), mappedFrame.height()), planeConfig, subsampling, skiaYUVColorSpace(GST_VIDEO_INFO_COLORIMETRY(mappedFrame.info())));
 }
 
 static sk_sp<SkColorSpace> colorSpaceFromVideoInfo(const GstVideoInfo* videoInfo)
@@ -262,7 +267,8 @@ static sk_sp<SkColorSpace> colorSpaceFromVideoInfo(const GstVideoInfo* videoInfo
     const auto& colorimetry = GST_VIDEO_INFO_COLORIMETRY(videoInfo);
     if (gst_video_colorimetry_matches(&colorimetry, GST_VIDEO_COLORIMETRY_BT2100_PQ))
         return SkColorSpace::MakeRGB(SkNamedTransferFn::kPQ, SkNamedGamut::kRec2020);
-    return SkColorSpace::MakeRGB(SkNamedTransferFn::kRec709, SkNamedGamut::kSRGB);
+    // The transfer function of SDR frames is not converted, as when GStreamer converts them to RGB.
+    return SkColorSpace::MakeSRGB();
 }
 
 void CoordinatedPlatformLayerBufferVideo::createSkiaImageIfNeeded(const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext, bool gstGLEnabled, Origin origin)
