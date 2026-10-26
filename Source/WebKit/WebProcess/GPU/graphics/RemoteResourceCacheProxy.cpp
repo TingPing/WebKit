@@ -39,6 +39,7 @@
 #include <wtf/TZoneMallocInlines.h>
 
 #if USE(SKIA)
+#include <WebCore/ImageBackingStore.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkTypeface.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
@@ -62,6 +63,11 @@ static std::optional<CreateShareableBitmapResult> createShareableBitmapForNative
     bitmap = ShareableBitmap::createFromImagePixels(image);
     if (bitmap)
         platformImage = bitmap->createBasePlatformImage(DontCopyBackingStore, ShouldInterpolate::Yes);
+#elif USE(SKIA)
+    // A decoded image may already be in shared memory.
+    bitmap = ImageBackingStore::shareableBitmap(image);
+    if (bitmap)
+        platformImage = image.platformImage();
 #endif
 
     // If we failed to create ShareableBitmap or PlatformImage, fall back to image-draw method.

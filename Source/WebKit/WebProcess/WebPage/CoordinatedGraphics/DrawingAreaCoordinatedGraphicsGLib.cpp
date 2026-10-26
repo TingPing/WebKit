@@ -39,6 +39,7 @@
 #include "WebPreferencesKeys.h"
 #include "WebProcess.h"
 #include <WebCore/GraphicsContext.h>
+#include <WebCore/ImageBackingStore.h>
 #include <WebCore/LocalFrameInlines.h>
 #include <WebCore/LocalFrameView.h>
 #include <WebCore/Page.h>
@@ -126,6 +127,7 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
     if (m_webPage->shouldRenderDOMInGPUProcess()) {
         ProcessCapabilities::setCanUseAcceleratedBuffers(false);
         WebProcess::singleton().setUsesGPUProcessForCompositing();
+        ImageBackingStore::setAllocatesSharedMemory(true);
     }
 #endif
     settings.setForceCompositingMode(store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey()));

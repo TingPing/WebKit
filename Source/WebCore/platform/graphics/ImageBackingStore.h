@@ -36,6 +36,10 @@
 
 namespace WebCore {
 
+#if USE(SKIA)
+class ShareableBitmap;
+#endif
+
 #if USE(CAIRO)
 // Due to the pixman 16.16 floating point representation, cairo is not able to handle
 // images whose size is bigger than 32768.
@@ -62,20 +66,19 @@ public:
 
     PlatformImagePtr image() const;
 
+#if USE(SKIA)
+    // Decodes into shared memory, so that another process can draw the images without a copy.
+    WEBCORE_EXPORT static void setAllocatesSharedMemory(bool);
+    WEBCORE_EXPORT static RefPtr<ShareableBitmap> shareableBitmap(const NativeImage&);
+#endif
+
     bool setSize(const IntSize& size)
     {
         if (size.isEmpty())
             return false;
 
-        Vector<uint8_t> buffer;
-        size_t bufferSize = size.area() * sizeof(uint32_t);
-
-        if (!buffer.tryReserveCapacity(bufferSize))
+        if (!allocatePixels(size))
             return false;
-
-        buffer.grow(bufferSize);
-        m_pixels = FragmentedSharedBuffer::DataSegment::create(WTF::move(buffer));
-        m_pixelsSpan = spanReinterpretCast<uint32_t>(spanConstCast<uint8_t>(protect(m_pixels)->span()));
         m_size = size;
         m_frameRect = IntRect(IntPoint(), m_size);
         clear();
@@ -221,10 +224,31 @@ private:
         , m_premultiplyAlpha(other.m_premultiplyAlpha)
     {
         ASSERT(!m_size.isEmpty() && !isOverSize(m_size));
-        Vector<uint8_t> buffer(protect(other.m_pixels)->span());
+        RELEASE_ASSERT(allocatePixels(m_size));
+        memcpySpan(m_pixelsSpan, other.m_pixelsSpan);
+    }
+
+    bool allocatePixels(const IntSize& size)
+    {
+#if USE(SKIA)
+        if (m_premultiplyAlpha && allocateSharedPixels(size))
+            return true;
+#endif
+        Vector<uint8_t> buffer;
+        size_t bufferSize = size.area() * sizeof(uint32_t);
+
+        if (!buffer.tryReserveCapacity(bufferSize))
+            return false;
+
+        buffer.grow(bufferSize);
         m_pixels = FragmentedSharedBuffer::DataSegment::create(WTF::move(buffer));
         m_pixelsSpan = spanReinterpretCast<uint32_t>(spanConstCast<uint8_t>(protect(m_pixels)->span()));
+        return true;
     }
+
+#if USE(SKIA)
+    bool allocateSharedPixels(const IntSize&);
+#endif
 
     bool inBounds(const IntPoint& point) const
     {
