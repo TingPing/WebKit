@@ -165,6 +165,15 @@ uint32_t GPUProcessConnection::maxAcceleratedImageBufferSize()
 }
 #endif
 
+#if USE(GSTREAMER)
+Vector<WebCore::GStreamerVideoDecoderDescription> GPUProcessConnection::hardwareVideoDecoders()
+{
+    if (!waitForDidInitialize())
+        return { };
+    return m_hardwareVideoDecoders;
+}
+#endif
+
 Ref<RemoteSharedResourceCacheProxy> GPUProcessConnection::sharedResourceCache()
 {
     if (!m_sharedResourceCache)
@@ -311,6 +320,10 @@ void GPUProcessConnection::didInitialize(std::optional<GPUProcessConnectionInfo>
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     m_maxAcceleratedImageBufferSize = info->maxAcceleratedImageBufferSize;
+#endif
+
+#if USE(GSTREAMER)
+    m_hardwareVideoDecoders = WTF::move(info->mediaCodecCapabilities.hardwareVideoDecoders);
 #endif
 
 #if PLATFORM(COCOA)

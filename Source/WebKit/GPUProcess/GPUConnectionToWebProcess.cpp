@@ -164,6 +164,10 @@
 #include <WebCore/SecurityOrigin.h>
 #endif
 
+#if USE(GSTREAMER)
+#include <WebCore/GStreamerCommon.h>
+#endif
+
 #if USE(GRAPHICS_LAYER_WC)
 #include "RemoteWCLayerTreeHost.h"
 #include "WCContentBufferManager.h"
@@ -397,7 +401,7 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
     connection->setOnlySendMessagesAsDispatchWhenWaitingForSyncReplyWhenProcessingSuchAMessage(true);
     connection->open(*this);
 
-    auto capabilities = parameters.mediaCodecCapabilities.value_or(GPUProcessMediaCodecCapabilities {
+    auto capabilities = parameters.mediaCodecCapabilities ? *parameters.mediaCodecCapabilities : GPUProcessMediaCodecCapabilities {
 #if ENABLE(VP9)
         .hasVP9HardwareDecoder = WebCore::vp9HardwareDecoderAvailableInProcess(),
 #endif
@@ -412,7 +416,10 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
         .hasVorbisDecoder = WebCore::isVorbisDecoderAvailable()
 #endif
 #endif
-    });
+#if USE(GSTREAMER)
+        .hardwareVideoDecoders = WebCore::hardwareVideoDecoders(),
+#endif
+    };
 
     if (!parameters.mediaCodecCapabilities)
         gpuProcess.send(Messages::GPUProcessProxy::SetMediaCodecCapabilities(capabilities));

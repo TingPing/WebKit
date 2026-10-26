@@ -52,6 +52,10 @@
     WebCore::DRMDevice drmDevice;
 #endif
 
+#if USE(GSTREAMER)
+    Vector<String> gstreamerOptions;
+#endif
+
     Vector<String> overrideLanguages;
 
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)

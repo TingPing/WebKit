@@ -45,10 +45,22 @@
 #include <WebCore/PlatformDisplaySurfaceless.h>
 #include <wtf/text/UTF8CStringView.h>
 
+#if USE(GSTREAMER)
+#include <WebCore/GStreamerCommon.h>
+#include <wtf/Threading.h>
+#endif
+
 namespace WebKit {
 
 void GPUProcess::platformInitializeGPUProcess(GPUProcessCreationParameters& parameters)
 {
+#if USE(GSTREAMER)
+    WebCore::setGStreamerOptionsFromUIProcess(WTF::move(parameters.gstreamerOptions));
+    Thread::create("GStreamer initialization"_s, [] {
+        WebCore::ensureGStreamerInitialized();
+    })->detach();
+#endif
+
 #if USE(GBM)
     WebCore::DRMDeviceManager::singleton().initializeMainDevice(WTF::move(parameters.drmDevice));
 

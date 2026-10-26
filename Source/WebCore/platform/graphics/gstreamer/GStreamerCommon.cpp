@@ -464,7 +464,7 @@ bool ensureGStreamerInitialized()
 {
     // WARNING: Please note this function can be called from any thread, for instance when creating
     // a WebCodec element from a JS Worker.
-    RELEASE_ASSERT(isInWebProcess());
+    RELEASE_ASSERT(isInWebProcess() || isInGPUProcess());
     static std::once_flag onceFlag;
     static bool isGStreamerInitialized;
     std::call_once(onceFlag, [] {
@@ -519,6 +519,39 @@ bool ensureGStreamerInitialized()
 #endif
     });
     return isGStreamerInitialized;
+}
+
+Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders()
+{
+    if (!ensureGStreamerInitialized())
+        return { };
+
+    GList* factories = gst_registry_feature_filter(gst_registry_get(), [](GstPluginFeature* feature, gpointer) -> gboolean {
+        if (!GST_IS_ELEMENT_FACTORY(feature))
+            return FALSE;
+        auto klass = StringView::fromLatin1(gst_element_factory_get_metadata(GST_ELEMENT_FACTORY_CAST(feature), GST_ELEMENT_METADATA_KLASS));
+        return klass.contains("Decoder"_s) && klass.contains("Video"_s) && klass.contains("Hardware"_s);
+    }, FALSE, nullptr);
+
+    Vector<GStreamerVideoDecoderDescription> decoders;
+    for (auto* item = factories; item; item = g_list_next(item)) {
+        auto* factory = GST_ELEMENT_FACTORY_CAST(item->data);
+        for (auto* padTemplates = gst_element_factory_get_static_pad_templates(factory); padTemplates; padTemplates = g_list_next(padTemplates)) {
+            auto* padTemplate = static_cast<GstStaticPadTemplate*>(padTemplates->data);
+            if (padTemplate->direction != GST_PAD_SINK)
+                continue;
+            GRefPtr<GstCaps> sinkCaps = adoptGRef(gst_static_pad_template_get_caps(padTemplate));
+            GUniquePtr<char> sinkCapsString(gst_caps_to_string(sinkCaps.get()));
+            decoders.append({
+                .name = String::fromLatin1(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory))),
+                .rank = gst_plugin_feature_get_rank(GST_PLUGIN_FEATURE_CAST(factory)),
+                .sinkCaps = String::fromLatin1(sinkCapsString.get()),
+            });
+            break;
+        }
+    }
+    gst_plugin_feature_list_free(factories);
+    return decoders;
 }
 
 static bool registerInternalVideoEncoder()

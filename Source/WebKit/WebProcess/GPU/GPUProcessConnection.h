@@ -92,6 +92,9 @@ public:
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     uint32_t maxAcceleratedImageBufferSize();
 #endif
+#if USE(GSTREAMER)
+    Vector<WebCore::GStreamerVideoDecoderDescription> hardwareVideoDecoders();
+#endif
     Ref<RemoteSharedResourceCacheProxy> sharedResourceCache();
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     SampleBufferDisplayLayerManager& sampleBufferDisplayLayerManager() LIFETIME_BOUND;
@@ -173,6 +176,9 @@ private:
 #endif
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     uint32_t m_maxAcceleratedImageBufferSize { 0 };
+#endif
+#if USE(GSTREAMER)
+    Vector<WebCore::GStreamerVideoDecoderDescription> m_hardwareVideoDecoders;
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     const std::unique_ptr<SampleBufferDisplayLayerManager> m_sampleBufferDisplayLayerManager;

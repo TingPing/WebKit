@@ -21,6 +21,7 @@
 
 #if USE(GSTREAMER)
 #include "GRefPtrGStreamer.h"
+#include "GStreamerVideoDecoderDescription.h"
 
 #include <gst/audio/audio-buffer.h>
 #include <gst/audio/audio-info.h>
@@ -127,6 +128,7 @@ Vector<String> extractGStreamerOptionsFromCommandLine();
 void setGStreamerOptionsFromUIProcess(Vector<String>&&);
 bool ensureGStreamerInitializedNonWebProcess();
 bool ensureGStreamerInitialized();
+Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders();
 void registerWebKitGStreamerElements();
 void registerWebKitGStreamerVideoEncoder();
 void deinitializeGStreamer();

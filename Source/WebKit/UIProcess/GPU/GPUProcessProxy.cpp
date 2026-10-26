@@ -80,6 +80,10 @@
 #include "DRMMainDevice.h"
 #endif
 
+#if USE(GSTREAMER)
+#include <WebCore/GStreamerCommon.h>
+#endif
+
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "AcceleratedBackingStoreMessages.h"
 #endif
@@ -212,6 +216,10 @@ GPUProcessProxy::GPUProcessProxy()
 
 #if USE(GBM)
     parameters.drmDevice = drmMainDevice();
+#endif
+
+#if USE(GSTREAMER)
+    parameters.gstreamerOptions = WebCore::extractGStreamerOptionsFromCommandLine();
 #endif
 
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)

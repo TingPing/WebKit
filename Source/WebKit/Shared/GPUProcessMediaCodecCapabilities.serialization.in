@@ -37,6 +37,18 @@ struct WebKit::GPUProcessMediaCodecCapabilities {
     bool hasVorbisDecoder;
 #endif
 #endif
+#if USE(GSTREAMER)
+    Vector<WebCore::GStreamerVideoDecoderDescription> hardwareVideoDecoders;
+#endif
 };
+
+#if USE(GSTREAMER)
+header: <WebCore/GStreamerVideoDecoderDescription.h>
+struct WebCore::GStreamerVideoDecoderDescription {
+    String name;
+    unsigned rank;
+    String sinkCaps;
+};
+#endif
 
 #endif

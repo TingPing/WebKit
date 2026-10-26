@@ -29,6 +29,11 @@
 
 #include <optional>
 
+#if USE(GSTREAMER)
+#include <WebCore/GStreamerVideoDecoderDescription.h>
+#include <wtf/Vector.h>
+#endif
+
 namespace WebKit {
 
 struct GPUProcessMediaCodecCapabilities {
@@ -45,6 +50,9 @@ struct GPUProcessMediaCodecCapabilities {
 #if ENABLE(VORBIS)
     bool hasVorbisDecoder { false };
 #endif
+#endif
+#if USE(GSTREAMER)
+    Vector<WebCore::GStreamerVideoDecoderDescription> hardwareVideoDecoders;
 #endif
 };
 
