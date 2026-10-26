@@ -49,6 +49,7 @@ public:
     static PlatformPathPtr emptyPlatformPath();
 
     PlatformPathPtr platformPath() const LIFETIME_BOUND;
+    PlatformPathPtr platformPathIfExists() const LIFETIME_BOUND { return m_platformPath ? const_cast<SkPath*>(&*m_platformPath) : nullptr; }
 
     void addPath(const PathSkia&, const AffineTransform&);
 

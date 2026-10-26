@@ -34,6 +34,7 @@
 #include <WebCore/Gradient.h>
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/NativeImage.h>
+#include <WebCore/PlatformPathImpl.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -59,6 +60,11 @@ RefPtr<NativeImage> RemoteResourceCache::cachedNativeImage(RenderingResourceIden
 
 bool RemoteResourceCache::cachePathImpl(RemotePathImplIdentifier identifier, Ref<PathImpl>&& path)
 {
+#if USE(SKIA)
+    // Made now, so that every draw of the path uses the same SkPath, which Skia keys its caches on.
+    if (RefPtr platformPath = dynamicDowncast<PlatformPathImpl>(path.get()))
+        platformPath->platformPath();
+#endif
     return m_paths.add(identifier, WTF::move(path)).isNewEntry;
 }
 

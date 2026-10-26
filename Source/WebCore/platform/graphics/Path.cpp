@@ -329,6 +329,13 @@ PlatformPathPtr Path::platformPath() const
 #if USE(CG)
     return const_cast<Path&>(*this).ensurePlatformPathImpl().platformPath();
 #else
+#if USE(SKIA)
+    // A shared path would be copied, losing the SkPath that Skia keys its caches on, like the one of small path masks.
+    if (RefPtr impl = dynamicDowncast<PathSkia>(asImpl())) {
+        if (auto platformPath = impl->platformPathIfExists())
+            return platformPath;
+    }
+#endif
     return const_cast<Path&>(*this).ensurePlatformPathImpl().platformPath();
 #endif
 }
