@@ -36,6 +36,7 @@
 
 namespace WebCore {
 
+class GraphicsContextGLVideoFrameCopierGStreamer;
 class TextureMapperGCGLPlatformLayer;
 
 class GraphicsContextGLEGL : public GLContextWrapper, public GraphicsContextGLANGLE {
@@ -94,6 +95,11 @@ private:
     unsigned glVersion() const override;
 
     mutable unsigned m_version { 0 };
+
+#if ENABLE(VIDEO) && USE(GSTREAMER) && USE(COORDINATED_GRAPHICS)
+    std::unique_ptr<GraphicsContextGLVideoFrameCopierGStreamer> m_videoFrameCopier;
+    bool m_videoFrameCopierCreationFailed { false };
+#endif
 
 #if !USE(COORDINATED_GRAPHICS)
     GCGLuint m_compositorTexture { 0 };

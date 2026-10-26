@@ -138,7 +138,7 @@ protected:
 #if ENABLE(WEBXR) && USE(OPENXR)
     void exportExternalSync(uint32_t externalSync, CompletionHandler<void(UnixFileDescriptor&&)>&&);
 #endif
-#if ENABLE(VIDEO) && PLATFORM(COCOA)
+#if ENABLE(VIDEO) && (PLATFORM(COCOA) || USE(GSTREAMER))
     void copyTextureFromVideoFrame(SharedVideoFrame&&, PlatformGLObject texture, uint32_t target, int32_t level, uint32_t internalFormat, uint32_t format, uint32_t type, bool premultiplyAlpha, bool flipY, CompletionHandler<void(bool)>&&);
     void setSharedVideoFrameSemaphore(IPC::Semaphore&&);
     void setSharedVideoFrameMemory(WebCore::SharedMemory::Handle&&);
@@ -186,7 +186,7 @@ protected:
     const Ref<RemoteSharedResourceCache> m_sharedResourceCache;
 #if ENABLE(VIDEO)
     const Ref<RemoteVideoFrameObjectHeap> m_videoFrameObjectHeap;
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || USE(GSTREAMER)
     SharedVideoFrameReader m_sharedVideoFrameReader;
 #endif
 #endif

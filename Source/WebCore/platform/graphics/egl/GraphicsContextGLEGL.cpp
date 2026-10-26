@@ -42,8 +42,15 @@
 #include "VideoFrame.h"
 #if USE(GSTREAMER)
 #include "VideoFrameContentHint.h"
+#endif
+#endif
+
+#if USE(GSTREAMER) && (ENABLE(VIDEO) || ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS))
 #include "VideoFrameGStreamer.h"
 #endif
+
+#if ENABLE(VIDEO) && USE(GSTREAMER) && USE(COORDINATED_GRAPHICS)
+#include "GraphicsContextGLVideoFrameCopierGStreamer.h"
 #endif
 
 #if USE(COORDINATED_GRAPHICS)
@@ -192,6 +199,10 @@ GraphicsContextGLEGL::GraphicsContextGLEGL(GraphicsContextGLAttributes&& attribu
 
 GraphicsContextGLEGL::~GraphicsContextGLEGL()
 {
+#if ENABLE(VIDEO) && USE(GSTREAMER) && USE(COORDINATED_GRAPHICS)
+    if (m_videoFrameCopier && makeContextCurrent())
+        m_videoFrameCopier = nullptr;
+#endif
 #if !USE(COORDINATED_GRAPHICS)
     if (m_compositorTexture) {
         if (!makeContextCurrent())
@@ -207,11 +218,33 @@ RefPtr<GraphicsLayerContentsDisplayDelegate> GraphicsContextGLEGL::layerContents
 }
 
 #if ENABLE(VIDEO)
+#if USE(GSTREAMER) && USE(COORDINATED_GRAPHICS)
+bool GraphicsContextGLEGL::copyTextureFromVideoFrame(VideoFrame& frame, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY)
+{
+    RefPtr gstreamerFrame = dynamicDowncast<VideoFrameGStreamer>(frame);
+    if (!gstreamerFrame || target != TEXTURE_2D || !makeContextCurrent())
+        return false;
+
+    if (!m_videoFrameCopier) {
+        if (m_videoFrameCopierCreationFailed)
+            return false;
+
+        m_videoFrameCopier = GraphicsContextGLVideoFrameCopierGStreamer::create(m_displayObj, m_configObj, m_contextObj, m_surfaceObj, m_isForWebGL2);
+        if (!m_videoFrameCopier) {
+            m_videoFrameCopierCreationFailed = true;
+            return false;
+        }
+    }
+
+    return m_videoFrameCopier->copy(*gstreamerFrame, texture, level, internalFormat, format, type, premultiplyAlpha, flipY);
+}
+#else
 bool GraphicsContextGLEGL::copyTextureFromVideoFrame(VideoFrame&, PlatformGLObject, GCGLenum, GCGLint, GCGLenum, GCGLenum, GCGLenum, bool, bool)
 {
     // FIXME: Implement copy-free (or at least, software copy-free) texture transfer.
     return false;
 }
+#endif
 #endif
 
 #if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)

@@ -432,7 +432,7 @@ private:
     WeakPtr<GPUProcessConnection> m_gpuProcessConnection; // Only main thread use.
     RefPtr<IPC::StreamClientConnection> m_streamConnection;
     bool m_didInitialize { false };
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || (USE(GSTREAMER) && ENABLE(VIDEO))
     SharedVideoFrameWriter m_sharedVideoFrameWriter;
 #endif
 #if ENABLE(VIDEO)

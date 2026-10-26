@@ -277,7 +277,7 @@ UnixFileDescriptor RemoteGraphicsContextGLProxy::exportExternalSync(GCGLExternal
 #if ENABLE(VIDEO)
 bool RemoteGraphicsContextGLProxy::copyTextureFromVideoFrame(WebCore::VideoFrame& videoFrame, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY)
 {
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || USE(GSTREAMER)
     if (isContextLost())
         return false;
 
@@ -691,7 +691,7 @@ void RemoteGraphicsContextGLProxy::abandonGpuProcess()
 
 void RemoteGraphicsContextGLProxy::disconnectGpuProcessIfNeeded()
 {
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || (USE(GSTREAMER) && ENABLE(VIDEO))
     m_sharedVideoFrameWriter.disable();
 #endif
     if (!m_streamConnection)

@@ -94,7 +94,7 @@ RemoteGraphicsContextGL::RemoteGraphicsContextGL(GPUConnectionToWebProcess& gpuC
     , m_sharedResourceCache(gpuConnectionToWebProcess.sharedResourceCache())
 #if ENABLE(VIDEO)
     , m_videoFrameObjectHeap(gpuConnectionToWebProcess.videoFrameObjectHeap())
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || USE(GSTREAMER)
     , m_sharedVideoFrameReader(m_videoFrameObjectHeap.ptr(), gpuConnectionToWebProcess.webProcessIdentity())
 #endif
 #endif
@@ -288,6 +288,30 @@ void RemoteGraphicsContextGL::surfaceBufferToVideoFrame(WebCore::GraphicsContext
         result = m_videoFrameObjectHeap->add(videoFrame.releaseNonNull());
 #endif
     completionHandler(WTF::move(result));
+}
+#endif
+
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+void RemoteGraphicsContextGL::copyTextureFromVideoFrame(SharedVideoFrame&& frame, PlatformGLObject texture, uint32_t target, int32_t level, uint32_t internalFormat, uint32_t format, uint32_t type, bool premultiplyAlpha, bool flipY, CompletionHandler<void(bool)>&& completionHandler)
+{
+    assertIsCurrent(workQueue());
+    RefPtr videoFrame = m_sharedVideoFrameReader.read(WTF::move(frame));
+    if (!videoFrame || !m_objectNames.isValidKey(texture)) {
+        completionHandler(false);
+        return;
+    }
+    bool result = protect(m_context)->copyTextureFromVideoFrame(*videoFrame, m_objectNames.get(texture), target, level, internalFormat, format, type, premultiplyAlpha, flipY);
+    completionHandler(result);
+}
+
+void RemoteGraphicsContextGL::setSharedVideoFrameSemaphore(IPC::Semaphore&& semaphore)
+{
+    m_sharedVideoFrameReader.setSemaphore(WTF::move(semaphore));
+}
+
+void RemoteGraphicsContextGL::setSharedVideoFrameMemory(WebCore::SharedMemory::Handle&& handle)
+{
+    m_sharedVideoFrameReader.setSharedMemory(WTF::move(handle));
 }
 #endif
 

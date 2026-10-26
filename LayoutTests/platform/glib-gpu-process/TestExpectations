@@ -26,4 +26,6 @@ fast/canvas/webgl/simulated-vertexAttrib0-invalid-indicies.html [ Failure ]
 # Fails in-process only, webkit.org/b/314312.
 media/media-sources-selection.html [ Pass ]
 
-webgl/tex-2d-video-no-change-wrap.html [ Failure ]
+# Accelerated canvases scale the YUV planes of video frames on the GPU, and the ImageBitmap scales the frame
+# GStreamer converted. They differ by more than the tolerance on the edges of saturated colors.
+imported/w3c/web-platform-tests/html/canvas/element/manual/imagebitmap/canvas-createImageBitmap-video-resize.html [ Failure ]
