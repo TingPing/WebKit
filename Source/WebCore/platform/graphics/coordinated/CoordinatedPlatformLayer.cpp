@@ -1841,7 +1841,7 @@ void CoordinatedPlatformLayer::markAllPropertiesChanged()
 void CoordinatedPlatformLayer::setHolePunchVideoRectangle(const IntRect& rect)
 {
     Locker locker { m_lock };
-    if (auto* buffer = dynamicDowncast<CoordinatedPlatformLayerBufferHolePunch>(m_contentsBuffer.committed.get()))
+    if (auto* buffer = dynamicDowncast<CoordinatedPlatformLayerBufferHolePunch>(m_contentsBuffer.committed))
         buffer->setHolePunchVideoRectangle(rect);
 }
 #endif
