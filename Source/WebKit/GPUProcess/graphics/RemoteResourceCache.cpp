@@ -62,7 +62,7 @@ bool RemoteResourceCache::cachePathImpl(RemotePathImplIdentifier identifier, Ref
 {
 #if USE(SKIA)
     // Made now, so that every draw of the path uses the same SkPath, which Skia keys its caches on.
-    if (RefPtr platformPath = dynamicDowncast<PlatformPathImpl>(path.get()))
+    if (RefPtr platformPath = dynamicDowncast<PlatformPathImpl>(path))
         platformPath->platformPath();
 #endif
     return m_paths.add(identifier, WTF::move(path)).isNewEntry;
