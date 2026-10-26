@@ -939,19 +939,24 @@ RefPtr<DMABufBuffer> VideoFrameGStreamer::getDMABuf()
 
     Ref dmabuf = DMABufBuffer::create({ size, fourcc, WTF::move(fds), WTF::move(offsets), WTF::move(strides), modifier });
 
+    const auto& colorimetry = GST_VIDEO_INFO_COLORIMETRY(&videoInfo);
     DMABufBuffer::ColorSpace colorSpace = DMABufBuffer::ColorSpace::Bt601;
-    DMABufBuffer::TransferFunction transferFunction = DMABufBuffer::TransferFunction::Bt709;
-    if (gst_video_colorimetry_matches(&GST_VIDEO_INFO_COLORIMETRY(&videoInfo), GST_VIDEO_COLORIMETRY_BT709))
+    switch (colorimetry.matrix) {
+    case GST_VIDEO_COLOR_MATRIX_BT709:
         colorSpace = DMABufBuffer::ColorSpace::Bt709;
-    else if (gst_video_colorimetry_matches(&GST_VIDEO_INFO_COLORIMETRY(&videoInfo), GST_VIDEO_COLORIMETRY_BT2020))
+        break;
+    case GST_VIDEO_COLOR_MATRIX_BT2020:
         colorSpace = DMABufBuffer::ColorSpace::Bt2020;
-    else if (gst_video_colorimetry_matches(&GST_VIDEO_INFO_COLORIMETRY(&videoInfo), GST_VIDEO_COLORIMETRY_BT2100_PQ)) {
-        colorSpace = DMABufBuffer::ColorSpace::Bt2020;
-        transferFunction = DMABufBuffer::TransferFunction::Pq;
-    } else if (gst_video_colorimetry_matches(&GST_VIDEO_INFO_COLORIMETRY(&videoInfo), GST_VIDEO_COLORIMETRY_SMPTE240M))
+        break;
+    case GST_VIDEO_COLOR_MATRIX_SMPTE240M:
         colorSpace = DMABufBuffer::ColorSpace::Smpte240M;
+        break;
+    default:
+        break;
+    }
     dmabuf->setColorSpace(colorSpace);
-    dmabuf->setTransferFunction(transferFunction);
+    dmabuf->setSampleRange(colorimetry.range == GST_VIDEO_COLOR_RANGE_0_255 ? DMABufBuffer::SampleRange::Full : DMABufBuffer::SampleRange::Narrow);
+    dmabuf->setTransferFunction(colorimetry.transfer == GST_VIDEO_TRANSFER_SMPTE2084 ? DMABufBuffer::TransferFunction::Pq : DMABufBuffer::TransferFunction::Bt709);
 
     dmabuf->ref();
     gst_mini_object_set_qdata(memory, dmabufQuark, dmabuf.ptr(), [](gpointer data) {
@@ -1029,6 +1034,7 @@ Ref<DMABufBuffer> VideoFrameGStreamer::dmabufForQualcommDecoder(const IntSize& s
 
         auto sampleRange = colorimetry.range == GST_VIDEO_COLOR_RANGE_0_255 ? DMABufBuffer::SampleRange::Full : DMABufBuffer::SampleRange::Narrow;
         dmabuf->setSampleRange(sampleRange);
+        dmabuf->setIsQualcommVideoFrameBuffer(true);
     }
 
     return dmabuf;
