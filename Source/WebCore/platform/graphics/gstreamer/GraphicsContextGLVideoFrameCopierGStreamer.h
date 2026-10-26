@@ -62,7 +62,7 @@ private:
     GCGLuint m_program { 0 };
     GCGLuint m_vertexBuffer { 0 };
     GCGLuint m_framebuffer { 0 };
-    std::array<GCGLuint, 3> m_planeTextures { };
+    std::array<GCGLuint, 4> m_planeTextures { };
     GCGLint m_planeCountLocation { -1 };
     GCGLint m_swapUVLocation { -1 };
     GCGLint m_flipYLocation { -1 };

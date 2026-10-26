@@ -65,6 +65,7 @@ static constexpr auto s_fragmentShaderSource {
     "uniform sampler2D u_texture0;"
     "uniform sampler2D u_texture1;"
     "uniform sampler2D u_texture2;"
+    "uniform sampler2D u_texture3;"
     "uniform int u_planeCount;"
     "uniform int u_swapUV;"
     "uniform int u_premultiplyAlpha;"
@@ -84,6 +85,7 @@ static constexpr auto s_fragmentShaderSource {
     "        yuv.gb = yuv.bg;"
     "    yuv.a = 1.0;"
     "    vec4 color = yuv * u_colorMatrix;"
+    "    color.a = u_planeCount == 4 ? texture2D(u_texture3, v_textureCoordinate).r : 1.0;"
     "    if (u_premultiplyAlpha == 1)"
     "        color.rgb *= color.a;"
     "    gl_FragColor = color;"
@@ -230,12 +232,13 @@ bool GraphicsContextGLVideoFrameCopierGStreamer::initialize(GCGLConfig config, b
     auto texture0Location = GL_GetUniformLocation(m_program, "u_texture0");
     auto texture1Location = GL_GetUniformLocation(m_program, "u_texture1");
     auto texture2Location = GL_GetUniformLocation(m_program, "u_texture2");
+    auto texture3Location = GL_GetUniformLocation(m_program, "u_texture3");
     m_planeCountLocation = GL_GetUniformLocation(m_program, "u_planeCount");
     m_swapUVLocation = GL_GetUniformLocation(m_program, "u_swapUV");
     m_flipYLocation = GL_GetUniformLocation(m_program, "u_flipY");
     m_premultiplyAlphaLocation = GL_GetUniformLocation(m_program, "u_premultiplyAlpha");
     m_colorMatrixLocation = GL_GetUniformLocation(m_program, "u_colorMatrix");
-    if (positionLocation < 0 || texture0Location < 0 || texture1Location < 0 || texture2Location < 0 || m_planeCountLocation < 0
+    if (positionLocation < 0 || texture0Location < 0 || texture1Location < 0 || texture2Location < 0 || texture3Location < 0 || m_planeCountLocation < 0
         || m_swapUVLocation < 0 || m_flipYLocation < 0 || m_premultiplyAlphaLocation < 0 || m_colorMatrixLocation < 0)
         return false;
 
@@ -243,6 +246,7 @@ bool GraphicsContextGLVideoFrameCopierGStreamer::initialize(GCGLConfig config, b
     GL_Uniform1i(texture0Location, 0);
     GL_Uniform1i(texture1Location, 1);
     GL_Uniform1i(texture2Location, 2);
+    GL_Uniform1i(texture3Location, 3);
 
     static constexpr std::array<GLfloat, 12> vertices { -1, -1, 1, -1, 1, 1, 1, 1, -1, 1, -1, -1 };
     GL_GenBuffers(1, &m_vertexBuffer);
@@ -296,6 +300,9 @@ bool GraphicsContextGLVideoFrameCopierGStreamer::copy(const VideoFrameGStreamer&
     case GST_VIDEO_FORMAT_NV12:
         planeCount = 2;
         break;
+    case GST_VIDEO_FORMAT_A420:
+        planeCount = 4;
+        break;
     default:
         return false;
     }
@@ -337,7 +344,7 @@ bool GraphicsContextGLVideoFrameCopierGStreamer::copy(const VideoFrameGStreamer&
         GL_BindTexture(GL_TEXTURE_2D, outputTexture);
         GL_TexImage2D(GL_TEXTURE_2D, level, internalFormat, 0, 0, 0, format, type, nullptr);
     });
-    GL_ActiveTexture(GL_TEXTURE3);
+    GL_ActiveTexture(GL_TEXTURE0 + m_planeTextures.size());
     GL_BindTexture(GL_TEXTURE_2D, outputTexture);
     GL_TexImage2D(GL_TEXTURE_2D, level, internalFormat, size.width(), size.height(), 0, format, type, nullptr);
     GL_BindTexture(GL_TEXTURE_2D, 0);
