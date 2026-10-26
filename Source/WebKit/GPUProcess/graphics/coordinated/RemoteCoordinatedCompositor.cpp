@@ -46,6 +46,7 @@
 #include <WebCore/NativeImage.h>
 #include <WebCore/PlatformDisplay.h>
 #include <WebCore/SkiaCompositingLayer.h>
+#include <WebCore/SkiaDamageRegion.h>
 #include <WebCore/SkiaRecordingResult.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkColorSpace.h>
@@ -54,6 +55,7 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/gpu/ganesh/GrDirectContext.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/StringView.h>
 
 namespace WebKit {
@@ -110,6 +112,23 @@ RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProce
     const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
     if (!enableCPURendering || StringView::fromLatin1(enableCPURendering) == "0"_s)
         m_threadSafeGrContextForRecording = m_threadSafeGrContext;
+
+    // Like the compositor of the web process, which logs the FPS to the console of the page.
+    bool ok = false;
+    Seconds fpsCalculationInterval(String::fromLatin1(getenv("WEBKIT_SHOW_FPS")).toDouble(&ok));
+    if (ok && fpsCalculationInterval) {
+        m_fpsCounter.calculationInterval = fpsCalculationInterval;
+        m_fpsCounter.lastCalculationTimestamp = MonotonicTime::now();
+    }
+
+#if ENABLE(DAMAGE_TRACKING)
+    if (const char* showDamage = getenv("WEBKIT_SHOW_DAMAGE")) {
+        if (auto value = parseInteger<unsigned>(StringView::fromLatin1(showDamage)); value && *value) {
+            m_damage.showsOverlay = true;
+            m_damage.propagationEnabled = true;
+        }
+    }
+#endif
 }
 
 RemoteCoordinatedCompositor::~RemoteCoordinatedCompositor()
@@ -485,11 +504,11 @@ void RemoteCoordinatedCompositor::setDamagePropagationSettings(bool propagationE
             return;
 
         auto& damage = protectedThis->m_damage;
-        damage.propagationEnabled = propagationEnabled;
+        damage.propagationEnabled = propagationEnabled || damage.showsOverlay;
         damage.unified = propagationEnabled && unified;
         damage.usedForCompositing = propagationEnabled && usedForCompositing;
         for (Ref layer : protectedThis->m_layers.values())
-            layer->setDamagePropagationEnabled(propagationEnabled);
+            layer->setDamagePropagationEnabled(damage.propagationEnabled);
 
         protectedThis->m_surface->setFrameDamageRectangleThreshold(Damage::clampRectangleThreshold(rectangleThreshold));
         protectedThis->m_surface->setDamageUsedForCompositing(damage.usedForCompositing);
@@ -503,6 +522,36 @@ void RemoteCoordinatedCompositor::enableFrameDamageNotificationForTesting()
     });
 }
 #endif
+
+#if ENABLE(DAMAGE_TRACKING)
+static void drawDamageOverlay(SkCanvas& canvas, const Damage& damage, const IntSize& size)
+{
+    SkPaint paint;
+    paint.setStyle(SkPaint::kFill_Style);
+    paint.setColor(SkColorSetARGB(128, 0, 255, 0));
+
+    // No region means the damage covers the whole surface.
+    if (auto damageRegion = SkiaDamageRegion::create(damage, size))
+        damageRegion->fillCanvasInDeviceSpace(canvas, paint);
+    else
+        canvas.drawPaint(paint);
+}
+#endif
+
+void RemoteCoordinatedCompositor::updateFPSCounter()
+{
+    if (!m_fpsCounter.calculationInterval)
+        return;
+
+    ++m_fpsCounter.frameCount;
+    auto delta = MonotonicTime::now() - m_fpsCounter.lastCalculationTimestamp;
+    if (delta < *m_fpsCounter.calculationInterval)
+        return;
+
+    m_webProcessConnection->send(Messages::RemoteCoordinatedCompositorProxy::DidUpdateFPS(m_fpsCounter.frameCount / delta.seconds()), m_identifier);
+    m_fpsCounter.frameCount = 0;
+    m_fpsCounter.lastCalculationTimestamp += delta;
+}
 
 void RemoteCoordinatedCompositor::scheduleRender()
 {
@@ -550,7 +599,8 @@ void RemoteCoordinatedCompositor::render()
 #if ENABLE(DAMAGE_TRACKING)
     if (m_damage.propagationEnabled)
         frameDamage = Damage(scaledSize, m_damage.unified ? Damage::Mode::BoundingBox : Damage::Mode::Rectangles);
-    if (m_damage.usedForCompositing)
+    // The overlay is drawn over the damage, so the frame is repainted in full instead.
+    if (m_damage.usedForCompositing && !m_damage.showsOverlay)
         priorTargetDamage = m_surface->renderTargetDamage();
 #endif
 
@@ -567,6 +617,15 @@ void RemoteCoordinatedCompositor::render()
         if (!frameDamage->isEmpty())
             m_surface->setFrameDamage(WTF::move(*frameDamage));
     }
+
+    if (m_damage.showsOverlay) {
+        if (const auto& damage = m_surface->renderTargetDamage(); damage && !damage->isEmpty()) {
+            drawDamageOverlay(*canvas, *damage, scaledSize);
+            // One more frame, so that once damage stops the overlay is repainted away.
+            m_needsRender = true;
+        }
+        m_surface->setFrameDamageForPlatformOnly(Damage(scaledSize, Damage::Mode::Full));
+    }
 #endif
 
     if (auto* surface = canvas->getSurface())
@@ -576,6 +635,7 @@ void RemoteCoordinatedCompositor::render()
     m_surface->didRenderFrame();
     m_surface->sendFrame();
     m_isWaitingForFrameDone = true;
+    updateFPSCounter();
 
     didComposite();
 }

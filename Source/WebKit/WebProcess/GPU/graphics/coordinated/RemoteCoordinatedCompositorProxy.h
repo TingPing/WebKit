@@ -105,6 +105,7 @@ private:
     RefPtr<IPC::Connection> gpuConnection() const;
     void didComposite();
     void didCompositeRenderingUpdate();
+    void didUpdateFPS(float);
 #if ENABLE(DAMAGE_TRACKING)
     void sendDamageSettings();
     void didRenderFrameForTesting(WebCore::Region&&);

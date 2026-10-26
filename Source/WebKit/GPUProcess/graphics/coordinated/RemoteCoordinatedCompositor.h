@@ -113,6 +113,7 @@ private:
     void applyCommit(CoordinatedLayerTreeTransaction&&, Vector<TileUpdates>&&, CompletionHandler<void()>&&);
     void scheduleRender();
     void render();
+    void updateFPSCounter();
     void frameComplete();
     void didComposite();
 
@@ -140,11 +141,17 @@ private:
     bool m_isWaitingForFrameDone { false };
     bool m_needsRender { false };
     Vector<CompletionHandler<void()>> m_pendingCommitCompletionHandlers;
+    struct {
+        std::optional<Seconds> calculationInterval;
+        MonotonicTime lastCalculationTimestamp;
+        unsigned frameCount { 0 };
+    } m_fpsCounter;
 #if ENABLE(DAMAGE_TRACKING)
     struct {
         bool propagationEnabled { false };
         bool unified { false };
         bool usedForCompositing { false };
+        bool showsOverlay { false };
         bool shouldNotifyFrameDamageForTesting { false };
     } m_damage;
 #endif

@@ -27,6 +27,7 @@
     DispatchedTo=WebContent
 ]
 messages -> RemoteCoordinatedCompositorProxy {
+    DidUpdateFPS(float fps)
 #if ENABLE(DAMAGE_TRACKING)
     DidRenderFrameForTesting(WebCore::Region frameDamage)
 #endif

@@ -42,7 +42,9 @@
 #include "WebProcess.h"
 #include <WebCore/CoordinatedPlatformLayer.h>
 #include <WebCore/CoordinatedTileBuffer.h>
+#include <WebCore/Document.h>
 #include <WebCore/NativeImage.h>
+#include <WebCore/Page.h>
 #include <WebCore/SharedBuffer.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkColorSpace.h>
@@ -334,6 +336,16 @@ void RemoteCoordinatedCompositorProxy::didCompositeRenderingUpdate()
             drawingArea->didCompleteRenderingUpdateDisplay();
     }
     didCompositeFunction();
+}
+
+void RemoteCoordinatedCompositorProxy::didUpdateFPS(float fps)
+{
+    RefPtr webPage = m_webPage;
+    if (!webPage)
+        return;
+
+    if (RefPtr document = webPage->corePage()->localTopDocument())
+        document->addConsoleMessage(MessageSource::Rendering, MessageLevel::Info, makeString("FPS: "_s, fps));
 }
 
 uint64_t RemoteCoordinatedCompositorProxy::recordTiles(const IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(GraphicsContext&)>& paint)
