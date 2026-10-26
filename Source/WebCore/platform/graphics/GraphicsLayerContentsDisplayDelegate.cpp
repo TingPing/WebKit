@@ -30,6 +30,8 @@
 #include "GraphicsLayerCA.h"
 #include "IOSurface.h"
 #include "PlatformCALayerDelegatedContents.h"
+#elif USE(COORDINATED_GRAPHICS)
+#include "CoordinatedPlatformLayerBuffer.h"
 #endif
 
 namespace WebCore {
@@ -49,6 +51,11 @@ GraphicsLayerCompositingCoordinatesOrientation GraphicsLayerContentsDisplayDeleg
 std::optional<PlatformCALayerDelegatedContents> GraphicsLayerContentsDisplayDelegate::delegatedContents() const
 {
     return std::nullopt;
+}
+#elif USE(COORDINATED_GRAPHICS)
+std::unique_ptr<CoordinatedPlatformLayerBuffer> GraphicsLayerContentsDisplayDelegate::takeRemoteDisplayBuffer()
+{
+    return nullptr;
 }
 #endif
 

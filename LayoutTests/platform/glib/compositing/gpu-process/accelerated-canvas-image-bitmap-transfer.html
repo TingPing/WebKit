@@ -1,5 +1,5 @@
 <!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true UseGPUProcessForWebGLEnabled=true ] -->
-<script src="../../../../resources/js-test-pre.js"></script>
+<script src="../../../../resources/js-test.js"></script>
 <script id="worker" type="text/worker">
 self.onmessage = (event) => {
     const canvas = new OffscreenCanvas(16, 8);
@@ -28,4 +28,3 @@ worker.onmessage = (event) => {
 };
 createImageBitmap(canvas).then((bitmap) => worker.postMessage(bitmap, [bitmap]));
 </script>
-<script src="../../../../resources/js-test-post.js"></script>

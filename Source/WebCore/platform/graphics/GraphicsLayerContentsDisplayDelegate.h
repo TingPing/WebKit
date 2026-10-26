@@ -72,7 +72,7 @@ public:
     virtual void setDisplayBuffer(std::unique_ptr<CoordinatedPlatformLayerBuffer>&&) = 0;
     virtual void display(CoordinatedPlatformLayer&, std::optional<Damage>&&) = 0;
     // A buffer the compositing process produced, which another layer can show instead.
-    virtual std::unique_ptr<CoordinatedPlatformLayerBuffer> takeRemoteDisplayBuffer() { return nullptr; }
+    virtual std::unique_ptr<CoordinatedPlatformLayerBuffer> takeRemoteDisplayBuffer();
 #if USE(SKIA)
     void setThreadSafeGrContext(const sk_sp<GrContextThreadSafeProxy>&);
     const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext() const;
