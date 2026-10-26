@@ -2752,7 +2752,7 @@ bool WebProcess::shouldUseRemoteRenderingForWebGL() const
 #if USE(COORDINATED_GRAPHICS)
 #if USE(GBM)
     if (m_usesGPUProcessForCompositing)
-        return m_useGPUProcessForWebGL;
+        return true;
     return m_useGPUProcessForWebGL && WebCore::GraphicsContextGLGBM::checkRequirements();
 #else
     return false;

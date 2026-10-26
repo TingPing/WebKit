@@ -332,6 +332,16 @@ static uint32_t maxAcceleratedImageBufferSize()
 }
 #endif
 
+static SharedPreferencesForWebProcess adjustSharedPreferences(SharedPreferencesForWebProcess&& sharedPreferences)
+{
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && ENABLE(WEBGL)
+    // A web process whose DOM is rendered here has no GL, so its WebGL is rendered here too.
+    if (sharedPreferences.useGPUProcessForDOMRenderingEnabled)
+        sharedPreferences.useGPUProcessForWebGLEnabled = true;
+#endif
+    return sharedPreferences;
+}
+
 Ref<GPUConnectionToWebProcess> GPUConnectionToWebProcess::create(GPUProcess& gpuProcess, WebCore::ProcessIdentifier webProcessIdentifier, PAL::SessionID sessionID, IPC::Connection::Handle&& connectionHandle, GPUProcessConnectionParameters&& parameters)
 {
     return adoptRef(*new GPUConnectionToWebProcess(gpuProcess, webProcessIdentifier, sessionID, WTF::move(connectionHandle), WTF::move(parameters)));
@@ -373,7 +383,7 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
 #if ENABLE(IPC_TESTING_API)
     , m_ipcTester(IPCTester::create())
 #endif
-    , m_sharedPreferencesForWebProcess(WTF::move(parameters.sharedPreferencesForWebProcess))
+    , m_sharedPreferencesForWebProcess(adjustSharedPreferences(WTF::move(parameters.sharedPreferencesForWebProcess)))
 {
     RELEASE_ASSERT(RunLoop::isMain());
 
@@ -1436,7 +1446,7 @@ void GPUConnectionToWebProcess::updateSampleBufferDisplayLayerBoundsAndPosition(
 
 void GPUConnectionToWebProcess::updateSharedPreferencesForWebProcess(SharedPreferencesForWebProcess&& sharedPreferencesForWebProcess)
 {
-    m_sharedPreferencesForWebProcess = WTF::move(sharedPreferencesForWebProcess);
+    m_sharedPreferencesForWebProcess = adjustSharedPreferences(WTF::move(sharedPreferencesForWebProcess));
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
     protect(m_libWebRTCCodecsProxy.get())->updateSharedPreferencesForWebProcess(m_sharedPreferencesForWebProcess);
 #endif

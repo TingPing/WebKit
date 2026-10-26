@@ -43,6 +43,7 @@
 #include <WebCore/LocalFrameView.h>
 #include <WebCore/Page.h>
 #include <WebCore/PageOverlayController.h>
+#include <WebCore/ProcessCapabilities.h>
 #include <WebCore/Region.h>
 #include <WebCore/Settings.h>
 #include <WebCore/ShareableBitmap.h>
@@ -118,6 +119,13 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
     if (settings.hardwareAccelerationEnabled() && !m_webPage->shouldRenderDOMInGPUProcess()) {
         WebProcess::singleton().initializePlatformDisplayIfNeeded();
         WebProcess::singleton().initializeVulkanIfNeeded();
+    }
+#endif
+#if ENABLE(GPU_PROCESS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    // Without GL in the web process, canvases and WebGL are rendered in the GPU process too.
+    if (m_webPage->shouldRenderDOMInGPUProcess()) {
+        ProcessCapabilities::setCanUseAcceleratedBuffers(false);
+        WebProcess::singleton().setUsesGPUProcessForCompositing();
     }
 #endif
     settings.setForceCompositingMode(store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey()));

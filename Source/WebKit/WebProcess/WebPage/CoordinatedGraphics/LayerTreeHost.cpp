@@ -112,9 +112,7 @@ LayerTreeHost::LayerTreeHost(WebPage& webPage)
 #if ENABLE(GPU_PROCESS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     RefPtr<RemoteCoordinatedCompositorProxy> remoteCompositor;
     if (webPage.shouldRenderDOMInGPUProcess()) {
-        ProcessCapabilities::setCanUseAcceleratedBuffers(false);
-        WebProcess::singleton().setUsesGPUProcessForCompositing();
-        remoteCompositor = RemoteCoordinatedCompositorProxy::create(webPage, *this, m_sceneState.get());
+        remoteCompositor =RemoteCoordinatedCompositorProxy::create(webPage, *this, m_sceneState.get());
         lazyInitialize(m_compositor, Ref { *remoteCompositor });
     } else
 #endif
