@@ -3766,7 +3766,9 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
             g_object_set(m_pipeline.get(), "audio-filter", scale, nullptr);
     }
 
-    managePlayerSuspend();
+    // isMediaStreamPlayer() can't tell yet, since the URL is set after this.
+    if (!isMediaStream)
+        managePlayerSuspend();
 #if ENABLE(MEDIA_TELEMETRY)
     MediaTelemetryReport::singleton().reportDrmInfo(getDrm());
     MediaTelemetryReport::singleton().reportPlaybackState(MediaTelemetryReport::AVPipelineState::Create);
