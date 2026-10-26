@@ -1,0 +1,88 @@
+<!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true ] -->
+<script src="../../../../resources/js-test.js"></script>
+<body>
+<script>
+description("Writes into the pixels of a canvas come after the draws that used it before, also when it is drawn into the page.");
+jsTestIsAsync = true;
+
+const size = 20;
+const steps = 16;
+
+function createCanvas(width, height) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    document.body.appendChild(canvas);
+    return canvas;
+}
+
+function solidImageData(context, value) {
+    const imageData = context.createImageData(size, size);
+    for (let i = 0; i < imageData.data.length; i += 4) {
+        imageData.data[i] = value;
+        imageData.data[i + 1] = 255 - value;
+        imageData.data[i + 2] = 0;
+        imageData.data[i + 3] = 255;
+    }
+    return imageData;
+}
+
+let source, sourceContext, destinationContext, patternContext, pixel;
+
+function pixelAt(context, x, y) {
+    return Array.from(context.getImageData(x, y, 1, 1).data).join(",");
+}
+
+function expectedPixel(value) {
+    return [value, 255 - value, 0, 255].join(",");
+}
+
+function runStep(step) {
+    const value = step * 16;
+    sourceContext.putImageData(solidImageData(sourceContext, value), 0, 0);
+    destinationContext.drawImage(source, step * size, 0);
+    patternContext.fillStyle = patternContext.createPattern(source, "no-repeat");
+    patternContext.save();
+    patternContext.translate(step * size, 0);
+    patternContext.fillRect(0, 0, size, size);
+    patternContext.restore();
+}
+
+function check() {
+    for (let step = 0; step < steps; ++step) {
+        pixel = pixelAt(destinationContext, step * size + size / 2, size / 2);
+        shouldBeEqualToString("pixel", expectedPixel(step * 16));
+        pixel = pixelAt(patternContext, step * size + size / 2, size / 2);
+        shouldBeEqualToString("pixel", expectedPixel(step * 16));
+    }
+    pixel = pixelAt(sourceContext, size / 2, size / 2);
+    shouldBeEqualToString("pixel", expectedPixel((steps - 1) * 16));
+}
+
+source = createCanvas(size, size);
+sourceContext = source.getContext("2d");
+destinationContext = createCanvas(size * steps, size).getContext("2d");
+patternContext = createCanvas(size * steps, size).getContext("2d");
+
+debug("Without rendering updates in between:");
+for (let step = 0; step < steps; ++step)
+    runStep(step);
+check();
+
+debug("");
+debug("With the canvas drawn into the page in between:");
+destinationContext.clearRect(0, 0, size * steps, size);
+patternContext.clearRect(0, 0, size * steps, size);
+let step = 0;
+function nextFrame() {
+    runStep(step++);
+    if (step < steps) {
+        requestAnimationFrame(nextFrame);
+        return;
+    }
+    check();
+    finishJSTest();
+}
+requestAnimationFrame(nextFrame);
+</script>
+</body>

@@ -167,6 +167,10 @@ ALWAYS_INLINE void RemoteImageBufferProxy::send(T&& message) const
     if (!connection) [[unlikely]]
         return;
 
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (RefPtr renderingBackend = m_renderingBackend.get())
+        didUse(renderingBackend->imageBufferUseFence());
+#endif
     auto result = connection->send(std::forward<T>(message), renderingResourceIdentifier());
     if (result != IPC::Error::NoError) [[unlikely]] {
         RELEASE_LOG(RemoteLayerBuffers, "RemoteImageBufferProxy::send - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING, IPC::description(T::name()).characters(), IPC::errorAsString(result).characters());
@@ -489,6 +493,15 @@ void RemoteImageBufferProxy::putPixelBuffer(const PixelBufferSourceView& pixelBu
     if (!backend)
         return;
     if (backend->canMapBackingStore()) {
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+        // Without draws of its own to wait for, the write only has to come after the uses of the buffer that were sent,
+        // which a fence shared with the other buffers tells without a round trip for every write.
+        if (RefPtr renderingBackend = m_renderingBackend.get(); renderingBackend && !m_context.consumeHasDrawn()) {
+            renderingBackend->waitForImageBufferUses(m_lastUseFence);
+            ImageBuffer::putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
+            return;
+        }
+#endif
         // Simulate a write so that pending reads migrate the data off of the mapped buffer.
         context().fillRect({ });
         flushDrawingContext();

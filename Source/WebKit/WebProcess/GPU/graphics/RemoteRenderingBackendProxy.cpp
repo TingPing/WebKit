@@ -826,6 +826,15 @@ void RemoteRenderingBackendProxy::sinkCoordinatedTileRecorder(UniqueRef<RemoteGr
     recorder->sendPendingDrawsIfNecessary();
     send(Messages::RemoteRenderingBackend::SinkCoordinatedTileRecorder(recorder->identifier(), recordingIdentifier));
 }
+
+void RemoteRenderingBackendProxy::waitForImageBufferUses(uint64_t fence)
+{
+    // A display list may draw any image buffer.
+    if (std::max(fence, m_displayListUseFence) < m_imageBufferUseFence)
+        return;
+    flushImageBuffers()();
+    ++m_imageBufferUseFence;
+}
 #endif
 
 void RemoteRenderingBackendProxy::getImageBufferResourceLimitsForTesting(CompletionHandler<void(ImageBufferResourceLimits)>&& callback)

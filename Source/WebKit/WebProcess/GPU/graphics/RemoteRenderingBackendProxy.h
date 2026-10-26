@@ -169,6 +169,12 @@ public:
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     UniqueRef<RemoteGraphicsContextProxy> createCoordinatedTileRecorder(uint64_t compositorIdentifier, const WebCore::IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale);
     void sinkCoordinatedTileRecorder(UniqueRef<RemoteGraphicsContextProxy>&&, uint64_t recordingIdentifier);
+
+    // The GPU process uses image buffers in the order of the stream, so waiting for a single flush tells that
+    // it is done with all the uses sent before it, whatever the buffer.
+    uint64_t imageBufferUseFence() const { return m_imageBufferUseFence; }
+    void didUseDisplayList() { m_displayListUseFence = m_imageBufferUseFence; }
+    void waitForImageBufferUses(uint64_t fence);
 #endif
 
     struct BufferSet {
@@ -256,6 +262,8 @@ private:
     RefPtr<RemoteSharedResourceCacheProxy> m_sharedResourceCache;
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     uint32_t m_maxAcceleratedImageBufferSize { 0 };
+    uint64_t m_imageBufferUseFence { 1 };
+    uint64_t m_displayListUseFence { 0 };
 #endif
     RemoteRenderingBackendIdentifier m_identifier { RemoteRenderingBackendIdentifier::generate() };
     const UniqueRef<RemoteResourceCacheProxy> m_remoteResourceCacheProxy { RemoteResourceCacheProxy::create(*this) };

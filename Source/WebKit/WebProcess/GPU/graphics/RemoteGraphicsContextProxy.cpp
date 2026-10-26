@@ -330,6 +330,10 @@ void RemoteGraphicsContextProxy::drawDisplayList(const DisplayList::DisplayList&
     auto identifier = recordResourceUse(displayList);
     if (!identifier)
         return;
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (RefPtr renderingBackend = m_renderingBackend.get())
+        renderingBackend->didUseDisplayList();
+#endif
     sendPendingDrawsIfNecessary();
     appendStateChangeItemIfNecessary();
     send(Messages::RemoteGraphicsContext::DrawDisplayList(*identifier));
@@ -802,6 +806,9 @@ bool RemoteGraphicsContextProxy::recordResourceUse(ImageBuffer& imageBuffer)
     // This draw consumes the source buffer's contents, so its buffered line
     // strokes must reach the GPU process first.
     cachedImageBuffer->sendPendingDrawsIfNecessary();
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    cachedImageBuffer->didUse(renderingBackend->imageBufferUseFence());
+#endif
     return true;
 }
 

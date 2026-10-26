@@ -107,6 +107,11 @@ public:
     // image buffer (drawImageBuffer source, clipToImageBuffer source, etc.) so
     // the GPU process sees the up-to-date contents.
     void sendPendingDrawsIfNecessary() const { m_context.sendPendingDrawsIfNecessary(); }
+
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    // The fence of the rendering backend that a write into the mapped pixels has to wait for.
+    void didUse(uint64_t fence) const { m_lastUseFence = fence; }
+#endif
 private:
     RemoteImageBufferProxy(Parameters, std::unique_ptr<WebCore::ImageBufferBackend>&&, RemoteRenderingBackendProxy&);
 
@@ -161,6 +166,9 @@ private:
 #endif
     mutable RemoteGraphicsContextProxy m_context;
     WeakPtr<RemoteRenderingBackendProxy> m_renderingBackend;
+#if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    mutable uint64_t m_lastUseFence { 0 };
+#endif
 };
 
 class RemoteSerializedImageBufferProxy : public WebCore::SerializedImageBuffer, public Identified<RemoteSerializedImageBufferIdentifier> {
