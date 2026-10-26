@@ -92,7 +92,9 @@ private:
     void setSize(WebCore::IntSize, float deviceScaleFactor);
     void setVisible(bool);
     void backgroundColorDidChange(std::optional<WebCore::Color>&&);
+#if PLATFORM(WPE) && ENABLE(WPE_PLATFORM) && (USE(GBM) || OS(ANDROID))
     void preferredBufferFormatsDidChange(Vector<RendererBufferFormat>&&);
+#endif
 
     WebCore::SkiaCompositingLayer& ensureLayer(WebCore::PlatformLayerIdentifier);
     void applyLayerProperties(WebCore::SkiaCompositingLayer&, const WebCore::CoordinatedLayerProperties&);

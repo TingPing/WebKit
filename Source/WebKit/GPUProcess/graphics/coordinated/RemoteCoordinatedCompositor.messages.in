@@ -33,7 +33,9 @@ messages -> RemoteCoordinatedCompositor {
     SetSize(WebCore::IntSize size, float deviceScaleFactor)
     SetVisible(bool visible)
     BackgroundColorDidChange(std::optional<WebCore::Color> color)
+#if PLATFORM(WPE) && ENABLE(WPE_PLATFORM) && (USE(GBM) || OS(ANDROID))
     PreferredBufferFormatsDidChange(Vector<WebKit::RendererBufferFormat> formats)
+#endif
 }
 
 #endif

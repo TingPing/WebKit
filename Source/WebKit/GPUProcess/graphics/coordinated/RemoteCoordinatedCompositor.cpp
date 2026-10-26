@@ -398,11 +398,13 @@ void RemoteCoordinatedCompositor::backgroundColorDidChange(std::optional<Color>&
         m_surface->backgroundColorDidChange(WTF::move(color));
 }
 
+#if PLATFORM(WPE) && ENABLE(WPE_PLATFORM) && (USE(GBM) || OS(ANDROID))
 void RemoteCoordinatedCompositor::preferredBufferFormatsDidChange(Vector<RendererBufferFormat>&& formats)
 {
     if (m_surface)
         m_surface->preferredBufferFormatsDidChange(WTF::move(formats));
 }
+#endif
 
 void RemoteCoordinatedCompositor::scheduleRender()
 {
