@@ -253,6 +253,10 @@ std::optional<ImageBufferBackendHandle> RemoteImageBufferProxy::takeBackendHandl
     auto* sharing = dynamicDowncast<ImageBufferBackendHandleSharing>(backend->toBackendSharing());
     if (!sharing)
         return std::nullopt;
+#if !PLATFORM(COCOA)
+    if (m_backendHandleForSerialization)
+        return std::exchange(m_backendHandleForSerialization, std::nullopt);
+#endif
     return sharing->takeBackendHandle();
 }
 
@@ -665,6 +669,13 @@ std::unique_ptr<WebCore::SerializedImageBuffer> RemoteSerializedImageBufferProxy
 {
     return std::unique_ptr<WebCore::SerializedImageBuffer>(new RemoteSerializedImageBufferProxy(m_parameters, m_renderingMode, m_memoryCost, copyBackendHandle(m_backendHandle), m_connection));
 }
+
+#if !PLATFORM(COCOA)
+std::optional<ImageBufferBackendHandle> RemoteSerializedImageBufferProxy::copyOfBackendHandle() const
+{
+    return copyBackendHandle(m_backendHandle);
+}
+#endif
 
 std::optional<WebCore::ImageBufferTransferHandle> RemoteSerializedImageBufferProxy::sinkIntoTransferHandle()
 {

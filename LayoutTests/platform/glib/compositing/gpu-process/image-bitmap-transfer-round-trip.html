@@ -1,0 +1,63 @@
+<!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true ] -->
+<script src="../../../../resources/js-test.js"></script>
+<script id="worker" type="text/worker">
+self.onmessage = (event) => {
+    const bitmap = event.data.bitmap;
+    self.postMessage({ bitmap, width: bitmap.width }, [bitmap]);
+};
+</script>
+<script>
+description("An ImageBitmap that is transferred to a worker can be transferred back, also when a pattern made the transfer copy it.");
+jsTestIsAsync = true;
+
+const worker = new Worker(URL.createObjectURL(new Blob([document.getElementById("worker").textContent])));
+
+function roundTrip(bitmap) {
+    return new Promise(resolve => {
+        worker.onmessage = event => resolve(event.data);
+        worker.postMessage({ bitmap }, [bitmap]);
+    });
+}
+
+async function createBitmap(fromBlob) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 30;
+    canvas.height = 20;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "green";
+    context.fillRect(0, 0, 10, 10);
+    if (!fromBlob)
+        return createImageBitmap(canvas);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve));
+    return createImageBitmap(blob);
+}
+
+let result, pixel;
+
+async function test(fromBlob, referencedByPattern) {
+    debug(`From ${fromBlob ? "a blob" : "a canvas"}, ${referencedByPattern ? "" : "not "}referenced by a pattern:`);
+    const bitmap = await createBitmap(fromBlob);
+    let pattern;
+    if (referencedByPattern)
+        pattern = document.createElement("canvas").getContext("2d").createPattern(bitmap, "repeat");
+    result = await roundTrip(bitmap);
+    shouldBe("result.width", "30");
+    shouldBeNonNull("result.bitmap");
+    if (!result.bitmap)
+        return;
+    shouldBe("result.bitmap.width", "30");
+    const context = document.createElement("canvas").getContext("2d");
+    context.drawImage(result.bitmap, 0, 0);
+    pixel = Array.from(context.getImageData(5, 5, 1, 1).data).join(",");
+    shouldBeEqualToString("pixel", "0,128,0,255");
+    debug("");
+}
+
+(async () => {
+    for (const fromBlob of [false, true]) {
+        await test(fromBlob, false);
+        await test(fromBlob, true);
+    }
+    finishJSTest();
+})();
+</script>

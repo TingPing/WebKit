@@ -91,6 +91,9 @@ public:
     // The backing store this process allocated travels with the serialized buffer;
     // for anything else the GPU process is asked for the handle after unserializing.
     std::optional<ImageBufferBackendHandle> takeBackendHandleForSerialization();
+#if !PLATFORM(COCOA)
+    void setBackendHandleForSerialization(std::optional<ImageBufferBackendHandle>&& handle) { m_backendHandleForSerialization = WTF::move(handle); }
+#endif
 
     void backingStoreWillChange();
     std::unique_ptr<WebCore::SerializedImageBuffer> sinkIntoSerializedImageBuffer() final;
@@ -169,6 +172,9 @@ private:
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     mutable uint64_t m_lastUseFence { 0 };
 #endif
+#if !PLATFORM(COCOA)
+    std::optional<ImageBufferBackendHandle> m_backendHandleForSerialization;
+#endif
 };
 
 class RemoteSerializedImageBufferProxy : public WebCore::SerializedImageBuffer, public Identified<RemoteSerializedImageBufferIdentifier> {
@@ -191,6 +197,9 @@ public:
     // Non-null only for a backing store this process allocated, which is handed to
     // the re-materialised buffer as-is.
     std::optional<ImageBufferBackendHandle> takeBackendHandle() { return std::exchange(m_backendHandle, std::nullopt); }
+#if !PLATFORM(COCOA)
+    std::optional<ImageBufferBackendHandle> copyOfBackendHandle() const;
+#endif
 
     std::unique_ptr<WebCore::SerializedImageBuffer> clone() const final;
 

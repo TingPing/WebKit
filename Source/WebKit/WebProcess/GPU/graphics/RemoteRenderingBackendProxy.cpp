@@ -403,10 +403,17 @@ static std::unique_ptr<ImageBufferBackend> createBackendForSerializedBuffer(cons
 
 RefPtr<RemoteImageBufferProxy> RemoteRenderingBackendProxy::moveToImageBuffer(RemoteSerializedImageBufferProxy& serialized)
 {
+#if !PLATFORM(COCOA)
+    // Memory mapped from a handle cannot make another one here, so the buffer keeps a copy for when it is serialized again.
+    auto backendHandleForSerialization = serialized.copyOfBackendHandle();
+#endif
     auto backend = createBackendForSerializedBuffer(serialized.parameters(), serialized.renderingMode(), serialized.takeBackendHandle());
     if (!backend)
         return nullptr;
     Ref result = RemoteImageBufferProxy::createForSerializedBuffer(serialized.parameters(), WTF::move(backend), *this);
+#if !PLATFORM(COCOA)
+    result->setBackendHandleForSerialization(WTF::move(backendHandleForSerialization));
+#endif
     auto resultIdentifier = result->renderingResourceIdentifier();
     auto addResult = m_imageBuffers.add(resultIdentifier, result);
     ASSERT_UNUSED(addResult, addResult.isNewEntry);

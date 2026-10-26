@@ -1,0 +1,33 @@
+An ImageBitmap that is transferred to a worker can be transferred back, also when a pattern made the transfer copy it.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+From a canvas, not referenced by a pattern:
+PASS result.width is 30
+PASS result.bitmap is non-null.
+PASS result.bitmap.width is 30
+PASS pixel is "0,128,0,255"
+
+From a canvas, referenced by a pattern:
+PASS result.width is 30
+PASS result.bitmap is non-null.
+PASS result.bitmap.width is 30
+PASS pixel is "0,128,0,255"
+
+From a blob, not referenced by a pattern:
+PASS result.width is 30
+PASS result.bitmap is non-null.
+PASS result.bitmap.width is 30
+PASS pixel is "0,128,0,255"
+
+From a blob, referenced by a pattern:
+PASS result.width is 30
+PASS result.bitmap is non-null.
+PASS result.bitmap.width is 30
+PASS pixel is "0,128,0,255"
+
+PASS successfullyParsed is true
+
+TEST COMPLETE
+
