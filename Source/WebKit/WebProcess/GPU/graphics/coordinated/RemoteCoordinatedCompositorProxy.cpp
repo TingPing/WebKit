@@ -53,7 +53,6 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
-#include <WebCore/GStreamerCommon.h>
 #include <WebCore/VideoFrameGStreamer.h>
 #endif
 #include <wtf/TZoneMallocInlines.h>
@@ -155,27 +154,10 @@ std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFram
     if (!frame)
         return std::nullopt;
 
-    GstMappedFrame mappedFrame(frame->sample(), GST_MAP_READ);
-    if (!mappedFrame.isValid())
-        return std::nullopt;
-
-    auto* info = mappedFrame.info();
-    unsigned planeCount = GST_VIDEO_INFO_N_PLANES(info);
-    Vector<uint64_t> offsets;
-    Vector<int32_t> strides;
-    size_t size = 0;
-    for (unsigned i = 0; i < planeCount; ++i) {
-        offsets.append(size);
-        strides.append(mappedFrame.planeStride(i));
-        size += mappedFrame.planeData(i).size();
-    }
-    if (!size)
-        return std::nullopt;
-
     std::optional<CoordinatedVideoFrameSlotIdentifier> slotIdentifier;
     RefPtr<SharedMemory> memory;
     std::optional<SharedMemory::Handle> handle;
-    {
+    auto layout = GStreamerVideoFrameLayout::write(*frame, [&](size_t size) -> std::span<uint8_t> {
         Locker locker { m_videoFrameSlotsLock };
         for (auto& entry : m_videoFrameSlots) {
             if (!entry.value.isInUse && entry.value.memory->size() >= size && entry.value.memory->size() <= 2 * size) {
@@ -197,7 +179,7 @@ std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFram
 
             RefPtr newMemory = SharedMemory::allocate(size);
             if (!newMemory)
-                return std::nullopt;
+                return { };
             slotIdentifier = CoordinatedVideoFrameSlotIdentifier::generate();
             m_videoFrameSlots.add(*slotIdentifier, VideoFrameSlot { .memory = WTF::move(newMemory) });
         }
@@ -206,32 +188,20 @@ std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFram
         if (!slot.wasSent) {
             handle = slot.memory->createHandle(SharedMemory::Protection::ReadOnly);
             if (!handle)
-                return std::nullopt;
+                return { };
             slot.wasSent = true;
         }
         slot.isInUse = true;
         memory = slot.memory;
-    }
+        return memory->mutableSpan();
+    });
+    if (!layout)
+        return std::nullopt;
 
-    auto destination = memory->mutableSpan();
-    for (unsigned i = 0; i < planeCount; ++i) {
-        auto plane = mappedFrame.planeData(i);
-        memcpySpan(destination.subspan(offsets[i], plane.size()), plane);
-    }
-
-    const auto& colorimetry = GST_VIDEO_INFO_COLORIMETRY(info);
     return CoordinatedVideoFrame {
         .slot = *slotIdentifier,
         .slotHandle = WTF::move(handle),
-        .presentationSize = frame->presentationSize(),
-        .format = static_cast<uint32_t>(GST_VIDEO_INFO_FORMAT(info)),
-        .size = { mappedFrame.width(), mappedFrame.height() },
-        .offsets = WTF::move(offsets),
-        .strides = WTF::move(strides),
-        .colorRange = static_cast<uint8_t>(colorimetry.range),
-        .colorMatrix = static_cast<uint8_t>(colorimetry.matrix),
-        .colorTransfer = static_cast<uint8_t>(colorimetry.transfer),
-        .colorPrimaries = static_cast<uint8_t>(colorimetry.primaries),
+        .layout = WTF::move(*layout),
         .rotation = rotation,
     };
 #else

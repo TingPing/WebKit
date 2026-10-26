@@ -68,7 +68,6 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <WebCore/GStreamerCommon.h>
 #include <WebCore/ImageOrientation.h>
 #include <WebCore/VideoFrameGStreamer.h>
-#include <gst/video/gstvideometa.h>
 #endif
 
 namespace WebKit {
@@ -351,25 +350,6 @@ RefPtr<SharedMemory> RemoteCoordinatedCompositor::videoFrameSlot(CoordinatedVide
     return m_videoFrameSlots.get(frame.slot);
 }
 
-static bool isSupportedVideoFrameFormat(GstVideoFormat format)
-{
-    switch (format) {
-    case GST_VIDEO_FORMAT_I420:
-    case GST_VIDEO_FORMAT_YV12:
-    case GST_VIDEO_FORMAT_NV12:
-    case GST_VIDEO_FORMAT_NV21:
-    case GST_VIDEO_FORMAT_Y444:
-    case GST_VIDEO_FORMAT_Y42B:
-    case GST_VIDEO_FORMAT_Y41B:
-    case GST_VIDEO_FORMAT_A420:
-    case GST_VIDEO_FORMAT_BGRx:
-    case GST_VIDEO_FORMAT_BGRA:
-        return true;
-    default:
-        return false;
-    }
-}
-
 static ImageOrientation imageOrientation(CoordinatedPlatformLayerBuffer::Rotation rotation)
 {
     switch (rotation) {
@@ -410,51 +390,10 @@ std::unique_ptr<CoordinatedPlatformLayerBuffer> RemoteCoordinatedCompositor::vid
         slotUse->connection->send(Messages::RemoteCoordinatedCompositorProxy::ReleaseVideoFrameSlot(slotUse->slot), slotUse->compositorIdentifier);
     }));
 
-    static constexpr int maxDimension = 16384;
-    auto format = static_cast<GstVideoFormat>(frame.format);
-    if (!isSupportedVideoFrameFormat(format) || frame.size.isEmpty() || frame.size.width() > maxDimension || frame.size.height() > maxDimension
-        || frame.presentationSize.isEmpty() || frame.presentationSize.width() > maxDimension || frame.presentationSize.height() > maxDimension)
+    RefPtr videoFrame = frame.layout.createVideoFrame(WTF::move(buffer));
+    if (!videoFrame)
         return nullptr;
-
-    GstVideoInfo info;
-    if (!gst_video_info_set_format(&info, format, frame.size.width(), frame.size.height()))
-        return nullptr;
-
-    unsigned planeCount = GST_VIDEO_INFO_N_PLANES(&info);
-    if (frame.offsets.size() != planeCount || frame.strides.size() != planeCount)
-        return nullptr;
-
-    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN; // GLib port
-    for (unsigned i = 0; i < planeCount; ++i) {
-        std::array<gint, GST_VIDEO_MAX_COMPONENTS> components;
-        gst_video_format_info_component(info.finfo, i, components.data());
-        size_t planeHeight = GST_VIDEO_FORMAT_INFO_SCALE_HEIGHT(info.finfo, components[0], frame.size.height());
-        auto minimumStride = CheckedInt32(GST_VIDEO_FORMAT_INFO_SCALE_WIDTH(info.finfo, components[0], frame.size.width())) * GST_VIDEO_FORMAT_INFO_PSTRIDE(info.finfo, components[0]);
-        if (minimumStride.hasOverflowed() || frame.strides[i] < minimumStride.value())
-            return nullptr;
-        auto planeEnd = CheckedSize(frame.strides[i]) * planeHeight + frame.offsets[i];
-        if (planeEnd.hasOverflowed() || planeEnd.value() > data.size())
-            return nullptr;
-        GST_VIDEO_INFO_PLANE_OFFSET(&info, i) = frame.offsets[i];
-        GST_VIDEO_INFO_PLANE_STRIDE(&info, i) = frame.strides[i];
-    }
-    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END;
-    info.size = data.size();
-
-    auto& colorimetry = GST_VIDEO_INFO_COLORIMETRY(&info);
-    colorimetry.range = frame.colorRange <= GST_VIDEO_COLOR_RANGE_16_235 ? static_cast<GstVideoColorRange>(frame.colorRange) : GST_VIDEO_COLOR_RANGE_UNKNOWN;
-    colorimetry.matrix = frame.colorMatrix <= GST_VIDEO_COLOR_MATRIX_BT2020 ? static_cast<GstVideoColorMatrix>(frame.colorMatrix) : GST_VIDEO_COLOR_MATRIX_UNKNOWN;
-    colorimetry.transfer = frame.colorTransfer <= GST_VIDEO_TRANSFER_BT601 ? static_cast<GstVideoTransferFunction>(frame.colorTransfer) : GST_VIDEO_TRANSFER_UNKNOWN;
-    colorimetry.primaries = frame.colorPrimaries <= GST_VIDEO_COLOR_PRIMARIES_EBU3213 ? static_cast<GstVideoColorPrimaries>(frame.colorPrimaries) : GST_VIDEO_COLOR_PRIMARIES_UNKNOWN;
-
-    gst_buffer_add_video_meta_full(buffer.get(), GST_VIDEO_FRAME_FLAG_NONE, format, frame.size.width(), frame.size.height(), planeCount, info.offset, info.stride);
-    GRefPtr<GstCaps> caps = adoptGRef(gst_video_info_to_caps(&info));
-    if (!caps)
-        return nullptr;
-
-    GRefPtr<GstSample> sample = adoptGRef(gst_sample_new(buffer.get(), caps.get(), nullptr, nullptr));
-    auto videoFrame = VideoFrameGStreamer::createWrappedSample(sample, VideoFrameGStreamer::CreateOptions(IntSize { frame.presentationSize }));
-    return CoordinatedPlatformLayerBufferVideo::create(WTF::move(videoFrame), std::nullopt, false, imageOrientation(frame.rotation), m_threadSafeGrContext);
+    return CoordinatedPlatformLayerBufferVideo::create(videoFrame.releaseNonNull(), std::nullopt, false, imageOrientation(frame.rotation), m_threadSafeGrContext);
 }
 #endif
 

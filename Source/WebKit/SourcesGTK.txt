@@ -100,6 +100,8 @@ Shared/glib/UserMessage.cpp
 Shared/glib/WebContextMenuItemGlib.cpp
 Shared/glib/WebKitContextMenuGAction.cpp @no-unify
 
+Shared/gstreamer/GStreamerVideoFrameLayout.cpp
+
 Shared/gtk/CoreIPCGtkPrint.cpp
 Shared/gtk/NativeWebKeyboardEventGtk.cpp
 Shared/gtk/NativeWebMouseEventGtk.cpp

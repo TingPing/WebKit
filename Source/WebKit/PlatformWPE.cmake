@@ -130,6 +130,8 @@ list(APPEND WebKit_SERIALIZATION_IN_FILES
     Shared/glib/SystemSettings.serialization.in
     Shared/glib/UserMessage.serialization.in
 
+    Shared/gstreamer/GStreamerVideoFrameLayout.serialization.in
+
     Shared/soup/WebCoreArgumentCodersSoup.serialization.in
 )
 
@@ -400,6 +402,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/Shared/Extensions"
     "${WEBKIT_DIR}/Shared/coordinated"
     "${WEBKIT_DIR}/Shared/glib"
+    "${WEBKIT_DIR}/Shared/gstreamer"
     "${WEBKIT_DIR}/Shared/libwpe"
     "${WEBKIT_DIR}/Shared/soup"
     "${WEBKIT_DIR}/Shared/wpe"

@@ -234,15 +234,7 @@ header: "CoordinatedLayerTreeTransaction.h"
 [CustomHeader, RValue] struct WebKit::CoordinatedVideoFrame {
     WebKit::CoordinatedVideoFrameSlotIdentifier slot;
     std::optional<WebCore::SharedMemory::Handle> slotHandle;
-    WebCore::IntSize presentationSize;
-    uint32_t format;
-    WebCore::IntSize size;
-    Vector<uint64_t> offsets;
-    Vector<int32_t> strides;
-    uint8_t colorRange;
-    uint8_t colorMatrix;
-    uint8_t colorTransfer;
-    uint8_t colorPrimaries;
+    WebKit::GStreamerVideoFrameLayout layout;
     WebCore::CoordinatedPlatformLayerBuffer::Rotation rotation;
 }
 
