@@ -1793,6 +1793,12 @@ void CoordinatedPlatformLayer::takePendingContentsBuffer(PendingChanges& changes
     m_contentsBuffer.hasCommitted = !!buffer;
     if (auto* remoteBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferRemote>(buffer))
         changes.properties.contentsBuffer = CoordinatedRemoteContentsBuffer { remoteBuffer->identifier(), remoteBuffer->alphaMode(), remoteBuffer->origin() };
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    else if (auto* videoBuffer = dynamicDowncast<CoordinatedPlatformLayerBufferVideo>(buffer)) {
+        changes.contentsBufferVideoFrame = &videoBuffer->videoFrame();
+        changes.contentsBufferRotation = videoBuffer->rotation();
+    }
+#endif
     else if (auto image = buffer ? buffer->skiaImage() : nullptr; image && !image->isTextureBacked())
         changes.contentsBufferImage = NativeImage::create(WTF::move(image));
     // Kept so it can be sent again to a new compositor.

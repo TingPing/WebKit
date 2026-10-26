@@ -75,6 +75,14 @@ header: <WebCore/CoordinatedPlatformLayerBuffer.h>
 header: <WebCore/CoordinatedPlatformLayerBuffer.h>
 [CustomHeader, Nested] enum class WebCore::CoordinatedPlatformLayerBuffer::Origin : bool
 
+header: <WebCore/CoordinatedPlatformLayerBuffer.h>
+[CustomHeader, Nested] enum class WebCore::CoordinatedPlatformLayerBuffer::Rotation : uint8_t {
+    None,
+    Right,
+    UpsideDown,
+    Left,
+}
+
 header: <WebCore/CoordinatedLayerProperties.h>
 [CustomHeader] struct WebCore::CoordinatedRemoteContentsBuffer {
     WebCore::CoordinatedContentsIdentifier identifier;
@@ -223,19 +231,37 @@ header: "CoordinatedLayerTreeTransaction.h"
 }
 
 header: "CoordinatedLayerTreeTransaction.h"
-[CustomHeader] struct WebKit::CoordinatedLayerUpdate {
+[CustomHeader, RValue] struct WebKit::CoordinatedVideoFrame {
+    WebKit::CoordinatedVideoFrameSlotIdentifier slot;
+    std::optional<WebCore::SharedMemory::Handle> slotHandle;
+    WebCore::IntSize presentationSize;
+    uint32_t format;
+    WebCore::IntSize size;
+    Vector<uint64_t> offsets;
+    Vector<int32_t> strides;
+    uint8_t colorRange;
+    uint8_t colorMatrix;
+    uint8_t colorTransfer;
+    uint8_t colorPrimaries;
+    WebCore::CoordinatedPlatformLayerBuffer::Rotation rotation;
+}
+
+header: "CoordinatedLayerTreeTransaction.h"
+[CustomHeader, RValue] struct WebKit::CoordinatedLayerUpdate {
     WebCore::CoordinatedLayerProperties properties;
     std::optional<WebKit::CoordinatedBackingStoreUpdate> backingStore;
     std::optional<WebKit::CoordinatedPixels> contentsImage;
     std::optional<WebKit::CoordinatedPixels> contentsBuffer;
+    std::optional<WebKit::CoordinatedVideoFrame> contentsVideoFrame;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"
-struct WebKit::CoordinatedLayerTreeTransaction {
+[RValue] struct WebKit::CoordinatedLayerTreeTransaction {
     WebCore::PlatformLayerIdentifier rootLayer;
     Vector<WebKit::CoordinatedLayerUpdate> layers;
     Vector<WebCore::PlatformLayerIdentifier> removedLayers;
     IPC::SharedBufferReference pixels;
+    Vector<WebKit::CoordinatedVideoFrameSlotIdentifier> removedVideoFrameSlots;
 }
 
 #endif

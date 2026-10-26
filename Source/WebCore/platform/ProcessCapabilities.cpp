@@ -36,6 +36,7 @@ static bool s_AVIFDecodingEnabled = false;
 static bool s_hardwareAcceleratedDecodingDisabled = false;
 static bool s_canUseAcceleratedBuffers = true;
 static bool s_remoteTilesPaintedWithGPU = false;
+static bool s_layersCompositedRemotely = false;
 
 #if USE(CG)
 void ProcessCapabilities::setHEICDecodingEnabled(bool value)
@@ -87,6 +88,16 @@ void ProcessCapabilities::setRemoteTilesPaintedWithGPU(bool value)
 bool ProcessCapabilities::remoteTilesPaintedWithGPU()
 {
     return s_remoteTilesPaintedWithGPU;
+}
+
+void ProcessCapabilities::setLayersCompositedRemotely(bool value)
+{
+    s_layersCompositedRemotely = value;
+}
+
+bool ProcessCapabilities::layersCompositedRemotely()
+{
+    return s_layersCompositedRemotely;
 }
 
 } // namespace WebCore

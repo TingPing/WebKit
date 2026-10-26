@@ -45,6 +45,7 @@
 #include "AcceleratedAnimations.h"
 #include "CoordinatedBackingStoreProxy.h"
 #include "CoordinatedLayerProperties.h"
+#include "CoordinatedPlatformLayerBuffer.h"
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/gpu/ganesh/GrContextThreadSafeProxy.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
@@ -60,6 +61,7 @@ class CoordinatedTileBuffer;
 class CoordinatedTileManager;
 class GraphicsLayerCoordinated;
 class NativeImage;
+class VideoFrame;
 
 #if USE(TEXTURE_MAPPER)
 class TextureMapperLayer;
@@ -214,6 +216,8 @@ public:
         float contentsScale { 1 };
         RefPtr<NativeImage> contentsImage;
         RefPtr<NativeImage> contentsBufferImage;
+        RefPtr<VideoFrame> contentsBufferVideoFrame;
+        CoordinatedPlatformLayerBuffer::Rotation contentsBufferRotation { CoordinatedPlatformLayerBuffer::Rotation::None };
     };
     std::optional<PendingChanges> takePendingChanges();
     // The changes the scrolling thread makes: scrolled positions and scrollbar contents.

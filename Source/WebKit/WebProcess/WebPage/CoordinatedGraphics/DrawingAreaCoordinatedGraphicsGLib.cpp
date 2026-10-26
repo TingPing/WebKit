@@ -126,6 +126,7 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
     // Without GL in the web process, canvases and WebGL are rendered in the GPU process too.
     if (m_webPage->shouldRenderDOMInGPUProcess()) {
         ProcessCapabilities::setCanUseAcceleratedBuffers(false);
+        ProcessCapabilities::setLayersCompositedRemotely(true);
         WebProcess::singleton().setUsesGPUProcessForCompositing();
         ImageBackingStore::setAllocatesSharedMemory(true);
         // The tiles are sized for the GPU process, which paints them on the CPU only when asked to.

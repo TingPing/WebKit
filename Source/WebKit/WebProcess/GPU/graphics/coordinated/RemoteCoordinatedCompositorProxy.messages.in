@@ -28,6 +28,7 @@
 ]
 messages -> RemoteCoordinatedCompositorProxy {
     DidUpdateFPS(float fps)
+    ReleaseVideoFrameSlot(WebKit::CoordinatedVideoFrameSlotIdentifier slot)
 #if ENABLE(DAMAGE_TRACKING)
     DidRenderFrameForTesting(WebCore::Region frameDamage)
 #endif

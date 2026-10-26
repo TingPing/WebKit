@@ -220,6 +220,7 @@ template: struct WebCore::ServiceWorkerRegistrationIdentifierType
 template: struct WebCore::SnapshotIdentifierType
 template: enum class WebCore::WebLockIdentifierType
 template: enum class WebCore::WorkerFileSystemStorageConnectionCallbackIdentifierType
+template: struct WebKit::CoordinatedVideoFrameSlotIdentifierType
 template: struct WebKit::GPUProcessConnectionIdentifierType
 template: enum class WebKit::LegacyCustomProtocolIDType
 template: struct WebKit::LibWebRTCResolverIdentifierType

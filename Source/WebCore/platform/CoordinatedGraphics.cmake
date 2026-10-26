@@ -87,6 +87,10 @@ if (USE_GSTREAMER)
     list(APPEND WebCore_SOURCES
         platform/graphics/coordinated/CoordinatedPlatformLayerBufferVideo.cpp
     )
+
+    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+        platform/graphics/coordinated/CoordinatedPlatformLayerBufferVideo.h
+    )
 endif ()
 
 if (USE_GBM)

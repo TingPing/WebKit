@@ -47,6 +47,10 @@ public:
     // The tiles of the layers are painted with the GPU, by the process that composites them.
     WEBCORE_EXPORT static void setRemoteTilesPaintedWithGPU(bool);
     static bool remoteTilesPaintedWithGPU();
+
+    // Another process composites the layers, and converts their video frames to RGB.
+    WEBCORE_EXPORT static void setLayersCompositedRemotely(bool);
+    static bool layersCompositedRemotely();
 };
 
 } // namespace WebCore

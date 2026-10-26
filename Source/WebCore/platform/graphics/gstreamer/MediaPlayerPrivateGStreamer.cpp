@@ -47,6 +47,7 @@
 #include "MediaPlayer.h"
 #include "NotImplemented.h"
 #include "OriginAccessPatterns.h"
+#include "ProcessCapabilities.h"
 #include "SecurityOrigin.h"
 #include "TextCombinerGStreamer.h"
 #include "TextSinkGStreamer.h"
@@ -4599,7 +4600,8 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSink()
     }
 
 #if USE(GSTREAMER_GL)
-    if (!m_videoSink && m_canRenderingBeAccelerated)
+    // When the GPU process composites the layers, this process has no GL and the frames go there in system memory.
+    if (!m_videoSink && m_canRenderingBeAccelerated && !ProcessCapabilities::layersCompositedRemotely())
         m_videoSink = createVideoSinkGL();
 #endif
 

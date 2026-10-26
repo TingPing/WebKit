@@ -27,10 +27,14 @@
 
 #if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "CoordinatedCompositor.h"
+#include "CoordinatedVideoFrameSlotIdentifier.h"
 #include "GPUProcessConnection.h"
 #include "MessageReceiver.h"
+#include <WebCore/CoordinatedPlatformLayerBuffer.h>
+#include <WebCore/SharedMemory.h>
 #include <atomic>
 #include <wtf/CheckedPtr.h>
+#include <wtf/HashMap.h>
 #include <wtf/Lock.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
@@ -41,6 +45,7 @@ namespace WebCore {
 class GraphicsContext;
 class IntRect;
 class Region;
+class VideoFrame;
 struct CoordinatedLayerProperties;
 }
 
@@ -49,6 +54,8 @@ class CoordinatedSceneState;
 class LayerTreeHost;
 class WebPage;
 struct CoordinatedLayerTreeTransaction;
+struct CoordinatedVideoFrame;
+struct PendingLayerTreeTransaction;
 
 class RemoteCoordinatedCompositorProxy final : public CoordinatedCompositor, public GPUProcessConnection::Client, public IPC::MessageReceiver, public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteCoordinatedCompositorProxy> {
     WTF_MAKE_TZONE_ALLOCATED(RemoteCoordinatedCompositorProxy);
@@ -106,6 +113,11 @@ private:
     void didComposite();
     void didCompositeRenderingUpdate();
     void didUpdateFPS(float);
+    void releaseVideoFrameSlot(CoordinatedVideoFrameSlotIdentifier);
+
+    // Called on the commit queue.
+    CoordinatedLayerTreeTransaction makeTransaction(PendingLayerTreeTransaction&&);
+    std::optional<CoordinatedVideoFrame> videoFrameInSlot(WebCore::VideoFrame&, WebCore::CoordinatedPlatformLayerBuffer::Rotation);
 #if ENABLE(DAMAGE_TRACKING)
     void sendDamageSettings();
     void didRenderFrameForTesting(WebCore::Region&&);
@@ -128,6 +140,16 @@ private:
     unsigned m_suspendedCount { 0 };
     mutable int m_maxTextureSize { 0 };
     bool m_isInvalidated { false };
+
+    // Shared memory the video frames of the layers are copied into, reused once the GPU process releases them.
+    struct VideoFrameSlot {
+        RefPtr<WebCore::SharedMemory> memory;
+        bool isInUse { false };
+        bool wasSent { false };
+    };
+    Lock m_videoFrameSlotsLock;
+    HashMap<CoordinatedVideoFrameSlotIdentifier, VideoFrameSlot> m_videoFrameSlots WTF_GUARDED_BY_LOCK(m_videoFrameSlotsLock);
+    Vector<CoordinatedVideoFrameSlotIdentifier> m_removedVideoFrameSlots WTF_GUARDED_BY_LOCK(m_videoFrameSlotsLock);
 #if ENABLE(DAMAGE_TRACKING)
     struct DamagePropagationSettings {
         std::optional<OptionSet<DamagePropagationFlags>> flags;

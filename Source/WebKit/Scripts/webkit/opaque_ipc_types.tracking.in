@@ -454,6 +454,7 @@
     [Legacy] MessageParam RemoteQueue.WriteTexture dataHandle
     [Legacy] StructureParam IPC::SharedBufferReference::SerializableBuffer.handle
     [Legacy] StructureParam WebKit::FullScreenMediaDetails.imageHandle
+    [NeedsReview] StructureParam WebKit::CoordinatedVideoFrame.slotHandle
 
     [DebugOnly] MessageParamReply IPCStreamTester.SyncMessageReturningSharedMemory1 handle
 

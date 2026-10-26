@@ -62,6 +62,14 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/StringView.h>
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+#include <WebCore/CoordinatedPlatformLayerBufferVideo.h>
+#include <WebCore/GStreamerCommon.h>
+#include <WebCore/ImageOrientation.h>
+#include <WebCore/VideoFrameGStreamer.h>
+#include <gst/video/gstvideometa.h>
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -330,6 +338,125 @@ auto RemoteCoordinatedCompositor::scheduleTileReplays(const CoordinatedLayerUpda
     return tilesToUpdate;
 }
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+RefPtr<SharedMemory> RemoteCoordinatedCompositor::videoFrameSlot(CoordinatedVideoFrame& frame)
+{
+    if (auto handle = std::exchange(frame.slotHandle, std::nullopt)) {
+        RefPtr memory = SharedMemory::map(WTF::move(*handle), SharedMemory::Protection::ReadOnly);
+        if (memory)
+            m_videoFrameSlots.set(frame.slot, *memory);
+        return memory;
+    }
+    return m_videoFrameSlots.get(frame.slot);
+}
+
+static bool isSupportedVideoFrameFormat(GstVideoFormat format)
+{
+    switch (format) {
+    case GST_VIDEO_FORMAT_I420:
+    case GST_VIDEO_FORMAT_YV12:
+    case GST_VIDEO_FORMAT_NV12:
+    case GST_VIDEO_FORMAT_NV21:
+    case GST_VIDEO_FORMAT_Y444:
+    case GST_VIDEO_FORMAT_Y42B:
+    case GST_VIDEO_FORMAT_Y41B:
+    case GST_VIDEO_FORMAT_A420:
+    case GST_VIDEO_FORMAT_BGRx:
+    case GST_VIDEO_FORMAT_BGRA:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static ImageOrientation imageOrientation(CoordinatedPlatformLayerBuffer::Rotation rotation)
+{
+    switch (rotation) {
+    case CoordinatedPlatformLayerBuffer::Rotation::None:
+        break;
+    case CoordinatedPlatformLayerBuffer::Rotation::Right:
+        return ImageOrientation::Orientation::OriginRightTop;
+    case CoordinatedPlatformLayerBuffer::Rotation::UpsideDown:
+        return ImageOrientation::Orientation::OriginBottomRight;
+    case CoordinatedPlatformLayerBuffer::Rotation::Left:
+        return ImageOrientation::Orientation::OriginLeftBottom;
+    }
+    return ImageOrientation::Orientation::OriginTopLeft;
+}
+
+struct VideoFrameSlotUse {
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(VideoFrameSlotUse);
+
+    Ref<SharedMemory> memory;
+    Ref<IPC::Connection> connection;
+    uint64_t compositorIdentifier;
+    CoordinatedVideoFrameSlotIdentifier slot;
+};
+
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(VideoFrameSlotUse);
+
+std::unique_ptr<CoordinatedPlatformLayerBuffer> RemoteCoordinatedCompositor::videoFrameBuffer(CoordinatedVideoFrame&& frame)
+{
+    RefPtr memory = videoFrameSlot(frame);
+    if (!memory)
+        return nullptr;
+
+    // The web process reuses the slot once this buffer is freed, including when the frame is invalid.
+    auto data = memory->span();
+    auto* slotUse = new VideoFrameSlotUse { .memory = memory.releaseNonNull(), .connection = m_webProcessConnection, .compositorIdentifier = m_identifier, .slot = frame.slot };
+    GRefPtr<GstBuffer> buffer = adoptGRef(gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, const_cast<uint8_t*>(data.data()), data.size(), 0, data.size(), slotUse, [](gpointer userData) {
+        std::unique_ptr<VideoFrameSlotUse> slotUse(static_cast<VideoFrameSlotUse*>(userData));
+        slotUse->connection->send(Messages::RemoteCoordinatedCompositorProxy::ReleaseVideoFrameSlot(slotUse->slot), slotUse->compositorIdentifier);
+    }));
+
+    static constexpr int maxDimension = 16384;
+    auto format = static_cast<GstVideoFormat>(frame.format);
+    if (!isSupportedVideoFrameFormat(format) || frame.size.isEmpty() || frame.size.width() > maxDimension || frame.size.height() > maxDimension
+        || frame.presentationSize.isEmpty() || frame.presentationSize.width() > maxDimension || frame.presentationSize.height() > maxDimension)
+        return nullptr;
+
+    GstVideoInfo info;
+    if (!gst_video_info_set_format(&info, format, frame.size.width(), frame.size.height()))
+        return nullptr;
+
+    unsigned planeCount = GST_VIDEO_INFO_N_PLANES(&info);
+    if (frame.offsets.size() != planeCount || frame.strides.size() != planeCount)
+        return nullptr;
+
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN; // GLib port
+    for (unsigned i = 0; i < planeCount; ++i) {
+        std::array<gint, GST_VIDEO_MAX_COMPONENTS> components;
+        gst_video_format_info_component(info.finfo, i, components.data());
+        size_t planeHeight = GST_VIDEO_FORMAT_INFO_SCALE_HEIGHT(info.finfo, components[0], frame.size.height());
+        auto minimumStride = CheckedInt32(GST_VIDEO_FORMAT_INFO_SCALE_WIDTH(info.finfo, components[0], frame.size.width())) * GST_VIDEO_FORMAT_INFO_PSTRIDE(info.finfo, components[0]);
+        if (minimumStride.hasOverflowed() || frame.strides[i] < minimumStride.value())
+            return nullptr;
+        auto planeEnd = CheckedSize(frame.strides[i]) * planeHeight + frame.offsets[i];
+        if (planeEnd.hasOverflowed() || planeEnd.value() > data.size())
+            return nullptr;
+        GST_VIDEO_INFO_PLANE_OFFSET(&info, i) = frame.offsets[i];
+        GST_VIDEO_INFO_PLANE_STRIDE(&info, i) = frame.strides[i];
+    }
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END;
+    info.size = data.size();
+
+    auto& colorimetry = GST_VIDEO_INFO_COLORIMETRY(&info);
+    colorimetry.range = frame.colorRange <= GST_VIDEO_COLOR_RANGE_16_235 ? static_cast<GstVideoColorRange>(frame.colorRange) : GST_VIDEO_COLOR_RANGE_UNKNOWN;
+    colorimetry.matrix = frame.colorMatrix <= GST_VIDEO_COLOR_MATRIX_BT2020 ? static_cast<GstVideoColorMatrix>(frame.colorMatrix) : GST_VIDEO_COLOR_MATRIX_UNKNOWN;
+    colorimetry.transfer = frame.colorTransfer <= GST_VIDEO_TRANSFER_BT601 ? static_cast<GstVideoTransferFunction>(frame.colorTransfer) : GST_VIDEO_TRANSFER_UNKNOWN;
+    colorimetry.primaries = frame.colorPrimaries <= GST_VIDEO_COLOR_PRIMARIES_EBU3213 ? static_cast<GstVideoColorPrimaries>(frame.colorPrimaries) : GST_VIDEO_COLOR_PRIMARIES_UNKNOWN;
+
+    gst_buffer_add_video_meta_full(buffer.get(), GST_VIDEO_FRAME_FLAG_NONE, format, frame.size.width(), frame.size.height(), planeCount, info.offset, info.stride);
+    GRefPtr<GstCaps> caps = adoptGRef(gst_video_info_to_caps(&info));
+    if (!caps)
+        return nullptr;
+
+    GRefPtr<GstSample> sample = adoptGRef(gst_sample_new(buffer.get(), caps.get(), nullptr, nullptr));
+    auto videoFrame = VideoFrameGStreamer::createWrappedSample(sample, VideoFrameGStreamer::CreateOptions(IntSize { frame.presentationSize }));
+    return CoordinatedPlatformLayerBufferVideo::create(WTF::move(videoFrame), std::nullopt, false, imageOrientation(frame.rotation), m_threadSafeGrContext);
+}
+#endif
+
 void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& update, std::span<const uint8_t> pixels, TileUpdates&& tilesToUpdate)
 {
     Ref layer = ensureLayer(update.properties.id);
@@ -341,6 +468,10 @@ void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& upda
             if (auto image = rasterImage(pixels, *update.contentsBuffer))
                 buffer = CoordinatedPlatformLayerBufferSkiaImage::create(image, m_threadSafeGrContext);
         }
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+        if (update.contentsVideoFrame)
+            buffer = videoFrameBuffer(WTF::move(*update.contentsVideoFrame));
+#endif
 #if ENABLE(WEBGL) && USE(GBM)
         if (const auto& contents = update.properties.contentsBuffer) {
             if (auto frame = RemoteCoordinatedContentsRegistry::singleton().takeFrame(m_webProcessIdentifier, contents->identifier)) {
@@ -444,6 +575,11 @@ void RemoteCoordinatedCompositor::applyCommit(CoordinatedLayerTreeTransaction&& 
             layer->invalidate();
     }
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    for (auto slot : transaction.removedVideoFrameSlots)
+        m_videoFrameSlots.remove(slot);
+#endif
+
     auto pixels = transaction.pixels.span();
     for (size_t i = 0; i < transaction.layers.size(); ++i)
         applyLayerUpdate(WTF::move(transaction.layers[i]), pixels, WTF::move(tilesToUpdate[i]));
@@ -466,10 +602,21 @@ void RemoteCoordinatedCompositor::updateLayers(CoordinatedLayerTreeTransaction&&
             if (protectedThis->m_isInvalidated)
                 return;
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+            for (auto slot : transaction.removedVideoFrameSlots)
+                protectedThis->m_videoFrameSlots.remove(slot);
+#endif
+
             auto pixels = transaction.pixels.span();
             for (auto& update : transaction.layers) {
                 if (protectedThis->m_layers.contains(update.properties.id))
                     protectedThis->applyLayerUpdate(WTF::move(update), pixels, { });
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+                else if (update.contentsVideoFrame) {
+                    // Keeps the slot mapped for the next frames, and gives it back.
+                    protectedThis->videoFrameBuffer(WTF::move(*update.contentsVideoFrame));
+                }
+#endif
             }
             protectedThis->scheduleRender();
         });

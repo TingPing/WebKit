@@ -28,6 +28,9 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
         platform/graphics/gstreamer/GStreamerCommon.h
         platform/graphics/gstreamer/GStreamerVideoDecoderDescription.h
         platform/graphics/gstreamer/GUniquePtrGStreamer.h
+        platform/graphics/gstreamer/VideoFrameContentHint.h
+        platform/graphics/gstreamer/VideoFrameGStreamer.h
+        platform/graphics/gstreamer/VideoFrameMetadataGStreamer.h
 
         platform/mediastream/libwebrtc/gstreamer/GStreamerVideoDecoderFactory.h
         platform/mediastream/libwebrtc/gstreamer/GStreamerVideoEncoderFactory.h

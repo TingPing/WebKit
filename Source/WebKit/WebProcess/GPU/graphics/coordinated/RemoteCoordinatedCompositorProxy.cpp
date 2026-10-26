@@ -46,10 +46,16 @@
 #include <WebCore/NativeImage.h>
 #include <WebCore/Page.h>
 #include <WebCore/SharedBuffer.h>
+#include <WebCore/VideoFrame.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkColorSpace.h>
 #include <skia/core/SkImage.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
+
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+#include <WebCore/GStreamerCommon.h>
+#include <WebCore/VideoFrameGStreamer.h>
+#endif
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
@@ -109,31 +115,138 @@ static std::optional<CoordinatedPixels> imagePixels(NativeImage& image, SharedBu
     return appendPixels(pixels, WTF::move(data), { platformImage->width(), platformImage->height() });
 }
 
-static CoordinatedLayerTreeTransaction makeTransaction(PendingLayerTreeTransaction&& pendingTransaction)
+CoordinatedLayerTreeTransaction RemoteCoordinatedCompositorProxy::makeTransaction(PendingLayerTreeTransaction&& pendingTransaction)
 {
     CoordinatedLayerTreeTransaction transaction {
         .rootLayer = pendingTransaction.rootLayer,
         .layers = { },
         .removedLayers = WTF::move(pendingTransaction.removedLayers),
         .pixels = { },
+        .removedVideoFrameSlots = { },
     };
 
     SharedBufferBuilder pixels;
     for (auto& changes : pendingTransaction.layers) {
-        CoordinatedLayerUpdate update { .properties = WTF::move(changes.properties), .backingStore = { }, .contentsImage = { }, .contentsBuffer = { } };
+        CoordinatedLayerUpdate update { .properties = WTF::move(changes.properties), .backingStore = { }, .contentsImage = { }, .contentsBuffer = { }, .contentsVideoFrame = { } };
         if (changes.backingStoreUpdate)
             update.backingStore = backingStoreUpdate(*changes.backingStoreUpdate, changes.contentsScale);
         if (RefPtr image = changes.contentsImage)
             update.contentsImage = imagePixels(*image, pixels);
         if (RefPtr image = changes.contentsBufferImage)
             update.contentsBuffer = imagePixels(*image, pixels);
+        if (RefPtr videoFrame = changes.contentsBufferVideoFrame)
+            update.contentsVideoFrame = videoFrameInSlot(*videoFrame, changes.contentsBufferRotation);
         transaction.layers.append(WTF::move(update));
     }
 
     if (!pixels.isEmpty())
         transaction.pixels = IPC::SharedBufferReference(pixels.takeBuffer());
 
+    Locker locker { m_videoFrameSlotsLock };
+    transaction.removedVideoFrameSlots = std::exchange(m_removedVideoFrameSlots, { });
+
     return transaction;
+}
+
+std::optional<CoordinatedVideoFrame> RemoteCoordinatedCompositorProxy::videoFrameInSlot(VideoFrame& videoFrame, CoordinatedPlatformLayerBuffer::Rotation rotation)
+{
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    RefPtr frame = dynamicDowncast<VideoFrameGStreamer>(videoFrame);
+    if (!frame)
+        return std::nullopt;
+
+    GstMappedFrame mappedFrame(frame->sample(), GST_MAP_READ);
+    if (!mappedFrame.isValid())
+        return std::nullopt;
+
+    auto* info = mappedFrame.info();
+    unsigned planeCount = GST_VIDEO_INFO_N_PLANES(info);
+    Vector<uint64_t> offsets;
+    Vector<int32_t> strides;
+    size_t size = 0;
+    for (unsigned i = 0; i < planeCount; ++i) {
+        offsets.append(size);
+        strides.append(mappedFrame.planeStride(i));
+        size += mappedFrame.planeData(i).size();
+    }
+    if (!size)
+        return std::nullopt;
+
+    std::optional<CoordinatedVideoFrameSlotIdentifier> slotIdentifier;
+    RefPtr<SharedMemory> memory;
+    std::optional<SharedMemory::Handle> handle;
+    {
+        Locker locker { m_videoFrameSlotsLock };
+        for (auto& entry : m_videoFrameSlots) {
+            if (!entry.value.isInUse && entry.value.memory->size() >= size && entry.value.memory->size() <= 2 * size) {
+                slotIdentifier = entry.key;
+                break;
+            }
+        }
+
+        if (!slotIdentifier) {
+            // The free slots don't fit, usually because the size of the video changed.
+            Vector<CoordinatedVideoFrameSlotIdentifier> removedSlots;
+            m_videoFrameSlots.removeIf([&](auto& entry) {
+                if (entry.value.isInUse)
+                    return false;
+                removedSlots.append(entry.key);
+                return true;
+            });
+            m_removedVideoFrameSlots.appendVector(WTF::move(removedSlots));
+
+            RefPtr newMemory = SharedMemory::allocate(size);
+            if (!newMemory)
+                return std::nullopt;
+            slotIdentifier = CoordinatedVideoFrameSlotIdentifier::generate();
+            m_videoFrameSlots.add(*slotIdentifier, VideoFrameSlot { .memory = WTF::move(newMemory) });
+        }
+
+        auto& slot = m_videoFrameSlots.find(*slotIdentifier)->value;
+        if (!slot.wasSent) {
+            handle = slot.memory->createHandle(SharedMemory::Protection::ReadOnly);
+            if (!handle)
+                return std::nullopt;
+            slot.wasSent = true;
+        }
+        slot.isInUse = true;
+        memory = slot.memory;
+    }
+
+    auto destination = memory->mutableSpan();
+    for (unsigned i = 0; i < planeCount; ++i) {
+        auto plane = mappedFrame.planeData(i);
+        memcpySpan(destination.subspan(offsets[i], plane.size()), plane);
+    }
+
+    const auto& colorimetry = GST_VIDEO_INFO_COLORIMETRY(info);
+    return CoordinatedVideoFrame {
+        .slot = *slotIdentifier,
+        .slotHandle = WTF::move(handle),
+        .presentationSize = frame->presentationSize(),
+        .format = static_cast<uint32_t>(GST_VIDEO_INFO_FORMAT(info)),
+        .size = { mappedFrame.width(), mappedFrame.height() },
+        .offsets = WTF::move(offsets),
+        .strides = WTF::move(strides),
+        .colorRange = static_cast<uint8_t>(colorimetry.range),
+        .colorMatrix = static_cast<uint8_t>(colorimetry.matrix),
+        .colorTransfer = static_cast<uint8_t>(colorimetry.transfer),
+        .colorPrimaries = static_cast<uint8_t>(colorimetry.primaries),
+        .rotation = rotation,
+    };
+#else
+    UNUSED_PARAM(videoFrame);
+    UNUSED_PARAM(rotation);
+    return std::nullopt;
+#endif
+}
+
+void RemoteCoordinatedCompositorProxy::releaseVideoFrameSlot(CoordinatedVideoFrameSlotIdentifier identifier)
+{
+    Locker locker { m_videoFrameSlotsLock };
+    auto it = m_videoFrameSlots.find(identifier);
+    if (it != m_videoFrameSlots.end())
+        it->value.isInUse = false;
 }
 
 Ref<RemoteCoordinatedCompositorProxy> RemoteCoordinatedCompositorProxy::create(WebPage& webPage, LayerTreeHost& layerTreeHost, CoordinatedSceneState& sceneState)
@@ -302,7 +415,6 @@ void RemoteCoordinatedCompositorProxy::requestCompositionForRenderingUpdate(Func
     m_commitQueue->dispatch([protectedThis = Ref { *this }, pendingTransaction = WTF::move(pendingTransaction), waitForRecordings = WTF::move(waitForRecordings)] mutable {
         if (waitForRecordings)
             waitForRecordings();
-        auto transaction = makeTransaction(WTF::move(pendingTransaction));
         RefPtr connection = protectedThis->gpuConnection();
         if (!connection) {
             callOnMainRunLoop([protectedThis = WTF::move(protectedThis)] {
@@ -311,7 +423,7 @@ void RemoteCoordinatedCompositorProxy::requestCompositionForRenderingUpdate(Func
             return;
         }
 
-        connection->sendWithAsyncReply(Messages::RemoteCoordinatedCompositor::Commit(WTF::move(transaction)), [protectedThis] {
+        connection->sendWithAsyncReply(Messages::RemoteCoordinatedCompositor::Commit(protectedThis->makeTransaction(WTF::move(pendingTransaction))), [protectedThis] {
             protectedThis->didComposite();
         }, protectedThis->m_surfaceID);
     });
@@ -384,7 +496,7 @@ void RemoteCoordinatedCompositorProxy::requestComposition(CompositionReason reas
 
     m_commitQueue->dispatch([protectedThis = Ref { *this }, pendingTransaction = WTF::move(pendingTransaction)] mutable {
         if (RefPtr connection = protectedThis->gpuConnection())
-            connection->send(Messages::RemoteCoordinatedCompositor::UpdateLayers(makeTransaction(WTF::move(pendingTransaction))), protectedThis->m_surfaceID);
+            connection->send(Messages::RemoteCoordinatedCompositor::UpdateLayers(protectedThis->makeTransaction(WTF::move(pendingTransaction))), protectedThis->m_surfaceID);
     });
 }
 
@@ -419,6 +531,11 @@ void RemoteCoordinatedCompositorProxy::gpuProcessConnectionDidClose(GPUProcessCo
     {
         Locker locker { m_connectionLock };
         m_gpuConnection = nullptr;
+    }
+    {
+        Locker locker { m_videoFrameSlotsLock };
+        m_videoFrameSlots.clear();
+        m_removedVideoFrameSlots.clear();
     }
 
     m_pendingCommits = 0;

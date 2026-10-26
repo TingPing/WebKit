@@ -26,6 +26,7 @@
 #pragma once
 
 #if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include "CoordinatedVideoFrameSlotIdentifier.h"
 #include "MessageReceiver.h"
 #include "RendererBufferFormat.h"
 #include "WebPageProxyIdentifier.h"
@@ -51,8 +52,10 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 class SkCanvas;
 
 namespace WebCore {
+class CoordinatedPlatformLayerBuffer;
 class CoordinatedTileBuffer;
 class CoordinatedTileManager;
+class SharedMemory;
 class SkiaCompositingLayer;
 class SkiaRecordingResult;
 struct CoordinatedLayerProperties;
@@ -63,6 +66,7 @@ class AcceleratedSurface;
 class GPUConnectionToWebProcess;
 struct CoordinatedLayerTreeTransaction;
 struct CoordinatedLayerUpdate;
+struct CoordinatedVideoFrame;
 
 class RemoteCoordinatedCompositor final : public IPC::MessageReceiver, public ThreadSafeRefCounted<RemoteCoordinatedCompositor, WTF::DestructionThread::Main> {
     WTF_MAKE_TZONE_ALLOCATED(RemoteCoordinatedCompositor);
@@ -113,6 +117,10 @@ private:
     void applyLayerProperties(WebCore::SkiaCompositingLayer&, const WebCore::CoordinatedLayerProperties&);
     TileUpdates scheduleTileReplays(const CoordinatedLayerUpdate&, Vector<Ref<WebCore::CoordinatedTileBuffer>>& paintingBuffers);
     void applyLayerUpdate(CoordinatedLayerUpdate&&, std::span<const uint8_t> pixels, TileUpdates&&);
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    RefPtr<WebCore::SharedMemory> videoFrameSlot(CoordinatedVideoFrame&);
+    std::unique_ptr<WebCore::CoordinatedPlatformLayerBuffer> videoFrameBuffer(CoordinatedVideoFrame&&);
+#endif
     void runWhenTilesArePainted(Function<void()>&&);
     void commitWhenTilesArePainted(CoordinatedLayerTreeTransaction&&, CompletionHandler<void()>&&);
     void applyCommit(CoordinatedLayerTreeTransaction&&, Vector<TileUpdates>&&, CompletionHandler<void()>&&);
@@ -144,6 +152,9 @@ private:
     Deque<Function<void()>> m_tasksWaitingForTiles;
     HashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::SkiaCompositingLayer>> m_layers;
     RefPtr<WebCore::SkiaCompositingLayer> m_rootLayer;
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    HashMap<CoordinatedVideoFrameSlotIdentifier, Ref<WebCore::SharedMemory>> m_videoFrameSlots;
+#endif
     WebCore::IntSize m_viewportSize;
     float m_deviceScaleFactor { 1 };
     bool m_isVisible { false };

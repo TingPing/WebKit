@@ -31,6 +31,8 @@
 #include "VideoFrameGStreamer.h"
 
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/core/SkColorSpace.h>
+#include <skia/core/SkYUVAPixmaps.h>
 #include <skia/gpu/ganesh/GrContextThreadSafeProxy.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
@@ -53,6 +55,8 @@ public:
     std::unique_ptr<CoordinatedPlatformLayerBuffer> copyBuffer() const;
 #endif
 
+    VideoFrameGStreamer& videoFrame() const { return m_videoFrame.get(); }
+
 private:
 #if USE(TEXTURE_MAPPER)
     void paintToTextureMapper(TextureMapper&, const FloatRect&, const TransformationMatrix& modelViewMatrix = TransformationMatrix(), float opacity = 1.0) override;
@@ -67,7 +71,7 @@ private:
     void createBufferFromMappedFrameIfNeeded();
 
 #else
-    sk_sp<SkImage> skiaImage() override { return m_image; }
+    sk_sp<SkImage> skiaImage() override;
 
     void createSkiaImageIfNeeded(const sk_sp<GrContextThreadSafeProxy>&, bool gstGLEnabled, Origin);
 
@@ -79,6 +83,7 @@ private:
 #endif
 
     void createSkiaImageForMainMemory(std::unique_ptr<GstMappedFrame>&&);
+    void createYUVAPixmapsForMainMemory(std::unique_ptr<GstMappedFrame>&&);
 
 #if USE(GSTREAMER_GL)
     void createSkiaImageForGLMemory(GstGLMemory*, std::unique_ptr<GstMappedFrame>&&, const sk_sp<GrContextThreadSafeProxy>&, Origin);
@@ -94,6 +99,9 @@ private:
     std::optional<GstMappedFrame> m_mappedVideoFrame;
 #else
     sk_sp<SkImage> m_image;
+    std::unique_ptr<GstMappedFrame> m_mappedFrame;
+    SkYUVAPixmaps m_yuvaPixmaps;
+    sk_sp<SkColorSpace> m_yuvaColorSpace;
 #endif
 };
 

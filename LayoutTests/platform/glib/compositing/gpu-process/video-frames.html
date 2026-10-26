@@ -1,0 +1,100 @@
+<!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true ] -->
+<html>
+<head>
+<link rel="stylesheet" href="../../damage/common.css">
+</head>
+<body>
+<video style="display: block" width="160" height="120" muted></video>
+<script src="../../damage/common.js"></script>
+<script>
+// The frames of a playing video keep reaching the compositor in the GPU process: many more of them
+// than are in flight at once, after the size of the video changes, and after the GPU process restarts.
+setupTestCase({ disableConsoleLog: true });
+
+const video = document.querySelector("video");
+let step = "";
+
+function isVideoDamage(damage)
+{
+    return damage.rects.every(rect => contains([0, 0, 160, 120], rect));
+}
+
+// The first paint of the page can still be on its way when the video starts playing.
+function waitForDamagedFrames(count, { afterFirstPaint = false } = { })
+{
+    return new Promise((resolve, reject) => {
+        const framesBefore = allFramesDamages().length;
+        const checkFrames = () => {
+            let damagedFrames = allFramesDamages().slice(framesBefore).filter(damage => damage.rects.length);
+            if (afterFirstPaint) {
+                const firstVideoFrame = damagedFrames.findIndex(isVideoDamage);
+                damagedFrames = firstVideoFrame < 0 ? [] : damagedFrames.slice(firstVideoFrame);
+            }
+            if (damagedFrames.length < count) {
+                requestAnimationFrame(checkFrames);
+                return;
+            }
+            for (const damage of damagedFrames) {
+                for (const rect of damage.rects)
+                    assertContains([0, 0, 160, 120], rect);
+            }
+            if (failure)
+                reject(`${step}: ${failure}`);
+            else
+                resolve();
+        };
+        requestAnimationFrame(checkFrames);
+    });
+}
+
+// A new GPU process paints the whole view once, then only the video changes again.
+function waitForRepaintAfterRestart(framesBefore)
+{
+    return new Promise(resolve => {
+        const checkFrames = () => {
+            const damagedFrames = allFramesDamages().slice(framesBefore).filter(damage => damage.rects.length);
+            const repaintIndex = damagedFrames.findLastIndex(damage => !isVideoDamage(damage));
+            if (repaintIndex < 0 || repaintIndex == damagedFrames.length - 1) {
+                requestAnimationFrame(checkFrames);
+                return;
+            }
+            resolve();
+        };
+        requestAnimationFrame(checkFrames);
+    });
+}
+
+async function play(source)
+{
+    video.src = source;
+    await video.play();
+}
+
+async function runTest()
+{
+    step = "first video";
+    await play("../../../../media/content/test.mp4");
+    await waitForDamagedFrames(30, { afterFirstPaint: true });
+
+    step = "second video";
+    await play("../../../../media/content/long-test.mp4");
+    await waitForDamagedFrames(10);
+
+    step = "GPU process restart";
+    const framesBeforeRestart = allFramesDamages().length;
+    if (window.testRunner)
+        testRunner.terminateGPUProcess();
+    await waitForRepaintAfterRestart(framesBeforeRestart);
+    await waitForDamagedFrames(10);
+
+    video.pause();
+    if (failure)
+        failTest(`FAIL: ${failure}`);
+    else
+        passTest();
+}
+
+runTest().catch(error => failTest(`FAIL: ${error}`));
+</script>
+</body>
+</html>

@@ -32,6 +32,7 @@
 #if ENABLE(VIDEO) && USE(GSTREAMER)
 #include "GStreamerCommon.h"
 #include "IntSize.h"
+#include "ProcessCapabilities.h"
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/video/gstvideometa.h>
@@ -50,7 +51,10 @@ using namespace WebCore;
 
 #define WEBKIT_VIDEO_SINK_PAD_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES(GST_CAPS_FEATURE_META_GST_VIDEO_GL_TEXTURE_UPLOAD_META, GST_CAPS_FORMAT) ";" GST_VIDEO_CAPS_MAKE(GST_CAPS_FORMAT)
 
-static GstStaticPadTemplate s_videoSinkTemplate = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS(WEBKIT_VIDEO_SINK_PAD_CAPS));
+// The process compositing the layers converts these to RGB.
+#define WEBKIT_VIDEO_SINK_REMOTE_CAPS GST_VIDEO_CAPS_MAKE("{ I420, YV12, NV12, NV21, Y444, Y42B, Y41B, A420 }") ";" GST_VIDEO_CAPS_MAKE(GST_CAPS_FORMAT)
+
+static GstStaticPadTemplate s_videoSinkTemplate = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS(WEBKIT_VIDEO_SINK_REMOTE_CAPS ";" WEBKIT_VIDEO_SINK_PAD_CAPS));
 
 
 GST_DEBUG_CATEGORY_STATIC(webkitVideoSinkDebug);
@@ -232,6 +236,14 @@ static gboolean webkitVideoSinkSetCaps(GstBaseSink* baseSink, GstCaps* caps)
     return GST_BASE_SINK_CLASS(webkit_video_sink_parent_class)->set_caps(baseSink, caps);
 }
 
+static GstCaps* webkitVideoSinkGetCaps(GstBaseSink*, GstCaps* filter)
+{
+    GRefPtr<GstCaps> caps = adoptGRef(gst_caps_from_string(ProcessCapabilities::layersCompositedRemotely() ? WEBKIT_VIDEO_SINK_REMOTE_CAPS : WEBKIT_VIDEO_SINK_PAD_CAPS));
+    if (!filter)
+        return caps.leakRef();
+    return gst_caps_intersect_full(filter, caps.get(), GST_CAPS_INTERSECT_FIRST);
+}
+
 static gboolean webkitVideoSinkProposeAllocation(GstBaseSink* baseSink, GstQuery* query)
 {
     GstCaps* caps;
@@ -281,6 +293,7 @@ static void webkit_video_sink_class_init(WebKitVideoSinkClass* klass)
     baseSinkClass->preroll = webkitVideoSinkRender;
     baseSinkClass->stop = webkitVideoSinkStop;
     baseSinkClass->start = webkitVideoSinkStart;
+    baseSinkClass->get_caps = webkitVideoSinkGetCaps;
     baseSinkClass->set_caps = webkitVideoSinkSetCaps;
     baseSinkClass->propose_allocation = webkitVideoSinkProposeAllocation;
     baseSinkClass->event = webkitVideoSinkEvent;
