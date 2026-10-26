@@ -151,7 +151,13 @@ static void webkitVideoSinkRepaintCancelled(WebKitVideoSink* sink)
 static GRefPtr<GstSample> webkitVideoSinkRequestRender(WebKitVideoSink* sink, GstBuffer* buffer)
 {
     WebKitVideoSinkPrivate* priv = sink->priv;
-    GRefPtr<GstSample> sample = adoptGRef(gst_sample_new(buffer, priv->currentCaps.get(), nullptr, nullptr));
+    GstSegment segment;
+    {
+        auto* baseSink = GST_BASE_SINK_CAST(sink);
+        auto locker = GstObjectLocker(baseSink);
+        gst_segment_copy_into(&baseSink->segment, &segment);
+    }
+    GRefPtr<GstSample> sample = adoptGRef(gst_sample_new(buffer, priv->currentCaps.get(), &segment, nullptr));
 
     // The video info structure is valid only if the sink handled an allocation query.
     GstVideoFormat format = GST_VIDEO_INFO_FORMAT(&priv->info);
