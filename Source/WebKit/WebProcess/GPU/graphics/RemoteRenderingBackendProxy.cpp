@@ -68,6 +68,7 @@
 
 #if USE(SKIA)
 #include "SharedBufferReference.h"
+#include <WebCore/SkiaSpanExtras.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkTypeface.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
@@ -580,7 +581,7 @@ std::optional<RenderingResourceIdentifier> RemoteRenderingBackendProxy::cacheTyp
         return std::nullopt;
 
     auto identifier = RenderingResourceIdentifier::generate();
-    send(Messages::RemoteRenderingBackend::CacheTypeface(IPC::SharedBufferReference(SharedBuffer::create(std::span { data->bytes(), data->size() })), identifier));
+    send(Messages::RemoteRenderingBackend::CacheTypeface(IPC::SharedBufferReference(SharedBuffer::create(span(data))), identifier));
     return identifier;
 }
 #endif
