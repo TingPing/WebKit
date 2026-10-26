@@ -877,7 +877,7 @@ GstMappedFrame::GstMappedFrame(GstMappedFrame&& other)
     std::swap(m_frame, other.m_frame);
     other.m_frame.buffer = nullptr;
     std::swap(m_alignment, other.m_alignment);
-    std::swap(m_planeSizes, other.m_planeSizes);
+    std::swap(m_planeHeights, other.m_planeHeights);
 }
 
 GstMappedFrame::GstMappedFrame(const GRefPtr<GstSample>& sample, GstMapFlags flags)
@@ -889,8 +889,14 @@ GstMappedFrame::GstMappedFrame(const GRefPtr<GstSample>& sample, GstMapFlags fla
     if (!gst_video_frame_map(&m_frame, &info, gst_sample_get_buffer(sample.get()), flags))
         return;
 
+    // The plane sizes are those of the default strides, which the mapped frame doesn't necessarily use.
     gst_video_alignment_reset(&m_alignment);
-    gst_video_info_align_full(&info, &m_alignment, m_planeSizes.data());
+    std::array<size_t, GST_VIDEO_MAX_PLANES> planeSizes { };
+    gst_video_info_align_full(&info, &m_alignment, planeSizes.data());
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN; // GLib port
+    for (unsigned i = 0; i < GST_VIDEO_INFO_N_PLANES(&info); ++i)
+        m_planeHeights[i] = GST_VIDEO_INFO_PLANE_HEIGHT(&info, i, planeSizes.data());
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END;
 }
 
 GstMappedFrame::~GstMappedFrame()
@@ -972,7 +978,7 @@ int GstMappedFrame::planeStride(uint32_t planeIndex) const
 size_t GstMappedFrame::planeHeight(uint32_t planeIndex) const
 {
     RELEASE_ASSERT(isValid());
-    return GST_VIDEO_INFO_PLANE_HEIGHT(&m_frame.info, planeIndex, m_planeSizes.data());
+    return m_planeHeights[planeIndex];
 }
 
 #if USE(GSTREAMER_GL)
