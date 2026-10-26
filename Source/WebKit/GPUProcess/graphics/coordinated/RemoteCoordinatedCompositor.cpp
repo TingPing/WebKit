@@ -35,6 +35,7 @@
 #include <WebCore/CoordinatedBackingStoreProxy.h>
 #include <WebCore/CoordinatedImageBackingStore.h>
 #include <WebCore/CoordinatedPlatformLayerBufferDMABuf.h>
+#include <WebCore/CoordinatedPlatformLayerBufferSkiaImage.h>
 #include <WebCore/CoordinatedTileBuffer.h>
 #include <WebCore/GLContext.h>
 #include <WebCore/NativeImage.h>
@@ -234,14 +235,23 @@ void RemoteCoordinatedCompositor::applyLayerUpdate(CoordinatedLayerUpdate&& upda
     Ref layer = ensureLayer(update.properties.id);
     applyLayerProperties(layer.get(), update.properties);
 
+#if ENABLE(WEBGL) && USE(GBM)
     if (update.properties.changes.contains(CoordinatedLayerChange::ContentsBuffer)) {
         std::unique_ptr<CoordinatedPlatformLayerBuffer> buffer;
         if (const auto& contents = update.properties.contentsBuffer) {
-            if (auto frame = RemoteCoordinatedContentsRegistry::singleton().takeFrame(m_webProcessIdentifier, contents->identifier))
-                buffer = CoordinatedPlatformLayerBufferDMABuf::create(WTF::move(frame->buffer), contents->alphaMode, contents->origin, WTF::move(frame->fence), m_threadSafeGrContext);
+            if (auto frame = RemoteCoordinatedContentsRegistry::singleton().takeFrame(m_webProcessIdentifier, contents->identifier)) {
+                buffer = WTF::switchOn(WTF::move(*frame),
+                    [&](RemoteCoordinatedContentsRegistry::DMABufFrame&& dmabufFrame) -> std::unique_ptr<CoordinatedPlatformLayerBuffer> {
+                        return CoordinatedPlatformLayerBufferDMABuf::create(WTF::move(dmabufFrame.buffer), contents->alphaMode, contents->origin, WTF::move(dmabufFrame.fence), m_threadSafeGrContext);
+                    },
+                    [&](RemoteCoordinatedContentsRegistry::TextureFrame&& textureFrame) -> std::unique_ptr<CoordinatedPlatformLayerBuffer> {
+                        return CoordinatedPlatformLayerBufferSkiaImage::create(WTF::move(textureFrame.texture), textureFrame.size, contents->alphaMode, WTF::move(textureFrame.fence), m_threadSafeGrContext);
+                    });
+            }
         }
         layer->setContentsBuffer(WTF::move(buffer));
     }
+#endif
 
     if (update.properties.changes.contains(CoordinatedLayerChange::ContentsImage)) {
         RefPtr<CoordinatedImageBackingStore> imageBackingStore;

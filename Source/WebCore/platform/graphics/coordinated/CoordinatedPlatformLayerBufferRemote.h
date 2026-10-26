@@ -26,31 +26,32 @@
 #pragma once
 
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#include "CoordinatedContentsIdentifier.h"
 #include "CoordinatedPlatformLayerBuffer.h"
 
 namespace WebCore {
 
-// Contents produced in the process that composites the layer, referenced by the identifier of their producer there.
+// Contents produced in the process that composites the layer, which registers their frames with this identifier.
 class CoordinatedPlatformLayerBufferRemote final : public CoordinatedPlatformLayerBuffer {
 public:
-    static std::unique_ptr<CoordinatedPlatformLayerBufferRemote> create(uint64_t identifier, AlphaMode alphaMode, Origin origin)
+    static std::unique_ptr<CoordinatedPlatformLayerBufferRemote> create(CoordinatedContentsIdentifier identifier, AlphaMode alphaMode, Origin origin)
     {
         return std::unique_ptr<CoordinatedPlatformLayerBufferRemote>(new CoordinatedPlatformLayerBufferRemote(identifier, alphaMode, origin));
     }
 
-    uint64_t identifier() const { return m_identifier; }
+    CoordinatedContentsIdentifier identifier() const { return m_identifier; }
     AlphaMode alphaMode() const { return m_alphaMode; }
     Origin origin() const { return m_origin; }
 
 private:
-    CoordinatedPlatformLayerBufferRemote(uint64_t identifier, AlphaMode alphaMode, Origin origin)
+    CoordinatedPlatformLayerBufferRemote(CoordinatedContentsIdentifier identifier, AlphaMode alphaMode, Origin origin)
         : CoordinatedPlatformLayerBuffer(Type::Remote, { }, alphaMode)
         , m_identifier(identifier)
         , m_origin(origin)
     {
     }
 
-    uint64_t m_identifier { 0 };
+    CoordinatedContentsIdentifier m_identifier;
     Origin m_origin { Origin::TopLeft };
 };
 

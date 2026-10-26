@@ -25,8 +25,11 @@
 
 #pragma once
 
-#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && USE(GBM)
+#if ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && USE(GBM)
+#include <WebCore/CoordinatedContentsIdentifier.h>
 #include <WebCore/DMABufBuffer.h>
+#include <WebCore/GLFence.h>
+#include <WebCore/GraphicsContextGLCoordinated.h>
 #include <WebCore/ProcessIdentifier.h>
 #include <wtf/HashMap.h>
 #include <wtf/Lock.h>
@@ -40,27 +43,27 @@ class RemoteCoordinatedContentsRegistry {
 public:
     static RemoteCoordinatedContentsRegistry& singleton();
 
-    void setFrame(WebCore::ProcessIdentifier, uint64_t identifier, Ref<WebCore::DMABufBuffer>&&, UnixFileDescriptor&& fence);
-    void remove(WebCore::ProcessIdentifier, uint64_t identifier);
-    void removeAll(WebCore::ProcessIdentifier);
-
-    struct Frame {
+    struct DMABufFrame {
         Ref<WebCore::DMABufBuffer> buffer;
         UnixFileDescriptor fence;
     };
-    std::optional<Frame> takeFrame(WebCore::ProcessIdentifier, uint64_t identifier);
+    using TextureFrame = WebCore::GraphicsContextGLCoordinated::DisplayTexture;
+    using Frame = Variant<DMABufFrame, TextureFrame>;
+
+    void setFrame(WebCore::ProcessIdentifier, WebCore::CoordinatedContentsIdentifier, Frame&&);
+    void remove(WebCore::ProcessIdentifier, WebCore::CoordinatedContentsIdentifier);
+    void removeAll(WebCore::ProcessIdentifier);
+
+    // The fence is only returned once, so the compositor doesn't wait for it again.
+    std::optional<Frame> takeFrame(WebCore::ProcessIdentifier, WebCore::CoordinatedContentsIdentifier);
 
 private:
-    using Key = std::pair<uint64_t, uint64_t>;
-    struct Entry {
-        RefPtr<WebCore::DMABufBuffer> buffer;
-        UnixFileDescriptor fence;
-    };
+    using Key = std::pair<WebCore::ProcessIdentifier, WebCore::CoordinatedContentsIdentifier>;
 
     Lock m_lock;
-    HashMap<Key, Entry> m_frames WTF_GUARDED_BY_LOCK(m_lock);
+    HashMap<Key, std::optional<Frame>> m_frames WTF_GUARDED_BY_LOCK(m_lock);
 };
 
 } // namespace WebKit
 
-#endif // ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && USE(GBM)
+#endif // ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && USE(GBM)

@@ -519,6 +519,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebCore::BackForwardFrameItemIdentifierID"_s,
         "WebCore::BackForwardItemIdentifierID"_s,
         "WebCore::BackgroundFetchRecordIdentifier"_s,
+        "WebCore::CoordinatedContentsIdentifier"_s,
         "WebCore::BrowsingContextGroupIdentifier"_s,
         "WebCore::DOMCacheIdentifierID"_s,
         "WebCore::DebuggerPauseSessionIdentifier"_s,

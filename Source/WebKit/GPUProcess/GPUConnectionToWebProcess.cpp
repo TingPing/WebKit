@@ -466,7 +466,9 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     for (Ref compositor : std::exchange(m_remoteCoordinatedCompositors, { }).values())
         compositor->invalidate();
+#if ENABLE(WEBGL) && USE(GBM)
     RemoteCoordinatedContentsRegistry::singleton().removeAll(m_webProcessIdentifier);
+#endif
 #endif
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
     m_libWebRTCCodecsProxy = nullptr;

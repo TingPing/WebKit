@@ -374,6 +374,7 @@ def message_to_struct_declaration(receiver, message):
 def atomic_object_identifier(type):
     # FIXME: This can be derived from *.serialization.in files.
     atomic_object_identifiers = [
+        'WebCore::CoordinatedContentsIdentifier',
         'WebCore::FileSystemHandleIdentifier',
         'WebCore::FileSystemSyncAccessHandleIdentifier',
         'WebCore::FileSystemWritableFileStreamIdentifier',
@@ -454,6 +455,7 @@ def serialized_identifiers():
         'WebCore::BackForwardFrameItemIdentifierID',
         'WebCore::BackForwardItemIdentifierID',
         'WebCore::BackgroundFetchRecordIdentifier',
+        'WebCore::CoordinatedContentsIdentifier',
         'WebCore::BrowsingContextGroupIdentifier',
         'WebCore::DOMCacheIdentifierID',
         'WebCore::DebuggerPauseSessionIdentifier',

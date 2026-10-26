@@ -76,7 +76,7 @@ header: <WebCore/CoordinatedPlatformLayerBuffer.h>
 
 header: <WebCore/CoordinatedLayerProperties.h>
 [CustomHeader] struct WebCore::CoordinatedRemoteContentsBuffer {
-    uint64_t identifier;
+    WebCore::CoordinatedContentsIdentifier identifier;
     WebCore::CoordinatedPlatformLayerBuffer::AlphaMode alphaMode;
     WebCore::CoordinatedPlatformLayerBuffer::Origin origin;
 }

@@ -201,37 +201,44 @@ bool GraphicsContextGLCoordinated::reshapeDrawingBuffer()
     return bindNextDrawingBuffer();
 }
 
-void GraphicsContextGLCoordinated::prepareForDisplay()
+auto GraphicsContextGLCoordinated::prepareDisplayTexture() -> std::optional<DisplayTexture>
 {
     if (!makeContextCurrent())
-        return;
+        return std::nullopt;
 
     if (!drawingBuffer())
-        return;
+        return std::nullopt;
 
     prepareTexture();
     if (!bindNextDrawingBuffer()) {
         forceContextLost();
-        return;
+        return std::nullopt;
     }
 
     attachDrawingBufferTexture();
 
     auto& displayBuffer = this->displayBuffer();
     if (!displayBuffer)
+        return std::nullopt;
+
+    return DisplayTexture { Ref { *displayBuffer.textureWrapper() }, getInternalFramebufferSize(), GLFence::create(PlatformDisplay::sharedDisplay().glDisplay()) };
+}
+
+void GraphicsContextGLCoordinated::prepareForDisplay()
+{
+    auto displayTexture = prepareDisplayTexture();
+    if (!displayTexture)
         return;
 
     std::unique_ptr<CoordinatedPlatformLayerBuffer> buffer;
-    auto fboSize = getInternalFramebufferSize();
-    auto fence = GLFence::create(PlatformDisplay::sharedDisplay().glDisplay());
 #if USE(TEXTURE_MAPPER)
     OptionSet<TextureMapperFlags> flags = TextureMapperFlags::ShouldFlipTexture;
     if (contextAttributes().alpha)
         flags.add(TextureMapperFlags::ShouldBlend);
-    buffer = CoordinatedPlatformLayerBufferRGB::create(displayBuffer.textureWrapper()->id(), fboSize, flags, WTF::move(fence));
+    buffer = CoordinatedPlatformLayerBufferRGB::create(displayTexture->texture->id(), displayTexture->size, flags, WTF::move(displayTexture->fence));
 #else
     auto alphaMode = contextAttributes().alpha ? CoordinatedPlatformLayerBuffer::AlphaMode::Premultiplied : CoordinatedPlatformLayerBuffer::AlphaMode::Opaque;
-    buffer = CoordinatedPlatformLayerBufferSkiaImage::create(Ref { *displayBuffer.textureWrapper() }, fboSize, alphaMode, WTF::move(fence), m_layerContentsDisplayDelegate->threadSafeGrContext());
+    buffer = CoordinatedPlatformLayerBufferSkiaImage::create(WTF::move(displayTexture->texture), displayTexture->size, alphaMode, WTF::move(displayTexture->fence), m_layerContentsDisplayDelegate->threadSafeGrContext());
 #endif
     m_layerContentsDisplayDelegate->setDisplayBuffer(WTF::move(buffer));
 }

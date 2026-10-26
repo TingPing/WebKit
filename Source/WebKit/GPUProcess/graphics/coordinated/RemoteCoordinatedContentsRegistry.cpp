@@ -26,7 +26,7 @@
 #include "config.h"
 #include "RemoteCoordinatedContentsRegistry.h"
 
-#if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && USE(GBM)
+#if ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && USE(GBM)
 #include <wtf/NeverDestroyed.h>
 
 namespace WebKit {
@@ -38,36 +38,42 @@ RemoteCoordinatedContentsRegistry& RemoteCoordinatedContentsRegistry::singleton(
     return registry;
 }
 
-void RemoteCoordinatedContentsRegistry::setFrame(ProcessIdentifier processIdentifier, uint64_t identifier, Ref<DMABufBuffer>&& buffer, UnixFileDescriptor&& fence)
+void RemoteCoordinatedContentsRegistry::setFrame(ProcessIdentifier processIdentifier, CoordinatedContentsIdentifier identifier, Frame&& frame)
 {
     Locker locker { m_lock };
-    m_frames.set({ processIdentifier.toUInt64(), identifier }, Entry { WTF::move(buffer), WTF::move(fence) });
+    m_frames.set({ processIdentifier, identifier }, WTF::move(frame));
 }
 
-void RemoteCoordinatedContentsRegistry::remove(ProcessIdentifier processIdentifier, uint64_t identifier)
+void RemoteCoordinatedContentsRegistry::remove(ProcessIdentifier processIdentifier, CoordinatedContentsIdentifier identifier)
 {
     Locker locker { m_lock };
-    m_frames.remove({ processIdentifier.toUInt64(), identifier });
+    m_frames.remove({ processIdentifier, identifier });
 }
 
 void RemoteCoordinatedContentsRegistry::removeAll(ProcessIdentifier processIdentifier)
 {
     Locker locker { m_lock };
-    m_frames.removeIf([processIdentifier = processIdentifier.toUInt64()](auto& entry) {
+    m_frames.removeIf([processIdentifier](auto& entry) {
         return entry.key.first == processIdentifier;
     });
 }
 
-auto RemoteCoordinatedContentsRegistry::takeFrame(ProcessIdentifier processIdentifier, uint64_t identifier) -> std::optional<Frame>
+auto RemoteCoordinatedContentsRegistry::takeFrame(ProcessIdentifier processIdentifier, CoordinatedContentsIdentifier identifier) -> std::optional<Frame>
 {
     Locker locker { m_lock };
-    auto it = m_frames.find({ processIdentifier.toUInt64(), identifier });
-    if (it == m_frames.end() || !it->value.buffer)
+    auto it = m_frames.find({ processIdentifier, identifier });
+    if (it == m_frames.end() || !it->value)
         return std::nullopt;
 
-    return Frame { *it->value.buffer, std::exchange(it->value.fence, { }) };
+    return WTF::switchOn(*it->value,
+        [](DMABufFrame& frame) -> Frame {
+            return DMABufFrame { frame.buffer, std::exchange(frame.fence, { }) };
+        },
+        [](TextureFrame& frame) -> Frame {
+            return TextureFrame { frame.texture, frame.size, std::exchange(frame.fence, nullptr) };
+        });
 }
 
 } // namespace WebKit
 
-#endif // ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && USE(GBM)
+#endif // ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER) && USE(GBM)

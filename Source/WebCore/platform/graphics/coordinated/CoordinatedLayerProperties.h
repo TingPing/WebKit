@@ -28,6 +28,7 @@
 #if USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "AcceleratedAnimations.h"
 #include "Color.h"
+#include "CoordinatedContentsIdentifier.h"
 #include "CoordinatedPlatformLayerBuffer.h"
 #include "FilterOperations.h"
 #include "FloatPoint.h"
@@ -88,7 +89,7 @@ enum class CoordinatedLayerChange : uint64_t {
 };
 
 struct CoordinatedRemoteContentsBuffer {
-    uint64_t identifier { 0 };
+    CoordinatedContentsIdentifier identifier;
     CoordinatedPlatformLayerBuffer::AlphaMode alphaMode { CoordinatedPlatformLayerBuffer::AlphaMode::Opaque };
     CoordinatedPlatformLayerBuffer::Origin origin { CoordinatedPlatformLayerBuffer::Origin::TopLeft };
 };

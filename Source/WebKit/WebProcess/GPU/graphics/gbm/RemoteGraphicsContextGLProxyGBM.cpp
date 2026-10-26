@@ -28,6 +28,7 @@
 
 #if ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(GBM)
 #include "WebProcess.h"
+#include <WebCore/CoordinatedContentsIdentifier.h>
 #include <WebCore/CoordinatedPlatformLayerBufferDMABuf.h>
 #include <WebCore/DMABufBuffer.h>
 #include <WebCore/GraphicsLayerContentsDisplayDelegateCoordinated.h>
@@ -63,6 +64,7 @@ private:
 
     const Ref<GraphicsLayerContentsDisplayDelegate> m_layerContentsDisplayDelegate;
     HashMap<uint64_t, Ref<DMABufBuffer>> m_buffers;
+    const CoordinatedContentsIdentifier m_contentsIdentifier { CoordinatedContentsIdentifier::generate() };
 };
 
 void RemoteGraphicsContextGLProxyGBM::prepareForDisplay()
@@ -76,7 +78,13 @@ void RemoteGraphicsContextGLProxyGBM::prepareForDisplay()
             inUseBuffers.append(buffer->id());
     }
 
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::PrepareForDisplay(WTF::move(inUseBuffers)));
+    std::optional<CoordinatedContentsIdentifier> contentsIdentifier;
+#if !USE(TEXTURE_MAPPER)
+    if (WebProcess::singleton().usesGPUProcessForCompositing())
+        contentsIdentifier = m_contentsIdentifier;
+#endif
+
+    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::PrepareForDisplay(WTF::move(inUseBuffers), contentsIdentifier));
     if (!sendResult.succeeded()) {
         markContextLost();
         return;
@@ -90,7 +98,7 @@ void RemoteGraphicsContextGLProxyGBM::prepareForDisplay()
             return;
 
         auto alphaMode = contextAttributes().alpha ? CoordinatedPlatformLayerBuffer::AlphaMode::Premultiplied : CoordinatedPlatformLayerBuffer::AlphaMode::Opaque;
-        m_layerContentsDisplayDelegate->setDisplayBuffer(CoordinatedPlatformLayerBufferRemote::create(m_identifier.toUInt64(), alphaMode, CoordinatedPlatformLayerBuffer::Origin::BottomLeft));
+        m_layerContentsDisplayDelegate->setDisplayBuffer(CoordinatedPlatformLayerBufferRemote::create(m_contentsIdentifier, alphaMode, CoordinatedPlatformLayerBuffer::Origin::BottomLeft));
         m_hasPreparedForDisplay = true;
         return;
     }

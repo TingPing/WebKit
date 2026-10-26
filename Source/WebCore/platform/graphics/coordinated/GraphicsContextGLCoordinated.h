@@ -32,6 +32,7 @@
 namespace WebCore {
 
 class CoordinatedWebGLTextureWrapper;
+class GLFence;
 
 class GraphicsContextGLCoordinated : public GraphicsContextGLEGL {
 public:
@@ -39,6 +40,13 @@ public:
     virtual ~GraphicsContextGLCoordinated();
 
     void prepareForDisplay() override;
+
+    struct DisplayTexture {
+        Ref<CoordinatedWebGLTextureWrapper> texture;
+        IntSize size;
+        std::unique_ptr<GLFence> fence;
+    };
+    std::optional<DisplayTexture> prepareDisplayTexture();
 
 protected:
     explicit GraphicsContextGLCoordinated(GraphicsContextGLAttributes&&);
