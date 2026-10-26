@@ -853,6 +853,7 @@ void CoordinatedPlatformLayer::setClipPath(const Path& path, WindRule windRule)
     assertIsHeld(m_lock);
     m_clipPath.path = path;
     m_clipPath.windRule = windRule;
+    m_clipPath.isSet = true;
     m_pendingChanges.add(Change::ClipPath);
     damageWholeLayer();
 }
@@ -1795,11 +1796,13 @@ void CoordinatedPlatformLayer::markAllPropertiesChanged()
     m_pendingChanges.add({
         Change::AnchorPoint, Change::Animations, Change::Backdrop, Change::BackdropRect, Change::BackdropRoot, Change::BackdropShapePath,
         Change::BackfaceVisibility, Change::BackgroundColor, Change::BackingStore, Change::BlendMode, Change::BoundsOrigin, Change::Children,
-        Change::ChildrenTransform, Change::ClipPath, Change::ContentsClippingRect, Change::ContentsClipShapePath, Change::ContentsColor,
+        Change::ChildrenTransform, Change::ContentsClippingRect, Change::ContentsClipShapePath, Change::ContentsColor,
         Change::ContentsImage, Change::ContentsOpaque, Change::ContentsRect, Change::ContentsRectClipsDescendants, Change::ContentsTiling,
         Change::ContentsVisible, Change::DebugIndicators, Change::Filters, Change::Mask, Change::MasksToBounds, Change::Opacity, Change::Position,
         Change::Preserves3D, Change::Replica, Change::Size, Change::Transform,
     });
+    if (m_clipPath.isSet)
+        m_pendingChanges.add(Change::ClipPath);
 
     if (!m_contentsBuffer.pending && m_contentsBuffer.committed) {
         m_contentsBuffer.pending = std::exchange(m_contentsBuffer.committed, nullptr);

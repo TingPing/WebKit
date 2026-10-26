@@ -364,7 +364,8 @@ private:
     } m_contentsBuffer WTF_GUARDED_BY_LOCK(m_lock);
     struct {
         Path path;
-        WindRule windRule;
+        WindRule windRule { WindRule::NonZero };
+        bool isSet { false };
     } m_clipPath WTF_GUARDED_BY_LOCK(m_lock);
     FilterOperations m_filters WTF_GUARDED_BY_LOCK(m_lock);
     RefPtr<CoordinatedPlatformLayer> m_mask WTF_GUARDED_BY_LOCK(m_lock);
