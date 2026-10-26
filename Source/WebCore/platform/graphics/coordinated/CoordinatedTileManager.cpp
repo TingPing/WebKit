@@ -167,6 +167,11 @@ Ref<CoordinatedTileBuffer> CoordinatedTileManager::scheduleReplay(const Ref<Skia
     return scheduleReplay(nullptr, recording, tileRect, dirtyRect);
 }
 
+void CoordinatedTileManager::prepareAtlases(SkiaRecordingResult& recording)
+{
+    m_paintingEngine->prepareAtlases(recording);
+}
+
 Ref<CoordinatedTileBuffer> CoordinatedTileManager::scheduleReplay(RefPtr<CoordinatedPlatformLayer>&& platformLayer, const Ref<SkiaRecordingResult>& recording, const IntRect& tileRect, const IntRect& dirtyRect)
 {
     Ref buffer = [&] -> Ref<CoordinatedTileBuffer> {

@@ -62,6 +62,8 @@ public:
     const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext() const { return m_threadSafeGrContext; }
 
     Ref<SkiaRecordingResult> record(const GraphicsLayerCoordinated&, const IntRect& recordRect, RenderingMode, bool contentsOpaque, float contentsScale, unsigned dirtyTilesCount);
+    // Packs the images of the recording into GPU atlases, which needs a GL context current on this thread.
+    void prepareAtlases(SkiaRecordingResult&);
     void replay(const Ref<CoordinatedTileBuffer>&, const Ref<SkiaRecordingResult>&, const IntRect& tileRect, const IntRect& dirtyRect) const;
 
     void paintIntoGraphicsContext(const GraphicsLayer&, GraphicsContext&, const IntRect&, bool contentsOpaque, float contentsScale) const;

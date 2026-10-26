@@ -161,11 +161,18 @@ Ref<SkiaRecordingResult> SkiaPaintingEngine::record(const GraphicsLayerCoordinat
     auto result = SkiaRecordingResult::create(WTF::move(picture), WTF::move(recordingData), recordRect, renderingMode, contentsOpaque, contentsScale);
 
     // Prepare GPU atlases on main thread before dispatching to workers.
-    if (result->hasAtlasLayouts()) {
-        auto fingerprint = result->imageSetFingerprint();
+    prepareAtlases(result.get());
+
+    return result;
+}
+
+void SkiaPaintingEngine::prepareAtlases(SkiaRecordingResult& result)
+{
+    if (result.hasAtlasLayouts()) {
+        auto fingerprint = result.imageSetFingerprint();
 
         // Fast path: reuse cached atlases if the image set is unchanged.
-        if (!tryReuseCachedAtlases(result.get(), fingerprint)) {
+        if (!tryReuseCachedAtlases(result, fingerprint)) {
             PlatformDisplay::sharedDisplay().skiaGLContext()->makeContextCurrent();
 
             auto* grContext = PlatformDisplay::sharedDisplay().skiaGrContext();
@@ -173,9 +180,9 @@ Ref<SkiaRecordingResult> SkiaPaintingEngine::record(const GraphicsLayerCoordinat
 
             Vector<Ref<SkiaGPUAtlas>> gpuAtlases;
             auto uploadCondition = AtlasUploadCondition::create();
-            gpuAtlases.reserveInitialCapacity(result->atlasLayouts().size());
+            gpuAtlases.reserveInitialCapacity(result.atlasLayouts().size());
 
-            for (const auto& layout : result->atlasLayouts()) {
+            for (const auto& layout : result.atlasLayouts()) {
                 if (auto atlas = createAtlas(layout.get(), uploadCondition.get()))
                     gpuAtlases.append(atlas.releaseNonNull());
             }
@@ -185,11 +192,11 @@ Ref<SkiaRecordingResult> SkiaPaintingEngine::record(const GraphicsLayerCoordinat
                 // This avoids holding the BitmapTextures by an extra frame, if not needed.
                 if (fingerprint == m_cachedImageFingerprint) {
                     m_cachedGPUAtlases = WTF::move(gpuAtlases);
-                    result->setGPUAtlases(copyToVectorOf<Ref<SkiaGPUAtlas>>(m_cachedGPUAtlases));
+                    result.setGPUAtlases(copyToVectorOf<Ref<SkiaGPUAtlas>>(m_cachedGPUAtlases));
                 } else {
                     m_cachedImageFingerprint = fingerprint;
                     m_cachedGPUAtlases.clear();
-                    result->setGPUAtlases(WTF::move(gpuAtlases));
+                    result.setGPUAtlases(WTF::move(gpuAtlases));
                 }
             }
         }
@@ -198,8 +205,6 @@ Ref<SkiaRecordingResult> SkiaPaintingEngine::record(const GraphicsLayerCoordinat
         m_cachedImageFingerprint = 0;
         m_cachedGPUAtlases.clear();
     }
-
-    return result;
 }
 
 void SkiaPaintingEngine::replay(const Ref<CoordinatedTileBuffer>& buffer, const Ref<SkiaRecordingResult>& recording, const IntRect& tileRect, const IntRect& dirtyRect) const

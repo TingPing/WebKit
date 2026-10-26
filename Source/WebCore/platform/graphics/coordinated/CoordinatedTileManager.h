@@ -84,6 +84,7 @@ public:
     Ref<SkiaRecordingResult> record(const GraphicsLayerCoordinated&, const IntRect& recordRect, bool contentsOpaque, float contentsScale, unsigned dirtyTilesCount);
     Ref<CoordinatedTileBuffer> scheduleReplay(const GraphicsLayerCoordinated&, const Ref<SkiaRecordingResult>&, const IntRect& tileRect, const IntRect& dirtyRect);
     WEBCORE_EXPORT Ref<CoordinatedTileBuffer> scheduleReplay(const Ref<SkiaRecordingResult>&, const IntRect& tileRect, const IntRect& dirtyRect);
+    WEBCORE_EXPORT void prepareAtlases(SkiaRecordingResult&);
 #elif USE(CAIRO)
     Ref<CoordinatedTileBuffer> schedulePaint(GraphicsLayerCoordinated&, const IntRect& dirtyRect, bool contentsOpaque, float contentsScale);
 #endif

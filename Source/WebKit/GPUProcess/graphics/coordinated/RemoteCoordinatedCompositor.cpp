@@ -173,8 +173,13 @@ void RemoteCoordinatedCompositor::didRecordTiles(uint64_t recordingIdentifier, R
 {
     // A commit using the recording is sent once the web process knows it was recorded, so it is queued after this.
     m_workQueue->dispatch([protectedThis = Ref { *this }, recordingIdentifier, recording = WTF::move(recording)] mutable {
-        if (!protectedThis->m_isInvalidated)
-            protectedThis->m_recordings.set(recordingIdentifier, WTF::move(recording));
+        if (protectedThis->m_isInvalidated)
+            return;
+
+        // Like the web process does when it records, so that small images are drawn from atlases rather than uploaded one by one.
+        if (protectedThis->m_tileManager && recording->renderingMode() == RenderingMode::Accelerated)
+            protectedThis->m_tileManager->prepareAtlases(recording.get());
+        protectedThis->m_recordings.set(recordingIdentifier, WTF::move(recording));
     });
 }
 
