@@ -53,11 +53,6 @@
 #include <WebCore/MediaPlayer.h>
 #endif
 
-#if USE(GSTREAMER) && (ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS))
-#include <WebCore/GraphicsContext.h>
-#include <WebCore/VideoFrame.h>
-#endif
-
 namespace WebKit {
 
 using namespace WebCore;
@@ -231,21 +226,6 @@ RefPtr<WebCore::VideoFrame> RemoteGraphicsContextGLProxy::surfaceBufferToVideoFr
     ASSERT(isMainRunLoop());
     if (isContextLost())
         return nullptr;
-#if USE(GSTREAMER)
-    // GStreamer runs in this process, not in the GPU process, so the frame is made here from the surface contents.
-    RefPtr image = copyNativeImage(buffer);
-    if (!image)
-        return nullptr;
-    FloatRect rect { { }, image->size() };
-    RefPtr imageBuffer = ImageBuffer::create(rect.size(), RenderingMode::Unaccelerated, RenderingPurpose::Unspecified, 1, ColorSpace::SRGB(), PixelFormat::BGRA8);
-    if (!imageBuffer)
-        return nullptr;
-    imageBuffer->context().drawNativeImage(*image, rect, rect, { CompositeOperator::Copy });
-    RefPtr pixelBuffer = imageBuffer->getPixelBuffer({ AlphaPremultiplication::Premultiplied, PixelFormat::BGRA8, ColorSpace::SRGB() }, { { }, imageBuffer->truncatedLogicalSize() });
-    if (!pixelBuffer)
-        return nullptr;
-    return VideoFrame::createFromPixelBuffer(pixelBuffer.releaseNonNull());
-#else
     auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::SurfaceBufferToVideoFrame(buffer));
     if (!sendResult.succeeded()) {
         markContextLost();
@@ -255,7 +235,6 @@ RefPtr<WebCore::VideoFrame> RemoteGraphicsContextGLProxy::surfaceBufferToVideoFr
     if (!result)
         return nullptr;
     return RemoteVideoFrameProxy::create(protect(WebProcess::singleton().ensureGPUProcessConnection().connection()), protect(protect(WebProcess::singleton().ensureGPUProcessConnection())->videoFrameObjectHeapProxy()), WTF::move(*result));
-#endif
 }
 #endif
 
