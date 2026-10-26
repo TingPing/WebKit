@@ -130,6 +130,10 @@ public:
     void LEGACY_NODELETE initializeCharacteristics(MediaTime presentationTime, bool isMirrored, Rotation);
 
     RefPtr<NativeImage> copyNativeImage() const;
+#if USE(SKIA)
+    // A texture of the Skia context of the current thread, or null when the frame can't be uploaded to one.
+    virtual RefPtr<NativeImage> acceleratedNativeImage() const { return nullptr; }
+#endif
     const PlatformVideoColorSpace& colorSpace() const LIFETIME_BOUND { return m_colorSpace; }
 
     bool hasNoTransformation() const { return m_rotation == VideoFrameRotation::None && !m_isMirrored; }

@@ -595,7 +595,7 @@ void RemoteGraphicsContextProxy::drawVideoFrame(const VideoFrame& frame, const F
 {
     sendPendingDrawsIfNecessary();
     appendStateChangeItemIfNecessary();
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || USE(GSTREAMER)
     Locker locker { m_sharedVideoFrameWriterLock };
     if (!m_sharedVideoFrameWriter)
         m_sharedVideoFrameWriter = makeUnique<SharedVideoFrameWriter>();
@@ -1018,7 +1018,7 @@ std::optional<RemoteGraphicsContextProxy::InlineStrokeData> RemoteGraphicsContex
 void RemoteGraphicsContextProxy::disconnect()
 {
     m_connection = nullptr;
-#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#if (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
     Locker locker { m_sharedVideoFrameWriterLock };
     if (m_sharedVideoFrameWriter) {
         m_sharedVideoFrameWriter->disable();

@@ -87,6 +87,9 @@ public:
     const GRefPtr<GstSample>& sample() const LIFETIME_BOUND { return m_sample; }
 
     RefPtr<ImageGStreamer> convertToImage();
+#if USE(SKIA)
+    RefPtr<NativeImage> acceleratedNativeImage() const final;
+#endif
 
     IntSize presentationSize() const final { return m_presentationSize; }
     uint32_t pixelFormat() const final { return GST_VIDEO_INFO_FORMAT(&m_info.info); }

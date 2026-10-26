@@ -47,7 +47,7 @@
 #include <WebCore/ARKitBadgeSystemImage.h>
 #endif
 
-#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#if (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
 #include "IPCSemaphore.h"
 #include "RemoteVideoFrameObjectHeap.h"
 #endif
@@ -607,7 +607,7 @@ void RemoteGraphicsContext::fillEllipse(const FloatRect& rect)
     context().fillEllipse(rect);
 }
 
-#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#if (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
 SharedVideoFrameReader& RemoteGraphicsContext::sharedVideoFrameReader()
 {
     if (!m_sharedVideoFrameReader) {
@@ -632,7 +632,7 @@ void RemoteGraphicsContext::setSharedVideoFrameMemory(SharedMemory::Handle&& han
 {
     sharedVideoFrameReader().setSharedMemory(WTF::move(handle));
 }
-#endif // PLATFORM(COCOA) && ENABLE(VIDEO)
+#endif // (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
 
 void RemoteGraphicsContext::strokeRect(const FloatRect& rect, float lineWidth)
 {

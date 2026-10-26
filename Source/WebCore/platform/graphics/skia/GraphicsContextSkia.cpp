@@ -45,6 +45,7 @@
 #include "SkiaPaintingEngine.h"
 #include "SkiaRecordingResult.h"
 #include "SkiaUtilities.h"
+#include "VideoFrame.h"
 #include <cmath>
 #include <ranges>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
@@ -267,6 +268,23 @@ sk_sp<SkImage> GraphicsContextSkia::imageForCurrentThread(const sk_sp<SkImage>& 
     // When drawing GPU-backed image on CPU-backed canvas we need to convert image to CPU-backed one.
     return imageInThisThread->makeRasterImage(grContext);
 }
+
+#if ENABLE(VIDEO)
+void GraphicsContextSkia::drawVideoFrame(const VideoFrame& frame, const FloatRect& destination, ShouldDiscardAlpha shouldDiscardAlpha, ImageDrawingOptions options)
+{
+    RefPtr image = renderingMode() == RenderingMode::Accelerated ? frame.acceleratedNativeImage() : nullptr;
+    if (!image) {
+        GraphicsContext::drawVideoFrame(frame, destination, shouldDiscardAlpha, options);
+        return;
+    }
+
+    IntSize size = image->size();
+    if (options.orientation().usesWidthAsHeight())
+        size = size.transposedSize();
+    auto compositeOperator = ((shouldDiscardAlpha == ShouldDiscardAlpha::No) && image->hasAlpha()) ? CompositeOperator::SourceOver : CompositeOperator::Copy;
+    drawNativeImage(*image, destination, { { }, size }, { options, compositeOperator });
+}
+#endif
 
 void GraphicsContextSkia::drawNativeImage(const NativeImage& nativeImage, const FloatRect& destRect, const FloatRect& srcRect, ImageDrawingOptions options)
 {

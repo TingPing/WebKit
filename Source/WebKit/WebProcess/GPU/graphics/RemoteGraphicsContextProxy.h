@@ -209,7 +209,7 @@ private:
     WeakPtr<RemoteRenderingBackendProxy> m_renderingBackend;
     std::optional<WebCore::ContentsFormat> m_contentsFormat;
     ThreadSafeWeakPtr<RemoteImageBufferProxy> m_client;
-#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#if (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
     Lock m_sharedVideoFrameWriterLock;
     std::unique_ptr<SharedVideoFrameWriter> m_sharedVideoFrameWriter WTF_GUARDED_BY_LOCK(m_sharedVideoFrameWriterLock);
 #endif

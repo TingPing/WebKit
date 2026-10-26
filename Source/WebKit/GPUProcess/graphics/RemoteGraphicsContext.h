@@ -46,6 +46,7 @@ class RemoteRenderingBackend;
 class RemoteResourceCache;
 class SharedVideoFrameReader;
 struct SharedPreferencesForWebProcess;
+struct SharedVideoFrame;
 
 class RemoteGraphicsContext : public IPC::StreamMessageReceiver, public CanMakeWeakPtr<RemoteGraphicsContext> {
 public:
@@ -106,7 +107,7 @@ public:
     void drawBadgeSystemImage(std::optional<WebCore::RenderingResourceIdentifier> imageIdentifier, const WebCore::FloatRect& destinationRect);
 #endif
     void drawSystemImage(Ref<WebCore::SystemImage>&&, const WebCore::FloatRect&);
-#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#if (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
     void drawVideoFrame(SharedVideoFrame&&, const WebCore::FloatRect& destination, WebCore::ShouldDiscardAlpha, WebCore::ImageDrawingOptions);
 #endif
     void drawPatternNativeImage(WebCore::RenderingResourceIdentifier imageIdentifier, const WebCore::FloatRect& destRect, const WebCore::FloatRect& tileRect, const WebCore::AffineTransform&, const WebCore::FloatPoint&, const WebCore::FloatSize& spacing, WebCore::ImageDrawingOptions);
@@ -179,7 +180,7 @@ protected:
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) override;
 
-#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#if (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
     SharedVideoFrameReader& sharedVideoFrameReader();
     void setSharedVideoFrameSemaphore(IPC::Semaphore&&);
     void setSharedVideoFrameMemory(WebCore::SharedMemory::Handle&&);
@@ -189,7 +190,7 @@ protected:
     const Ref<RemoteRenderingBackend> m_renderingBackend;
     const Ref<RemoteSharedResourceCache> m_sharedResourceCache;
     const RefPtr<WebCore::ControlFactory> m_controlFactory;
-#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#if (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
     const std::unique_ptr<SharedVideoFrameReader> m_sharedVideoFrameReader;
 #endif
 };

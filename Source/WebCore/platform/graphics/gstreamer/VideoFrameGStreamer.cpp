@@ -27,6 +27,7 @@
 #include "BitmapImage.h"
 #include "GLContext.h"
 #include "GStreamerCommon.h"
+#include "GStreamerSkiaUtilities.h"
 #include "GStreamerVideoFrameConverter.h"
 #include "GraphicsContext.h"
 #include "ImageGStreamer.h"
@@ -55,6 +56,8 @@
 
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkPixmap.h>
+#include <skia/gpu/ganesh/GrDirectContext.h>
+#include <skia/gpu/ganesh/SkImageGanesh.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 GST_DEBUG_CATEGORY(webkit_video_frame_debug);
@@ -763,6 +766,36 @@ RefPtr<NativeImage> VideoFrame::copyNativeImage() const
         return nullptr;
     return NativeImage::create(image->image());
 }
+
+#if USE(SKIA)
+RefPtr<NativeImage> VideoFrameGStreamer::acceleratedNativeImage() const
+{
+    if (m_memoryType != MemoryType::System || !GST_VIDEO_INFO_IS_YUV(&m_info.info))
+        return nullptr;
+
+    auto* glContext = PlatformDisplay::sharedDisplay().skiaGLContext();
+    if (!glContext || !glContext->makeContextCurrent())
+        return nullptr;
+
+    auto* grContext = PlatformDisplay::sharedDisplay().skiaGrContext();
+    if (!grContext)
+        return nullptr;
+
+    GstMappedFrame mappedFrame(m_sample, GST_MAP_READ);
+    if (!mappedFrame)
+        return nullptr;
+
+    auto pixmaps = skiaYUVAPixmaps(mappedFrame);
+    if (!pixmaps.isValid())
+        return nullptr;
+
+    // The planes are uploaded right away, so the frame can be unmapped once this returns.
+    auto image = SkImages::TextureFromYUVAPixmaps(grContext, pixmaps, skgpu::Mipmapped::kNo, false, skiaColorSpaceForYUV(mappedFrame.info()));
+    if (!image)
+        return nullptr;
+    return NativeImage::create(WTF::move(image));
+}
+#endif
 
 GRefPtr<GstSample> VideoFrameGStreamer::resizedSample(const IntSize& destinationSize)
 {

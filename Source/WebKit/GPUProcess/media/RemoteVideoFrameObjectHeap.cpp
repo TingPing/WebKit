@@ -195,13 +195,12 @@ void RemoteVideoFrameObjectHeap::setSharedVideoFrameMemory(SharedMemory::Handle&
 {
     m_sharedVideoFrameReader.setSharedMemory(WTF::move(handle));
 }
+#endif
 
 RefPtr<WebCore::VideoFrame> RemoteVideoFrameObjectHeap::get(RemoteVideoFrameReadReference&& read)
 {
     return m_heap.read(WTF::move(read), 0_s);
 }
-
-#endif
 
 void RemoteVideoFrameObjectHeap::lowMemoryHandler()
 {

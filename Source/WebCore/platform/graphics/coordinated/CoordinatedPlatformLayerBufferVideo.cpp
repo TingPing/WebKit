@@ -30,6 +30,7 @@
 #if USE(COORDINATED_GRAPHICS) && !USE(TEXTURE_MAPPER) && ENABLE(VIDEO) && USE(GSTREAMER)
 #include "CoordinatedPlatformLayerBufferSkiaImage.h"
 #include "GLFence.h"
+#include "GStreamerSkiaUtilities.h"
 #include "ImageOrientation.h"
 #include "PlatformDisplay.h"
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
@@ -187,90 +188,6 @@ static bool isSinglePlaneGLMemory(GstGLMemory* memory, GstVideoInfo* videoInfo, 
 }
 #endif // USE(GSTREAMER_GL)
 
-static SkYUVColorSpace skiaYUVColorSpace(const GstVideoColorimetry& colorimetry)
-{
-    bool isFullRange = colorimetry.range == GST_VIDEO_COLOR_RANGE_0_255;
-    switch (colorimetry.matrix) {
-    case GST_VIDEO_COLOR_MATRIX_BT709:
-        return isFullRange ? kRec709_Full_SkYUVColorSpace : kRec709_Limited_SkYUVColorSpace;
-    case GST_VIDEO_COLOR_MATRIX_BT2020:
-        return isFullRange ? kBT2020_8bit_Full_SkYUVColorSpace : kBT2020_8bit_Limited_SkYUVColorSpace;
-    case GST_VIDEO_COLOR_MATRIX_SMPTE240M:
-        return isFullRange ? kSMPTE240_Full_SkYUVColorSpace : kSMPTE240_Limited_SkYUVColorSpace;
-    case GST_VIDEO_COLOR_MATRIX_FCC:
-        return isFullRange ? kFCC_Full_SkYUVColorSpace : kFCC_Limited_SkYUVColorSpace;
-    default:
-        // Default to bt601. This is the same behaviour as GStreamer's glcolorconvert element.
-        return isFullRange ? kJPEG_Full_SkYUVColorSpace : kRec601_Limited_SkYUVColorSpace;
-    }
-}
-
-static std::optional<SkYUVAInfo> buildYUVAInfoFromMappedFrame(GstMappedFrame& mappedFrame)
-{
-    auto planeConfig = SkYUVAInfo::PlaneConfig::kUnknown;
-    auto subsampling = SkYUVAInfo::Subsampling::kUnknown;
-    switch (GST_VIDEO_INFO_FORMAT(mappedFrame.info())) {
-    case GST_VIDEO_FORMAT_BGRx:
-    case GST_VIDEO_FORMAT_RGBx:
-    case GST_VIDEO_FORMAT_BGRA:
-    case GST_VIDEO_FORMAT_RGBA:
-        planeConfig = SkYUVAInfo::PlaneConfig::kYUVA;
-        subsampling = SkYUVAInfo::Subsampling::k444;
-        break;
-    case GST_VIDEO_FORMAT_I420:
-        planeConfig = SkYUVAInfo::PlaneConfig::kY_U_V;
-        subsampling = SkYUVAInfo::Subsampling::k420;
-        break;
-    case GST_VIDEO_FORMAT_YV12:
-        planeConfig = SkYUVAInfo::PlaneConfig::kY_V_U;
-        subsampling = SkYUVAInfo::Subsampling::k420;
-        break;
-    case GST_VIDEO_FORMAT_NV12:
-    case GST_VIDEO_FORMAT_P010_10LE:
-        planeConfig = SkYUVAInfo::PlaneConfig::kY_UV;
-        subsampling = SkYUVAInfo::Subsampling::k420;
-        break;
-    case GST_VIDEO_FORMAT_NV21:
-        planeConfig = SkYUVAInfo::PlaneConfig::kY_VU;
-        subsampling = SkYUVAInfo::Subsampling::k420;
-        break;
-    case GST_VIDEO_FORMAT_Y444:
-        planeConfig = SkYUVAInfo::PlaneConfig::kY_U_V;
-        subsampling = SkYUVAInfo::Subsampling::k444;
-        break;
-    case GST_VIDEO_FORMAT_Y41B:
-        planeConfig = SkYUVAInfo::PlaneConfig::kY_U_V;
-        subsampling = SkYUVAInfo::Subsampling::k411;
-        break;
-    case GST_VIDEO_FORMAT_Y42B:
-        planeConfig = SkYUVAInfo::PlaneConfig::kY_U_V;
-        subsampling = SkYUVAInfo::Subsampling::k422;
-        break;
-    case GST_VIDEO_FORMAT_A420:
-        planeConfig = SkYUVAInfo::PlaneConfig::kY_U_V_A;
-        subsampling = SkYUVAInfo::Subsampling::k420;
-        break;
-    default:
-        break;
-    }
-
-    if (planeConfig == SkYUVAInfo::PlaneConfig::kUnknown) {
-        LOG_ERROR("Failed to create Skia image for video buffer: unsupported buffer format");
-        return std::nullopt;
-    }
-
-    return SkYUVAInfo(SkISize::Make(mappedFrame.width(), mappedFrame.height()), planeConfig, subsampling, skiaYUVColorSpace(GST_VIDEO_INFO_COLORIMETRY(mappedFrame.info())));
-}
-
-static sk_sp<SkColorSpace> colorSpaceFromVideoInfo(const GstVideoInfo* videoInfo)
-{
-    const auto& colorimetry = GST_VIDEO_INFO_COLORIMETRY(videoInfo);
-    if (gst_video_colorimetry_matches(&colorimetry, GST_VIDEO_COLORIMETRY_BT2100_PQ))
-        return SkColorSpace::MakeRGB(SkNamedTransferFn::kPQ, SkNamedGamut::kRec2020);
-    // The transfer function of SDR frames is not converted, as when GStreamer converts them to RGB.
-    return SkColorSpace::MakeSRGB();
-}
-
 void CoordinatedPlatformLayerBufferVideo::createSkiaImageIfNeeded(const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext, bool gstGLEnabled, Origin origin)
 {
     const auto& sample = m_videoFrame->sample();
@@ -398,7 +315,7 @@ void CoordinatedPlatformLayerBufferVideo::createSkiaImageForSinglePlaneGLMemory(
 
 void CoordinatedPlatformLayerBufferVideo::createSkiaImageForYUVGLMemory(std::unique_ptr<GstMappedFrame>&& mappedFrame, const sk_sp<GrContextThreadSafeProxy>& threadSafeGrContext, Origin origin)
 {
-    auto info = buildYUVAInfoFromMappedFrame(*mappedFrame);
+    auto info = skiaYUVAInfo(*mappedFrame);
     if (!info)
         return;
 
@@ -420,7 +337,7 @@ void CoordinatedPlatformLayerBufferVideo::createSkiaImageForYUVGLMemory(std::uni
     for (unsigned i = 0; i < planeCount; ++i)
         planeContexts[i] = makeUnique<PromiseGLVideoPlaneContext>(context.copyRef(), i).release();
 
-    m_image = SkImages::PromiseTextureFromYUVA(threadSafeGrContext, yuvaBackendTexturesInfo, colorSpaceFromVideoInfo(videoInfo),
+    m_image = SkImages::PromiseTextureFromYUVA(threadSafeGrContext, yuvaBackendTexturesInfo, skiaColorSpaceForYUV(videoInfo),
         +[](void* userData) -> sk_sp<GrPromiseImageTexture> {
             auto& planeContext = *static_cast<PromiseGLVideoPlaneContext*>(userData);
             return planeContext.context->promiseImageTexture(planeContext.index);
@@ -433,31 +350,11 @@ void CoordinatedPlatformLayerBufferVideo::createSkiaImageForYUVGLMemory(std::uni
 
 void CoordinatedPlatformLayerBufferVideo::createYUVAPixmapsForMainMemory(std::unique_ptr<GstMappedFrame>&& mappedFrame)
 {
-    auto info = buildYUVAInfoFromMappedFrame(*mappedFrame);
-    if (!info)
+    m_yuvaPixmaps = skiaYUVAPixmaps(*mappedFrame);
+    if (!m_yuvaPixmaps.isValid())
         return;
 
-    std::array<size_t, SkYUVAInfo::kMaxPlanes> rowBytes { };
-    unsigned planeCount = GST_VIDEO_INFO_N_PLANES(mappedFrame->info());
-    for (unsigned i = 0; i < planeCount && i < SkYUVAInfo::kMaxPlanes; ++i)
-        rowBytes[i] = mappedFrame->planeStride(i);
-
-    SkYUVAPixmapInfo pixmapInfo(*info, SkYUVAPixmapInfo::DataType::kUnorm8, rowBytes.data());
-    if (!pixmapInfo.isValid() || pixmapInfo.numPlanes() != static_cast<int>(planeCount)) {
-        LOG_ERROR("Failed to create Skia image for YUV video buffer: invalid plane layout");
-        return;
-    }
-
-    std::array<SkPixmap, SkYUVAInfo::kMaxPlanes> pixmaps;
-    for (unsigned i = 0; i < planeCount; ++i) {
-        auto planeData = mappedFrame->planeData(i);
-        if (planeData.size() < pixmapInfo.planeInfo(i).computeByteSize(pixmapInfo.rowBytes(i)))
-            return;
-        pixmaps[i] = SkPixmap(pixmapInfo.planeInfo(i), planeData.data(), pixmapInfo.rowBytes(i));
-    }
-
-    m_yuvaPixmaps = SkYUVAPixmaps::FromExternalPixmaps(*info, pixmaps.data());
-    m_yuvaColorSpace = colorSpaceFromVideoInfo(mappedFrame->info());
+    m_yuvaColorSpace = skiaColorSpaceForYUV(mappedFrame->info());
     m_mappedFrame = WTF::move(mappedFrame);
 }
 

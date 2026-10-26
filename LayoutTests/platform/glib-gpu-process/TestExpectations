@@ -20,12 +20,10 @@ fast/canvas/canvas-ellipse-connecting-line.html [ ImageOnlyFailure ]
 fast/canvas/webgl/simulated-vertexAttrib0-invalid-indicies.html [ Failure ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
-# Media. It is still played in the web process, which has no GPU to convert video frames.
+# Media
 #////////////////////////////////////////////////////////////////////////////////////////
 
-webgl/tex-2d-video-no-change-wrap.html [ Failure ]
+# Fails in-process only, webkit.org/b/314312.
+media/media-sources-selection.html [ Pass ]
 
-# videoconvert turns limited-range white into 253 instead of 255.
-media/track/track-webvtt-no-snap-to-lines-overlap.html [ ImageOnlyFailure ]
-media/track/track-webvtt-snap-to-lines-inline-style.html [ ImageOnlyFailure ]
-media/track/track-webvtt-snap-to-lines-left-right.html [ ImageOnlyFailure ]
+webgl/tex-2d-video-no-change-wrap.html [ Failure ]

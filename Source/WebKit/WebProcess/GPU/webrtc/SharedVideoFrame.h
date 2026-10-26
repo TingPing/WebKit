@@ -25,12 +25,11 @@
 
 #pragma once
 
-#if ENABLE(GPU_PROCESS) && PLATFORM(COCOA) && ENABLE(VIDEO)
+#if ENABLE(GPU_PROCESS) && (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(VIDEO)
 
 #include "IPCSemaphore.h"
 #include "RemoteVideoFrameIdentifier.h"
 #include <WebCore/IntSize.h>
-#include <WebCore/PixelBufferConformerCV.h>
 #include <WebCore/PlatformVideoColorSpace.h>
 #include <WebCore/ProcessIdentity.h>
 #include <WebCore/SharedMemory.h>
@@ -38,12 +37,18 @@
 #include <wtf/Atomics.h>
 #include <wtf/MediaTime.h>
 #include <wtf/RefPtr.h>
-#include <wtf/RetainPtr.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/UniqueRef.h>
 
+#if PLATFORM(COCOA)
+#include <WebCore/PixelBufferConformerCV.h>
+#include <wtf/RetainPtr.h>
+
 typedef struct CF_BRIDGED_TYPE(id) __CVBuffer* CVPixelBufferRef;
 typedef struct __CVPixelBufferPool* CVPixelBufferPoolRef;
+#else
+#include "GStreamerVideoFrameLayout.h"
+#endif
 
 namespace WebCore {
 class SharedVideoFrameInfo;
@@ -66,7 +71,12 @@ struct SharedVideoFrame {
     WebCore::VideoFrameRotation rotation { };
     WebCore::PlatformVideoColorSpace colorSpace;
     bool shouldIgnoreAlpha { false };
+#if PLATFORM(COCOA)
     using Buffer = Variant<std::nullptr_t, RemoteVideoFrameReadReference, MachSendRight, WebCore::IntSize>;
+#else
+    // The planes are either copied into the shared memory with this layout, or the frame is in the GPU process.
+    using Buffer = Variant<GStreamerVideoFrameLayout, RemoteVideoFrameReadReference>;
+#endif
     Buffer buffer;
 };
 
@@ -76,9 +86,11 @@ public:
     SharedVideoFrameWriter();
 
     std::optional<SharedVideoFrame> write(const WebCore::VideoFrame&, NOESCAPE const Function<void(IPC::Semaphore&)>&, NOESCAPE const Function<void(WebCore::SharedMemory::Handle&&)>&);
+#if PLATFORM(COCOA)
     std::optional<SharedVideoFrame::Buffer> writeBuffer(CVPixelBufferRef, NOESCAPE const Function<void(IPC::Semaphore&)>&, NOESCAPE const Function<void(WebCore::SharedMemory::Handle&&)>&, bool canSendIOSurface = true);
 #if USE(LIBWEBRTC)
     std::optional<SharedVideoFrame::Buffer> writeBuffer(const webrtc::VideoFrame&, NOESCAPE const Function<void(IPC::Semaphore&)>&, NOESCAPE const Function<void(WebCore::SharedMemory::Handle&&)>&);
+#endif
 #endif
     std::optional<SharedVideoFrame::Buffer> writeBuffer(const WebCore::VideoFrame&, NOESCAPE const Function<void(IPC::Semaphore&)>&, NOESCAPE const Function<void(WebCore::SharedMemory::Handle&&)>&);
 
@@ -90,16 +102,22 @@ private:
 
     bool wait(NOESCAPE const Function<void(IPC::Semaphore&)>&);
     bool allocateStorage(size_t, NOESCAPE const Function<void(WebCore::SharedMemory::Handle&&)>&);
+#if PLATFORM(COCOA)
     bool prepareWriting(const WebCore::SharedVideoFrameInfo&, NOESCAPE const Function<void(IPC::Semaphore&)>&, NOESCAPE const Function<void(WebCore::SharedMemory::Handle&&)>&);
+#else
+    bool prepareWriting(size_t, NOESCAPE const Function<void(IPC::Semaphore&)>&, NOESCAPE const Function<void(WebCore::SharedMemory::Handle&&)>&);
+#endif
 
-#if USE(LIBWEBRTC)
+#if PLATFORM(COCOA) && USE(LIBWEBRTC)
     std::optional<SharedVideoFrame::Buffer> writeBuffer(webrtc::VideoFrameBuffer&, NOESCAPE const Function<void(IPC::Semaphore&)>&, NOESCAPE const Function<void(WebCore::SharedMemory::Handle&&)>&);
 #endif
     void signalInCaseOfError();
 
     UniqueRef<IPC::Semaphore> m_semaphore;
     RefPtr<WebCore::SharedMemory> m_storage;
+#if PLATFORM(COCOA)
     std::unique_ptr<WebCore::PixelBufferConformerCV> m_compressedPixelBufferConformer;
+#endif
     bool m_isSemaphoreInUse { false };
     // Written by disable() from another thread without holding any lock, so that a writer
     // blocked in wait() while holding m_encodersConnectionLock can be unblocked without deadlock.
@@ -114,32 +132,46 @@ class SharedVideoFrameReader {
 public:
     ~SharedVideoFrameReader();
 
+#if PLATFORM(COCOA)
     enum class UseIOSurfaceBufferPool : bool { No, Yes };
     explicit SharedVideoFrameReader(RefPtr<RemoteVideoFrameObjectHeap>&&, const WebCore::ProcessIdentity& = { }, UseIOSurfaceBufferPool = UseIOSurfaceBufferPool::Yes);
+#else
+    explicit SharedVideoFrameReader(RefPtr<RemoteVideoFrameObjectHeap>&&, const WebCore::ProcessIdentity& = { });
+#endif
     SharedVideoFrameReader();
 
     void setSemaphore(IPC::Semaphore&& semaphore) { m_semaphore = WTF::move(semaphore); }
     bool setSharedMemory(WebCore::SharedMemory::Handle&&);
 
     RefPtr<WebCore::VideoFrame> read(SharedVideoFrame&&);
+#if PLATFORM(COCOA)
     RetainPtr<CVPixelBufferRef> readBuffer(SharedVideoFrame::Buffer&&);
+#endif
 
 private:
+#if PLATFORM(COCOA)
     CVPixelBufferPoolRef pixelBufferPool(const WebCore::SharedVideoFrameInfo&);
     RetainPtr<CVPixelBufferRef> readBufferFromSharedMemory();
+#else
+    RefPtr<WebCore::VideoFrame> readFromSharedMemory(const GStreamerVideoFrameLayout&, SharedVideoFrame&);
+#endif
 
     const RefPtr<RemoteVideoFrameObjectHeap> m_objectHeap;
+#if PLATFORM(COCOA)
     WebCore::ProcessIdentity m_resourceOwner;
     UseIOSurfaceBufferPool m_useIOSurfaceBufferPool { UseIOSurfaceBufferPool::No };
+#endif
     std::optional<IPC::Semaphore> m_semaphore;
     RefPtr<WebCore::SharedMemory> m_storage;
 
+#if PLATFORM(COCOA)
     RetainPtr<CVPixelBufferPoolRef> m_bufferPool;
     OSType m_bufferPoolType { 0 };
     uint32_t m_bufferPoolWidth { 0 };
     uint32_t m_bufferPoolHeight { 0 };
     WebCore::IntSize m_blackFrameSize;
     RetainPtr<CVPixelBufferRef> m_blackFrame;
+#endif
 };
 
 }
