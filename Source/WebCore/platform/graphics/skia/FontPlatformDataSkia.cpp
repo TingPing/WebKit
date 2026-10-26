@@ -241,22 +241,35 @@ RefPtr<SharedBuffer> FontPlatformData::openTypeTable(uint32_t table) const
 
 FontPlatformData FontPlatformData::create(const Attributes& data, const FontCustomPlatformData* custom)
 {
+    return create(data, custom, nullptr);
+}
+
+FontPlatformData FontPlatformData::create(const Attributes& data, const FontCustomPlatformData* custom, sk_sp<SkTypeface>&& typeface)
+{
+    if (custom)
+        typeface = data.m_variations.isEmpty() ? custom->m_typeface : custom->retrieveOrAddCachedTypeface(data.m_variations);
+    else if (!typeface)
+        typeface = FontCache::forCurrentThread().fontManager().matchFamilyStyle(data.m_familyName.c_str(), data.m_style);
+
     Vector<hb_feature_t> features = data.m_features;
-    if (custom) {
-        sk_sp<SkTypeface> typeface = custom->m_typeface;
-        return { WTF::move(typeface), data.m_metadata, WTF::move(features), custom };
-    }
-    sk_sp<SkTypeface> typeface = FontCache::forCurrentThread().fontManager().matchFamilyStyle(data.m_familyName.c_str(), data.m_style);
-    return { WTF::move(typeface), data.m_metadata, WTF::move(features) };
+    FontPlatformData platformData { WTF::move(typeface), data.m_metadata, WTF::move(features), custom };
+    platformData.m_font.setEdging(data.m_edging);
+    platformData.m_font.setHinting(data.m_hinting);
+    platformData.m_font.setSubpixel(data.m_isSubpixel);
+    platformData.m_font.setLinearMetrics(data.m_hinting == SkFontHinting::kNone && data.m_isSubpixel);
+    return platformData;
 }
 
 FontPlatformData::Attributes FontPlatformData::attributes() const
 {
+    const auto& typeface = *skFont().getTypeface();
     SkString familyName;
-    skFont().getTypeface()->getFamilyName(&familyName);
-    SkFontStyle style = skFont().getTypeface()->fontStyle();
+    typeface.getFamilyName(&familyName);
+    Vector<SkFontArguments::VariationPosition::Coordinate> variations(std::max(typeface.getVariationDesignPosition({ }), 0));
+    if (!variations.isEmpty())
+        variations.shrink(std::max(typeface.getVariationDesignPosition(variations.mutableSpan()), 0));
     Vector<hb_feature_t> features = m_features;
-    return { m_metadata, familyName, style, WTF::move(features) };
+    return { m_metadata, familyName, typeface.fontStyle(), WTF::move(features), WTF::move(variations), m_font.getEdging(), m_font.getHinting(), m_font.isSubpixel(), std::nullopt };
 }
 
 hb_font_t* FontPlatformData::hbFont() const

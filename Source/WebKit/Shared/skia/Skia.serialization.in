@@ -26,3 +26,24 @@ header: <skia/core/SkFontStyle.h>
     int width();
     SkFontStyle::Slant slant();
 };
+
+header: <skia/core/SkFont.h>
+[CustomHeader, Nested] enum class SkFont::Edging : int {
+    kAlias,
+    kAntiAlias,
+    kSubpixelAntiAlias,
+};
+
+header: <skia/core/SkFontTypes.h>
+[CustomHeader] enum class SkFontHinting : int {
+    kNone,
+    kSlight,
+    kNormal,
+    kFull,
+};
+
+header: <skia/core/SkFontArguments.h>
+[CustomHeader, Nested] struct SkFontArguments::VariationPosition::Coordinate {
+    uint32_t axis;
+    float value;
+};

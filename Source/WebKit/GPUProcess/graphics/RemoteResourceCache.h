@@ -35,6 +35,12 @@
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
 
+#if USE(SKIA)
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/core/SkTypeface.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
+#endif
+
 namespace WebCore {
 
 class Filter;
@@ -78,6 +84,11 @@ public:
     bool releaseFontCustomPlatformData(WebCore::RenderingResourceIdentifier);
     RefPtr<WebCore::FontCustomPlatformData> cachedFontCustomPlatformData(WebCore::RenderingResourceIdentifier) const;
 
+#if USE(SKIA)
+    bool cacheTypeface(WebCore::RenderingResourceIdentifier, sk_sp<SkTypeface>&&);
+    sk_sp<SkTypeface> cachedTypeface(WebCore::RenderingResourceIdentifier) const;
+#endif
+
     bool cacheDisplayList(RemoteDisplayListIdentifier, Ref<const WebCore::DisplayList::DisplayList>);
     RefPtr<const WebCore::DisplayList::DisplayList> cachedDisplayList(RemoteDisplayListIdentifier) const;
     bool releaseDisplayList(RemoteDisplayListIdentifier);
@@ -92,6 +103,9 @@ private:
     HashMap<WebCore::RenderingResourceIdentifier, Ref<WebCore::Filter>> m_filters;
     HashMap<WebCore::RenderingResourceIdentifier, Ref<SharedFont>> m_fonts;
     HashMap<WebCore::RenderingResourceIdentifier, Ref<WebCore::FontCustomPlatformData>> m_fontCustomPlatformDatas;
+#if USE(SKIA)
+    HashMap<WebCore::RenderingResourceIdentifier, sk_sp<SkTypeface>> m_typefaces;
+#endif
     HashMap<RemotePathImplIdentifier, Ref<WebCore::PathImpl>> m_paths;
     HashMap<RemoteDisplayListIdentifier, Ref<const WebCore::DisplayList::DisplayList>> m_displayLists;
 };

@@ -135,6 +135,18 @@ RefPtr<FontCustomPlatformData> RemoteResourceCache::cachedFontCustomPlatformData
     return m_fontCustomPlatformDatas.get(identifier);
 }
 
+#if USE(SKIA)
+bool RemoteResourceCache::cacheTypeface(RenderingResourceIdentifier identifier, sk_sp<SkTypeface>&& typeface)
+{
+    return m_typefaces.add(identifier, WTF::move(typeface)).isNewEntry;
+}
+
+sk_sp<SkTypeface> RemoteResourceCache::cachedTypeface(RenderingResourceIdentifier identifier) const
+{
+    return m_typefaces.get(identifier);
+}
+#endif
+
 bool RemoteResourceCache::cacheDisplayList(RemoteDisplayListIdentifier identifier, Ref<const DisplayList::DisplayList> displayList)
 {
     return m_displayLists.add(identifier, displayList).isNewEntry;
@@ -164,6 +176,9 @@ void RemoteResourceCache::releaseMemory()
     m_fonts.clear();
     m_paths.clear();
     m_fontCustomPlatformDatas.clear();
+#if USE(SKIA)
+    m_typefaces.clear();
+#endif
     m_displayLists.clear();
 }
 

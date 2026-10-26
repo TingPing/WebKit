@@ -172,7 +172,7 @@ FontCustomPlatformSerializedData FontCustomPlatformData::serializedData() const
     return FontCustomPlatformSerializedData { creationData.fontFaceData, creationData.itemInCollection, m_renderingResourceIdentifier };
 }
 
-sk_sp<SkTypeface> FontCustomPlatformData::retrieveOrAddCachedTypeface(const Vector<SkFontArguments::VariationPosition::Coordinate>& variationsToBeApplied)
+sk_sp<SkTypeface> FontCustomPlatformData::retrieveOrAddCachedTypeface(const Vector<SkFontArguments::VariationPosition::Coordinate>& variationsToBeApplied) const
 {
     WTF::Hasher variationHasher;
     for (auto& coordinate : variationsToBeApplied) {

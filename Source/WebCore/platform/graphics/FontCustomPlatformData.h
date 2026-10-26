@@ -104,7 +104,7 @@ public:
     }
 
 #if USE(SKIA)
-    sk_sp<SkTypeface> retrieveOrAddCachedTypeface(const Vector<SkFontArguments::VariationPosition::Coordinate>&);
+    sk_sp<SkTypeface> retrieveOrAddCachedTypeface(const Vector<SkFontArguments::VariationPosition::Coordinate>&) const;
     void clearVariationTypefacesCache() const;
     void clearUnusedVariationTypefacesCacheEntries() const;
 #endif

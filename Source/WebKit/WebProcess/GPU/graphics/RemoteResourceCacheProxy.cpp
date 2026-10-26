@@ -38,6 +38,12 @@
 #include <WebCore/FontCustomPlatformData.h>
 #include <wtf/TZoneMallocInlines.h>
 
+#if USE(SKIA)
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/core/SkTypeface.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -201,7 +207,12 @@ void RemoteResourceCacheProxy::recordFontUse(FontBase& font)
 
     if (result.isNewEntry) {
         auto renderingResourceIdentifier = font.platformData().customPlatformData() ? std::optional(font.platformData().customPlatformData()->m_renderingResourceIdentifier) : std::nullopt;
-        m_remoteRenderingBackendProxy->cacheFont(font.attributes(), font.platformData().attributes(), renderingResourceIdentifier);
+        auto platformDataAttributes = font.platformData().attributes();
+#if USE(SKIA)
+        if (!renderingResourceIdentifier)
+            platformDataAttributes.m_typefaceIdentifier = recordTypefaceUse(*font.platformData().skFont().getTypeface());
+#endif
+        m_remoteRenderingBackendProxy->cacheFont(font.attributes(), platformDataAttributes, renderingResourceIdentifier);
         ++m_numberOfFontsUsedInCurrentRenderingUpdate;
         return;
     }
@@ -229,6 +240,19 @@ void RemoteResourceCacheProxy::recordFontCustomPlatformDataUse(const FontCustomP
         ++m_numberOfFontCustomPlatformDatasUsedInCurrentRenderingUpdate;
     }
 }
+
+#if USE(SKIA)
+std::optional<RenderingResourceIdentifier> RemoteResourceCacheProxy::recordTypefaceUse(const SkTypeface& typeface)
+{
+    if (auto identifier = m_typefaces.getOptional(typeface.uniqueID()))
+        return *identifier;
+
+    auto identifier = m_remoteRenderingBackendProxy->cacheTypeface(typeface);
+    if (identifier)
+        m_typefaces.add(typeface.uniqueID(), *identifier);
+    return identifier;
+}
+#endif
 
 RemoteDisplayListIdentifier RemoteResourceCacheProxy::recordDisplayListUse(const DisplayList::DisplayList& displayList)
 {
@@ -320,6 +344,9 @@ void RemoteResourceCacheProxy::releaseFontCustomPlatformDatas()
 {
     m_fontCustomPlatformDatas.clear();
     m_numberOfFontCustomPlatformDatasUsedInCurrentRenderingUpdate = 0;
+#if USE(SKIA)
+    m_typefaces.clear();
+#endif
 }
 
 void RemoteResourceCacheProxy::finalizeRenderingUpdateForFonts()

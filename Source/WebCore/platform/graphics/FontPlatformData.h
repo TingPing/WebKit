@@ -43,9 +43,12 @@
 #if USE(CAIRO)
 #include "RefPtrCairo.h"
 #elif USE(SKIA)
+#include <WebCore/RenderingResourceIdentifier.h>
 #include <hb.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkFont.h>
+#include <skia/core/SkFontArguments.h>
+#include <skia/core/SkFontTypes.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #endif
 
@@ -131,11 +134,16 @@ struct FontPlatformDataAttributes {
 #endif
 
 #if USE(SKIA)
-    FontPlatformDataAttributes(const FontMetadata& metadata, SkString familyName, SkFontStyle style, Vector<hb_feature_t>&& features)
+    FontPlatformDataAttributes(const FontMetadata& metadata, SkString familyName, SkFontStyle style, Vector<hb_feature_t>&& features, Vector<SkFontArguments::VariationPosition::Coordinate>&& variations, SkFont::Edging edging, SkFontHinting hinting, bool isSubpixel, std::optional<RenderingResourceIdentifier> typefaceIdentifier)
         : m_metadata(metadata)
         , m_familyName(familyName)
         , m_style(style)
         , m_features(WTF::move(features))
+        , m_variations(WTF::move(variations))
+        , m_edging(edging)
+        , m_hinting(hinting)
+        , m_isSubpixel(isSubpixel)
+        , m_typefaceIdentifier(typefaceIdentifier)
         { }
 #endif
 
@@ -152,6 +160,13 @@ struct FontPlatformDataAttributes {
     SkString m_familyName;
     SkFontStyle m_style;
     Vector<hb_feature_t> m_features;
+    Vector<SkFontArguments::VariationPosition::Coordinate> m_variations;
+    // How the font is rasterized, which depends on the settings of the process that created it.
+    SkFont::Edging m_edging { SkFont::Edging::kAntiAlias };
+    SkFontHinting m_hinting { SkFontHinting::kNormal };
+    bool m_isSubpixel { false };
+    // A typeface sent to the GPU process with its data, so it doesn't have to be found by name.
+    std::optional<RenderingResourceIdentifier> m_typefaceIdentifier;
 #endif
 };
 
@@ -333,6 +348,9 @@ public:
     using Attributes = FontPlatformDataAttributes;
 
     WEBCORE_EXPORT static FontPlatformData create(const Attributes&, const FontCustomPlatformData*);
+#if USE(SKIA)
+    WEBCORE_EXPORT static FontPlatformData create(const Attributes&, const FontCustomPlatformData*, sk_sp<SkTypeface>&&);
+#endif
 
     WEBCORE_EXPORT FontPlatformData(const FontPlatformData&);
     WEBCORE_EXPORT FontPlatformData& operator=(const FontPlatformData&);

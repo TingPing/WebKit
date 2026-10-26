@@ -88,6 +88,15 @@
 #include <WebCore/SkiaRecordingResult.h>
 #endif
 
+#if USE(SKIA)
+#include "SharedBufferReference.h"
+#include <WebCore/FontCache.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/core/SkStream.h>
+#include <skia/core/SkTypeface.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
+#endif
+
 #if HAVE(SHAPE_DETECTION_API_IMPLEMENTATION)
 #import <WebCore/BarcodeDetectorImplementation.h>
 #import <WebCore/FaceDetectorImplementation.h>
@@ -542,7 +551,16 @@ void RemoteRenderingBackend::cacheFont(const Font::Attributes& fontAttributes, F
         MESSAGE_CHECK(customPlatformData, "CacheFont without caching custom data");
     }
 
+#if USE(SKIA)
+    sk_sp<SkTypeface> typeface;
+    if (platformData.m_typefaceIdentifier) {
+        typeface = m_remoteResourceCache.cachedTypeface(*platformData.m_typefaceIdentifier);
+        MESSAGE_CHECK(typeface, "CacheFont without caching its typeface");
+    }
+    FontPlatformData platform = FontPlatformData::create(platformData, customPlatformData.get(), WTF::move(typeface));
+#else
     FontPlatformData platform = FontPlatformData::create(platformData, customPlatformData.get());
+#endif
 
     Ref font = SharedFont::create(platform, fontAttributes.origin, fontAttributes.isInterstitial, fontAttributes.visibility, fontAttributes.isTextOrientationFallback, fontAttributes.renderingResourceIdentifier);
 
@@ -574,6 +592,19 @@ void RemoteRenderingBackend::releaseFontCustomPlatformData(WebCore::RenderingRes
     bool success = m_remoteResourceCache.releaseFontCustomPlatformData(identifier);
     MESSAGE_CHECK(success, "FontCustomPlatformData released before being cached.");
 }
+
+#if USE(SKIA)
+void RemoteRenderingBackend::cacheTypeface(IPC::SharedBufferReference&& data, RenderingResourceIdentifier identifier)
+{
+    assertIsCurrent(workQueue());
+    auto span = data.span();
+    auto stream = SkMemoryStream::MakeCopy(span.data(), span.size());
+    auto typeface = SkTypeface::MakeDeserialize(stream.get(), sk_ref_sp(&FontCache::forCurrentThread().fontManager()));
+    MESSAGE_CHECK(typeface, "cacheTypeface couldn't deserialize the typeface");
+    bool success = m_remoteResourceCache.cacheTypeface(identifier, WTF::move(typeface));
+    MESSAGE_CHECK(success, "Typeface already cached.");
+}
+#endif
 
 void RemoteRenderingBackend::cachePathImpl(Ref<WebCore::PathImpl>&& path, RemotePathImplIdentifier identifier)
 {

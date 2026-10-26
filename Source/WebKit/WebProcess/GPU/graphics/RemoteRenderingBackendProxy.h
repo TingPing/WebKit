@@ -56,6 +56,10 @@
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
 
+#if USE(SKIA)
+class SkTypeface;
+#endif
+
 namespace WebCore {
 
 class ColorSpace;
@@ -131,6 +135,9 @@ public:
     void releaseFont(WebCore::RenderingResourceIdentifier);
     void cacheFontCustomPlatformData(Ref<const WebCore::FontCustomPlatformData>&&);
     void releaseFontCustomPlatformData(WebCore::RenderingResourceIdentifier);
+#if USE(SKIA)
+    std::optional<WebCore::RenderingResourceIdentifier> cacheTypeface(const SkTypeface&);
+#endif
     void cacheGradient(Ref<WebCore::Gradient>&&, RemoteGradientIdentifier);
     void releaseGradient(RemoteGradientIdentifier);
     void cacheFilter(Ref<WebCore::Filter>&&);

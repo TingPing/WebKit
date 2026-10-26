@@ -66,6 +66,13 @@
 #include "ImageBufferRemoteCoordinatedBackend.h"
 #endif
 
+#if USE(SKIA)
+#include "SharedBufferReference.h"
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/core/SkTypeface.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
+#endif
+
 namespace WebKit {
 
 using namespace WebCore;
@@ -557,6 +564,20 @@ void RemoteRenderingBackendProxy::releaseFontCustomPlatformData(RenderingResourc
         return;
     send(Messages::RemoteRenderingBackend::ReleaseFontCustomPlatformData(identifier));
 }
+
+#if USE(SKIA)
+std::optional<RenderingResourceIdentifier> RemoteRenderingBackendProxy::cacheTypeface(const SkTypeface& typeface)
+{
+    // With its data, the GPU process doesn't have to find the typeface by name, which can find another one.
+    auto data = typeface.serialize(SkTypeface::SerializeBehavior::kDoIncludeData);
+    if (!data)
+        return std::nullopt;
+
+    auto identifier = RenderingResourceIdentifier::generate();
+    send(Messages::RemoteRenderingBackend::CacheTypeface(IPC::SharedBufferReference(SharedBuffer::create(std::span { data->bytes(), data->size() })), identifier));
+    return identifier;
+}
+#endif
 
 void RemoteRenderingBackendProxy::cacheGradient(Ref<Gradient>&& gradient, RemoteGradientIdentifier identifier)
 {

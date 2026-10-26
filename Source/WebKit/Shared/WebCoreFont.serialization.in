@@ -98,6 +98,11 @@ header: <WebCore/FontPlatformData.h>
     SkString m_familyName;
     SkFontStyle m_style;
     Vector<hb_feature_t> m_features;
+    Vector<SkFontArguments::VariationPosition::Coordinate> m_variations;
+    SkFont::Edging m_edging;
+    SkFontHinting m_hinting;
+    bool m_isSubpixel;
+    std::optional<WebCore::RenderingResourceIdentifier> m_typefaceIdentifier;
 #endif
 };
 

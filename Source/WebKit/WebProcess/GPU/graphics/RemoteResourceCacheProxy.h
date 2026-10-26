@@ -41,6 +41,10 @@
 #include <wtf/TZoneMalloc.h>
 #include <wtf/UniqueRef.h>
 
+#if USE(SKIA)
+class SkTypeface;
+#endif
+
 namespace WebCore {
 class Filter;
 class FontBase;
@@ -107,6 +111,9 @@ private:
     void LEGACY_NODELETE prepareForNextRenderingUpdate();
     void releaseFonts();
     void releaseFontCustomPlatformDatas();
+#if USE(SKIA)
+    std::optional<WebCore::RenderingResourceIdentifier> recordTypefaceUse(const SkTypeface&);
+#endif
 
     struct NativeImageEntry {
         RefPtr<WebCore::ShareableBitmap> bitmap; // Reused across GPUP crashes, held through the associated NativeImage lifetime.
@@ -124,6 +131,9 @@ private:
     using FontHashMap = HashMap<WebCore::RenderingResourceIdentifier, uint64_t>;
     FontHashMap m_fonts;
     FontHashMap m_fontCustomPlatformDatas;
+#if USE(SKIA)
+    HashMap<uint32_t, WebCore::RenderingResourceIdentifier> m_typefaces;
+#endif
 
     unsigned m_numberOfFontsUsedInCurrentRenderingUpdate { 0 };
     unsigned m_numberOfFontCustomPlatformDatasUsedInCurrentRenderingUpdate { 0 };
