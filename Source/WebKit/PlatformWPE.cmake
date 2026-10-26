@@ -494,6 +494,8 @@ endif ()
 list(APPEND WebKit_MESSAGES_IN_FILES
     GPUProcess/graphics/coordinated/RemoteCoordinatedCompositor
 
+    WebProcess/GPU/graphics/coordinated/RemoteCoordinatedCompositorProxy
+
     WebProcess/glib/SystemSettingsManager
 )
 

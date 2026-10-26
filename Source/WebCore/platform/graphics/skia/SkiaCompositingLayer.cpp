@@ -303,6 +303,19 @@ void SkiaCompositingLayer::addDamage(Damage&& damage)
         m_layerDamage = WTF::move(damage);
 }
 
+void SkiaCompositingLayer::addDamage(std::span<const IntRect> rects)
+{
+    // An empty Damage rejects everything added to it later, so it must never become the layer's damage.
+    if (!damagePropagationEnabled() || m_rect.isEmpty() || rects.empty())
+        return;
+
+    // As many cells as rects, so that none of them is united with another.
+    Damage damage(m_rect.size(), Damage::Mode::Rectangles, rects.size());
+    for (const auto& rect : rects)
+        damage.add(rect);
+    addDamage(WTF::move(damage));
+}
+
 void SkiaCompositingLayer::LayerRectTracker::recordVisit(uint64_t id, const FloatRect& rectInFrame)
 {
     auto& entry = m_entries.add(id, Entry { }).iterator->value;

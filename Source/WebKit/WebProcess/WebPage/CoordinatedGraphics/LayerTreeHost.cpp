@@ -114,7 +114,7 @@ LayerTreeHost::LayerTreeHost(WebPage& webPage)
     if (webPage.shouldRenderDOMInGPUProcess()) {
         ProcessCapabilities::setCanUseAcceleratedBuffers(false);
         WebProcess::singleton().setUsesGPUProcessForCompositing();
-        remoteCompositor = RemoteCoordinatedCompositorProxy::create(webPage, m_sceneState.get());
+        remoteCompositor = RemoteCoordinatedCompositorProxy::create(webPage, *this, m_sceneState.get());
         lazyInitialize(m_compositor, Ref { *remoteCompositor });
     } else
 #endif

@@ -59,6 +59,8 @@ list(APPEND WebKit_MESSAGES_IN_FILES
 
     UIProcess/glib/AcceleratedBackingStore
 
+    WebProcess/GPU/graphics/coordinated/RemoteCoordinatedCompositorProxy
+
     WebProcess/WebPage/ViewGestureGeometryCollector
 
     WebProcess/WebPage/CoordinatedGraphics/AcceleratedSurface

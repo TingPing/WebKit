@@ -32,7 +32,9 @@
 #include "CoordinatedSceneState.h"
 #include "DrawingArea.h"
 #include "GPUConnectionToWebProcessMessages.h"
+#include "LayerTreeHost.h"
 #include "RemoteCoordinatedCompositorMessages.h"
+#include "RemoteCoordinatedCompositorProxyMessages.h"
 #include "RemoteGraphicsContextProxy.h"
 #include "RemoteRenderingBackendProxy.h"
 #include "RenderProcessInfo.h"
@@ -132,13 +134,14 @@ static CoordinatedLayerTreeTransaction makeTransaction(PendingLayerTreeTransacti
     return transaction;
 }
 
-Ref<RemoteCoordinatedCompositorProxy> RemoteCoordinatedCompositorProxy::create(WebPage& webPage, CoordinatedSceneState& sceneState)
+Ref<RemoteCoordinatedCompositorProxy> RemoteCoordinatedCompositorProxy::create(WebPage& webPage, LayerTreeHost& layerTreeHost, CoordinatedSceneState& sceneState)
 {
-    return adoptRef(*new RemoteCoordinatedCompositorProxy(webPage, sceneState));
+    return adoptRef(*new RemoteCoordinatedCompositorProxy(webPage, layerTreeHost, sceneState));
 }
 
-RemoteCoordinatedCompositorProxy::RemoteCoordinatedCompositorProxy(WebPage& webPage, CoordinatedSceneState& sceneState)
+RemoteCoordinatedCompositorProxy::RemoteCoordinatedCompositorProxy(WebPage& webPage, LayerTreeHost& layerTreeHost, CoordinatedSceneState& sceneState)
     : m_webPage(webPage)
+    , m_layerTreeHost(&layerTreeHost)
     , m_sceneState(sceneState)
     , m_surfaceID(AcceleratedSurface::generateSurfaceID())
     , m_commitQueue(WorkQueue::create("org.webkit.RemoteCoordinatedCompositorCommit"_s))
@@ -152,6 +155,8 @@ void RemoteCoordinatedCompositorProxy::connectToGPUProcess(WebPage& webPage)
     ASSERT(RunLoop::isMain());
     Ref gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
     gpuProcessConnection->addClient(*this);
+    gpuProcessConnection->messageReceiverMap().addMessageReceiver(Messages::RemoteCoordinatedCompositorProxy::messageReceiverName(), m_surfaceID, *this);
+    m_gpuProcessConnection = gpuProcessConnection.get();
     Ref connection = gpuProcessConnection->connection();
     // Synchronous, because tile recordings reach the GPU process through another connection and need the compositor.
     connection->sendSync(Messages::GPUConnectionToWebProcess::CreateCoordinatedCompositor(m_surfaceID, webPage.webPageProxyIdentifier(), webPage.size(), webPage.deviceScaleFactor(), webPage.effectiveBackgroundColor(),
@@ -175,6 +180,9 @@ void RemoteCoordinatedCompositorProxy::invalidate()
     ASSERT(RunLoop::isMain());
     m_isInvalidated = true;
     m_didCompositeFunction = nullptr;
+    m_layerTreeHost = nullptr;
+    if (auto gpuProcessConnection = m_gpuProcessConnection.get())
+        gpuProcessConnection->messageReceiverMap().removeMessageReceiver(Messages::RemoteCoordinatedCompositorProxy::messageReceiverName(), m_surfaceID);
 
     RefPtr connection = gpuConnection();
     if (!connection)
@@ -215,6 +223,43 @@ void RemoteCoordinatedCompositorProxy::preferredBufferFormatsDidChange()
         return;
 
     connection->send(Messages::RemoteCoordinatedCompositor::PreferredBufferFormatsDidChange(webPage->preferredBufferFormats()), m_surfaceID);
+}
+#endif
+
+#if ENABLE(DAMAGE_TRACKING)
+void RemoteCoordinatedCompositorProxy::setDamagePropagationSettings(std::optional<OptionSet<DamagePropagationFlags>> flags, unsigned rectangleThreshold)
+{
+    m_damagePropagationSettings = DamagePropagationSettings { flags, rectangleThreshold };
+    sendDamageSettings();
+}
+
+void RemoteCoordinatedCompositorProxy::enableFrameDamageNotificationForTesting()
+{
+    m_shouldNotifyFrameDamageForTesting = true;
+    if (RefPtr connection = gpuConnection())
+        connection->send(Messages::RemoteCoordinatedCompositor::EnableFrameDamageNotificationForTesting(), m_surfaceID);
+}
+
+void RemoteCoordinatedCompositorProxy::sendDamageSettings()
+{
+    RefPtr connection = gpuConnection();
+    if (!connection)
+        return;
+
+    if (m_damagePropagationSettings) {
+        auto flags = m_damagePropagationSettings->flags;
+        connection->send(Messages::RemoteCoordinatedCompositor::SetDamagePropagationSettings(!!flags, flags && flags->contains(DamagePropagationFlags::Unified),
+            flags && flags->contains(DamagePropagationFlags::UseForCompositing), m_damagePropagationSettings->rectangleThreshold), m_surfaceID);
+    }
+
+    if (m_shouldNotifyFrameDamageForTesting)
+        connection->send(Messages::RemoteCoordinatedCompositor::EnableFrameDamageNotificationForTesting(), m_surfaceID);
+}
+
+void RemoteCoordinatedCompositorProxy::didRenderFrameForTesting(Region&& frameDamage)
+{
+    if (CheckedPtr layerTreeHost = m_layerTreeHost)
+        layerTreeHost->notifyFrameDamageForTesting(WTF::move(frameDamage));
 }
 #endif
 
@@ -309,7 +354,7 @@ uint64_t RemoteCoordinatedCompositorProxy::recordTiles(const IntRect& recordRect
 
 void RemoteCoordinatedCompositorProxy::requestComposition(CompositionReason reason)
 {
-    if (reason != CompositionReason::AsyncScrolling)
+    if (reason != CompositionReason::AsyncScrolling && reason != CompositionReason::VideoFrame)
         return;
 
     Locker locker { m_commitLock };
@@ -355,9 +400,10 @@ void RemoteCoordinatedCompositorProxy::fillGLInformation(RenderProcessInfo&& inf
     completionHandler(WTF::move(info));
 }
 
-void RemoteCoordinatedCompositorProxy::gpuProcessConnectionDidClose(GPUProcessConnection&)
+void RemoteCoordinatedCompositorProxy::gpuProcessConnectionDidClose(GPUProcessConnection& gpuProcessConnection)
 {
     ASSERT(RunLoop::isMain());
+    gpuProcessConnection.messageReceiverMap().removeMessageReceiver(Messages::RemoteCoordinatedCompositorProxy::messageReceiverName(), m_surfaceID);
     {
         Locker locker { m_connectionLock };
         m_gpuConnection = nullptr;
@@ -379,6 +425,9 @@ void RemoteCoordinatedCompositorProxy::gpuProcessConnectionDidClose(GPUProcessCo
     }
 
     connectToGPUProcess(*webPage);
+#if ENABLE(DAMAGE_TRACKING)
+    sendDamageSettings();
+#endif
     if (m_suspendedCount) {
         if (RefPtr connection = gpuConnection())
             connection->send(Messages::RemoteCoordinatedCompositor::SetVisible(false), m_surfaceID);

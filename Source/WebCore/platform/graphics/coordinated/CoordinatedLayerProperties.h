@@ -37,6 +37,7 @@
 #include "FloatRoundedRect.h"
 #include "FloatSize.h"
 #include "GraphicsTypes.h"
+#include "IntRect.h"
 #include "Path.h"
 #include "PlatformLayerIdentifier.h"
 #include "TransformationMatrix.h"
@@ -85,7 +86,8 @@ enum class CoordinatedLayerChange : uint64_t {
     Children                     = 1LLU << 34,
     Animations                   = 1LLU << 35,
     ContentsBuffer               = 1LLU << 36,
-    ContentsImage                = 1LLU << 37,
+    Damage                       = 1LLU << 37,
+    ContentsImage                = 1LLU << 38,
 };
 
 struct CoordinatedRemoteContentsBuffer {
@@ -134,6 +136,7 @@ struct CoordinatedLayerProperties {
     Vector<PlatformLayerIdentifier> children { };
     AcceleratedAnimations animations { };
     std::optional<CoordinatedRemoteContentsBuffer> contentsBuffer { };
+    Vector<IntRect> damage { };
 };
 
 } // namespace WebCore

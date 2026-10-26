@@ -61,6 +61,7 @@ header: <WebCore/CoordinatedLayerProperties.h>
     Children,
     Animations,
     ContentsBuffer,
+    Damage,
     ContentsImage,
 }
 
@@ -196,6 +197,7 @@ struct WebCore::CoordinatedLayerProperties {
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::Children] Vector<WebCore::PlatformLayerIdentifier> children;
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::Animations] WebCore::AcceleratedAnimations animations;
     [OptionalTupleBit=WebCore::CoordinatedLayerChange::ContentsBuffer] std::optional<WebCore::CoordinatedRemoteContentsBuffer> contentsBuffer;
+    [OptionalTupleBit=WebCore::CoordinatedLayerChange::Damage] Vector<WebCore::IntRect> damage;
 }
 
 header: "CoordinatedLayerTreeTransaction.h"

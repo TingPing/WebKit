@@ -107,7 +107,8 @@ Ref<AcceleratedSurface> AcceleratedSurface::create(WebPage& webPage, Function<vo
 {
     Parameters parameters {
 #if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
-        .hardwareAccelerationEnabled = webPage.corePage()->settings().hardwareAccelerationEnabled(),
+        // The web process has no GL when the GPU process renders, so it paints without compositing on the CPU.
+        .hardwareAccelerationEnabled = webPage.corePage()->settings().hardwareAccelerationEnabled() && !webPage.shouldRenderDOMInGPUProcess(),
 #endif
         .backgroundColor = webPage.effectiveBackgroundColor(),
         .isVisible = webPage.activityState().contains(ActivityState::IsVisible),

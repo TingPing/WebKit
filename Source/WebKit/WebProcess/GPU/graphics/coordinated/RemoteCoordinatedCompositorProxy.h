@@ -28,7 +28,9 @@
 #if ENABLE(GPU_PROCESS) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
 #include "CoordinatedCompositor.h"
 #include "GPUProcessConnection.h"
+#include "MessageReceiver.h"
 #include <atomic>
+#include <wtf/CheckedPtr.h>
 #include <wtf/Lock.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
@@ -38,18 +40,20 @@
 namespace WebCore {
 class GraphicsContext;
 class IntRect;
+class Region;
 struct CoordinatedLayerProperties;
 }
 
 namespace WebKit {
 class CoordinatedSceneState;
+class LayerTreeHost;
 class WebPage;
 struct CoordinatedLayerTreeTransaction;
 
-class RemoteCoordinatedCompositorProxy final : public CoordinatedCompositor, public GPUProcessConnection::Client, public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteCoordinatedCompositorProxy> {
+class RemoteCoordinatedCompositorProxy final : public CoordinatedCompositor, public GPUProcessConnection::Client, public IPC::MessageReceiver, public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteCoordinatedCompositorProxy> {
     WTF_MAKE_TZONE_ALLOCATED(RemoteCoordinatedCompositorProxy);
 public:
-    static Ref<RemoteCoordinatedCompositorProxy> create(WebPage&, CoordinatedSceneState&);
+    static Ref<RemoteCoordinatedCompositorProxy> create(WebPage&, LayerTreeHost&, CoordinatedSceneState&);
     ~RemoteCoordinatedCompositorProxy();
 
     WTF_ABSTRACT_THREAD_SAFE_REF_COUNTED_AND_CAN_MAKE_WEAK_PTR_IMPL;
@@ -76,8 +80,8 @@ public:
     std::optional<float> fps() const final { return std::nullopt; }
 
 #if ENABLE(DAMAGE_TRACKING)
-    void setDamagePropagationSettings(std::optional<OptionSet<DamagePropagationFlags>>, unsigned) final { }
-    void enableFrameDamageNotificationForTesting() final { }
+    void setDamagePropagationSettings(std::optional<OptionSet<DamagePropagationFlags>>, unsigned rectangleThreshold) final;
+    void enableFrameDamageNotificationForTesting() final;
 #endif
 
     void fillGLInformation(RenderProcessInfo&&, CompletionHandler<void(RenderProcessInfo&&)>&&) final;
@@ -89,17 +93,26 @@ public:
     uint64_t recordTiles(const WebCore::IntRect& recordRect, unsigned dirtyTilesCount, bool contentsOpaque, float contentsScale, const Function<void(WebCore::GraphicsContext&)>& paint);
 
 private:
-    RemoteCoordinatedCompositorProxy(WebPage&, CoordinatedSceneState&);
+    RemoteCoordinatedCompositorProxy(WebPage&, LayerTreeHost&, CoordinatedSceneState&);
 
     // GPUProcessConnection::Client
     void gpuProcessConnectionDidClose(GPUProcessConnection&) final;
+
+    // IPC::MessageReceiver
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
     void connectToGPUProcess(WebPage&);
     RefPtr<IPC::Connection> gpuConnection() const;
     void didComposite();
     void didCompositeRenderingUpdate();
+#if ENABLE(DAMAGE_TRACKING)
+    void sendDamageSettings();
+    void didRenderFrameForTesting(WebCore::Region&&);
+#endif
 
     WeakPtr<WebPage> m_webPage;
+    CheckedPtr<LayerTreeHost> m_layerTreeHost;
+    ThreadSafeWeakPtr<GPUProcessConnection> m_gpuProcessConnection;
     const Ref<CoordinatedSceneState> m_sceneState;
     const uint64_t m_surfaceID;
     const Ref<WorkQueue> m_commitQueue;
@@ -114,6 +127,14 @@ private:
     unsigned m_suspendedCount { 0 };
     mutable int m_maxTextureSize { 0 };
     bool m_isInvalidated { false };
+#if ENABLE(DAMAGE_TRACKING)
+    struct DamagePropagationSettings {
+        std::optional<OptionSet<DamagePropagationFlags>> flags;
+        unsigned rectangleThreshold { 0 };
+    };
+    std::optional<DamagePropagationSettings> m_damagePropagationSettings;
+    bool m_shouldNotifyFrameDamageForTesting { false };
+#endif
 };
 
 } // namespace WebKit

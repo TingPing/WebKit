@@ -36,6 +36,10 @@ messages -> RemoteCoordinatedCompositor {
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM) && (USE(GBM) || OS(ANDROID))
     PreferredBufferFormatsDidChange(Vector<WebKit::RendererBufferFormat> formats)
 #endif
+#if ENABLE(DAMAGE_TRACKING)
+    SetDamagePropagationSettings(bool propagationEnabled, bool unified, bool usedForCompositing, uint32_t rectangleThreshold)
+    EnableFrameDamageNotificationForTesting()
+#endif
 }
 
 #endif

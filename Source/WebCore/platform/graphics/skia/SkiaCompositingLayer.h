@@ -109,6 +109,7 @@ public:
 #if ENABLE(DAMAGE_TRACKING)
     void setDamagePropagationEnabled(bool enabled) { m_damagePropagationEnabled = enabled; }
     void addDamage(Damage&&);
+    void addDamage(std::span<const IntRect>);
 #endif
 
     void setUseBackingStore(bool, CoordinatedAnimatedBackingStoreClient* = nullptr);

@@ -33,6 +33,7 @@
 #include "GPUProcess.h"
 #include "GPUProcessProxyMessages.h"
 #include "RemoteCoordinatedCompositorMessages.h"
+#include "RemoteCoordinatedCompositorProxyMessages.h"
 #include "RemoteCoordinatedContentsRegistry.h"
 #include <WebCore/CoordinatedBackingStoreProxy.h>
 #include <WebCore/CoordinatedImageBackingStore.h>
@@ -40,6 +41,7 @@
 #include <WebCore/CoordinatedPlatformLayerBufferSkiaImage.h>
 #include <WebCore/CoordinatedTileBuffer.h>
 #include <WebCore/CoordinatedTileManager.h>
+#include <WebCore/Damage.h>
 #include <WebCore/GLContext.h>
 #include <WebCore/NativeImage.h>
 #include <WebCore/PlatformDisplay.h>
@@ -66,6 +68,7 @@ Ref<RemoteCoordinatedCompositor> RemoteCoordinatedCompositor::create(GPUConnecti
 
 RemoteCoordinatedCompositor::RemoteCoordinatedCompositor(GPUConnectionToWebProcess& connectionToWebProcess, uint64_t identifier, Parameters&& parameters)
     : m_connectionToWebProcess(connectionToWebProcess)
+    , m_webProcessConnection(connectionToWebProcess.connection())
     , m_webProcessIdentifier(connectionToWebProcess.webProcessIdentifier())
     , m_identifier(identifier)
     , m_workQueue(WorkQueue::create("org.webkit.RemoteCoordinatedCompositor"_s))
@@ -150,8 +153,12 @@ void RemoteCoordinatedCompositor::didRecordTiles(uint64_t recordingIdentifier, R
 SkiaCompositingLayer& RemoteCoordinatedCompositor::ensureLayer(PlatformLayerIdentifier identifier)
 {
     ASSERT(m_workQueue->runLoop().isCurrent());
-    return m_layers.ensure(identifier, [] {
-        return SkiaCompositingLayer::create();
+    return m_layers.ensure(identifier, [&] {
+        Ref layer = SkiaCompositingLayer::create();
+#if ENABLE(DAMAGE_TRACKING)
+        layer->setDamagePropagationEnabled(m_damage.propagationEnabled);
+#endif
+        return layer;
     }).iterator->value.get();
 }
 
@@ -242,6 +249,10 @@ void RemoteCoordinatedCompositor::applyLayerProperties(SkiaCompositingLayer& lay
     }
     if (changes.contains(CoordinatedLayerChange::Animations))
         layer.setAnimations(properties.animations);
+#if ENABLE(DAMAGE_TRACKING)
+    if (changes.contains(CoordinatedLayerChange::Damage))
+        layer.addDamage(properties.damage.span());
+#endif
 }
 
 static std::span<const uint8_t> pixelsSpan(std::span<const uint8_t> pixels, const CoordinatedPixels& location)
@@ -406,6 +417,33 @@ void RemoteCoordinatedCompositor::preferredBufferFormatsDidChange(Vector<Rendere
 }
 #endif
 
+#if ENABLE(DAMAGE_TRACKING)
+void RemoteCoordinatedCompositor::setDamagePropagationSettings(bool propagationEnabled, bool unified, bool usedForCompositing, uint32_t rectangleThreshold)
+{
+    m_workQueue->dispatch([protectedThis = Ref { *this }, propagationEnabled, unified, usedForCompositing, rectangleThreshold] {
+        if (protectedThis->m_isInvalidated)
+            return;
+
+        auto& damage = protectedThis->m_damage;
+        damage.propagationEnabled = propagationEnabled;
+        damage.unified = propagationEnabled && unified;
+        damage.usedForCompositing = propagationEnabled && usedForCompositing;
+        for (Ref layer : protectedThis->m_layers.values())
+            layer->setDamagePropagationEnabled(propagationEnabled);
+
+        protectedThis->m_surface->setFrameDamageRectangleThreshold(Damage::clampRectangleThreshold(rectangleThreshold));
+        protectedThis->m_surface->setDamageUsedForCompositing(damage.usedForCompositing);
+    });
+}
+
+void RemoteCoordinatedCompositor::enableFrameDamageNotificationForTesting()
+{
+    m_workQueue->dispatch([protectedThis = Ref { *this }] {
+        protectedThis->m_damage.shouldNotifyFrameDamageForTesting = true;
+    });
+}
+#endif
+
 void RemoteCoordinatedCompositor::scheduleRender()
 {
     ASSERT(m_workQueue->runLoop().isCurrent());
@@ -448,10 +486,28 @@ void RemoteCoordinatedCompositor::render()
     m_rootLayer->setTransform(viewportTransform);
 
     std::optional<Damage> frameDamage;
+    std::optional<Damage> priorTargetDamage;
+#if ENABLE(DAMAGE_TRACKING)
+    if (m_damage.propagationEnabled)
+        frameDamage = Damage(scaledSize, m_damage.unified ? Damage::Mode::BoundingBox : Damage::Mode::Rectangles);
+    if (m_damage.usedForCompositing)
+        priorTargetDamage = m_surface->renderTargetDamage();
+#endif
+
     canvas->save();
-    if (m_rootLayer->paint(*canvas, frameDamage, std::nullopt, m_surface->skiaClearColor(CompositionReason::RenderingUpdate)))
+    if (m_rootLayer->paint(*canvas, frameDamage, priorTargetDamage, m_surface->skiaClearColor(CompositionReason::RenderingUpdate)))
         m_needsRender = true;
     canvas->restore();
+
+#if ENABLE(DAMAGE_TRACKING)
+    if (frameDamage) {
+        // Sent before the commit is completed, so the web process has it before its next rendering update.
+        if (m_damage.shouldNotifyFrameDamageForTesting)
+            m_webProcessConnection->send(Messages::RemoteCoordinatedCompositorProxy::DidRenderFrameForTesting(frameDamage->regionForTesting()), m_identifier);
+        if (!frameDamage->isEmpty())
+            m_surface->setFrameDamage(WTF::move(*frameDamage));
+    }
+#endif
 
     if (auto* surface = canvas->getSurface())
         grContext->flushAndSubmit(surface, GrSyncCpu::kNo);

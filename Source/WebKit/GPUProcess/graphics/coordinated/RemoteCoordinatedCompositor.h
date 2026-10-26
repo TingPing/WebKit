@@ -95,6 +95,10 @@ private:
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM) && (USE(GBM) || OS(ANDROID))
     void preferredBufferFormatsDidChange(Vector<RendererBufferFormat>&&);
 #endif
+#if ENABLE(DAMAGE_TRACKING)
+    void setDamagePropagationSettings(bool propagationEnabled, bool unified, bool usedForCompositing, uint32_t rectangleThreshold);
+    void enableFrameDamageNotificationForTesting();
+#endif
 
     WebCore::SkiaCompositingLayer& ensureLayer(WebCore::PlatformLayerIdentifier);
     void applyLayerProperties(WebCore::SkiaCompositingLayer&, const WebCore::CoordinatedLayerProperties&);
@@ -105,6 +109,7 @@ private:
     void didComposite();
 
     WeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
+    const Ref<IPC::Connection> m_webProcessConnection;
     const WebCore::ProcessIdentifier m_webProcessIdentifier;
     const uint64_t m_identifier;
     const Ref<WorkQueue> m_workQueue;
@@ -125,6 +130,14 @@ private:
     bool m_isWaitingForFrameDone { false };
     bool m_needsRender { false };
     Vector<CompletionHandler<void()>> m_pendingCommitCompletionHandlers;
+#if ENABLE(DAMAGE_TRACKING)
+    struct {
+        bool propagationEnabled { false };
+        bool unified { false };
+        bool usedForCompositing { false };
+        bool shouldNotifyFrameDamageForTesting { false };
+    } m_damage;
+#endif
 };
 
 } // namespace WebKit

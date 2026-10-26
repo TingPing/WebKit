@@ -1716,10 +1716,12 @@ std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer
         takePendingContentsBuffer(changes);
     });
 
-    // FIXME: send damage to the remote compositor.
 #if ENABLE(DAMAGE_TRACKING)
     if (m_pendingChanges.contains(Change::Damage)) {
-        m_damage = std::nullopt;
+        if (auto damage = std::exchange(m_damage, std::nullopt); damage && !damage->isEmpty()) {
+            properties.damage = damage->rects();
+            properties.changes.add(CoordinatedLayerChange::Damage);
+        }
         m_pendingChanges.remove(Change::Damage);
     }
 #endif
@@ -1772,6 +1774,14 @@ std::optional<CoordinatedPlatformLayer::PendingChanges> CoordinatedPlatformLayer
         takePendingContentsBuffer(changes);
         properties.changes.add(CoordinatedLayerChange::ContentsBuffer);
         m_pendingChanges.remove(Change::ContentsBuffer);
+
+#if ENABLE(DAMAGE_TRACKING)
+        // The damage stays pending, because it may also cover tiles that only the next commit brings.
+        if (m_damage && !m_damage->isEmpty()) {
+            properties.damage = m_damage->rects();
+            properties.changes.add(CoordinatedLayerChange::Damage);
+        }
+#endif
     }
 
     return changes;
