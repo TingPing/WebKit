@@ -71,27 +71,38 @@ void RemoteGStreamerVideoDecoderManagerProxy::registerDecoders()
     if (!ProcessCapabilities::layersCompositedRemotely())
         return;
 
-    // The GPU process decodes with the GPU, and the encoders that use it are left out.
-    hideHardwareAcceleratedElementFactories();
+    static Lock lock;
+    static bool didRegister { false };
+    {
+        Locker locker { lock };
+        if (didRegister)
+            return;
+    }
 
+    // Any thread can get here, so the main thread is waited for without holding anything it may wait for.
     Vector<GStreamerVideoDecoderDescription> decoders;
     callOnMainRunLoopAndWait([&] {
         decoders = protect(WebProcess::singleton().ensureGPUProcessConnection())->hardwareVideoDecoders();
     });
-    if (decoders.isEmpty())
+    // Connected now, so that the streaming threads of the decoders don't wait for the main thread.
+    if (!decoders.isEmpty())
+        singleton().ensureConnection();
+
+    Locker locker { lock };
+    if (std::exchange(didRegister, true))
         return;
 
-    // Connected now, so that the streaming threads of the decoders don't wait for the main thread.
-    singleton().connection();
+    // The GPU process decodes with the GPU, and the encoders that use it are left out.
+    hideElementFactoriesUsingTheGPU();
     registerRemoteVideoDecoders(decoders);
 }
 
-RefPtr<IPC::Connection> RemoteGStreamerVideoDecoderManagerProxy::connection()
+void RemoteGStreamerVideoDecoderManagerProxy::ensureConnection()
 {
     {
         Locker locker { m_lock };
         if (m_connection)
-            return m_connection;
+            return;
     }
 
     callOnMainRunLoopAndWait([this] {
@@ -104,9 +115,6 @@ RefPtr<IPC::Connection> RemoteGStreamerVideoDecoderManagerProxy::connection()
         m_videoFrameObjectHeapProxy = &gpuProcessConnection->videoFrameObjectHeapProxy();
         protect(m_connection)->addWorkQueueMessageReceiver(Messages::RemoteGStreamerVideoDecoderManagerProxy::messageReceiverName(), m_queue, *this);
     });
-
-    Locker locker { m_lock };
-    return m_connection;
 }
 
 RefPtr<IPC::Connection> RemoteGStreamerVideoDecoderManagerProxy::currentConnection()
@@ -129,7 +137,7 @@ void RemoteGStreamerVideoDecoderManagerProxy::gpuProcessConnectionDidClose(GPUPr
     // The decoders restart in the next GPU process, which the compositor also connects to right away. The
     // streaming threads can't wait for the main thread to connect, which can be waiting for them.
     callOnMainRunLoop([] {
-        singleton().connection();
+        singleton().ensureConnection();
     });
     m_queue->dispatch([decoders = WTF::move(decoders)] {
         for (auto& decoder : decoders.values())

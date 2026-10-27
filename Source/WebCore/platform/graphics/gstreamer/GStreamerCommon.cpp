@@ -522,6 +522,18 @@ bool ensureGStreamerInitialized()
     return isGStreamerInitialized;
 }
 
+// The decoders of gst-libav are software ones, but libavcodec links VA-API and Vulkan, so they run where the GPU is.
+static bool isVideoDecoderLinkingGPULibraries(GstElementFactory* factory)
+{
+    return !g_strcmp0(gst_plugin_feature_get_plugin_name(GST_PLUGIN_FEATURE_CAST(factory)), "libav")
+        && gst_element_factory_list_is_type(factory, GST_ELEMENT_FACTORY_TYPE_DECODER | GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO);
+}
+
+static bool usesGPU(GstElementFactory* factory)
+{
+    return isVideoDecoderLinkingGPULibraries(factory) || GStreamerQuirksManager::singleton().isHardwareAccelerated(factory).value_or(false);
+}
+
 Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders()
 {
     if (!ensureGStreamerInitialized())
@@ -541,7 +553,7 @@ Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders()
         auto& softwareDecoders = *static_cast<HashSet<String>*>(userData);
         if (softwareDecoders.contains("*"_s) || softwareDecoders.contains(String::fromLatin1(gst_plugin_feature_get_name(feature))))
             return TRUE;
-        return GStreamerQuirksManager::singleton().isHardwareAccelerated(factory).value_or(false);
+        return usesGPU(factory);
     }, FALSE, &softwareDecoders);
 
     Vector<GStreamerVideoDecoderDescription> decoders;
@@ -593,15 +605,25 @@ bool isGPUProcessVideoDecoder(GstElement* element)
     return factory && g_str_has_prefix(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory)), WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX);
 }
 
-void hideHardwareAcceleratedElementFactories()
+const char* decoderNameOfFactory(GstElementFactory* factory)
+{
+    const char* name = gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory));
+    if (!g_str_has_prefix(name, WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX))
+        return name;
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN; // GLib port
+    return name + strlen(WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX);
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END;
+}
+
+void hideElementFactoriesUsingTheGPU()
 {
     GList* factories = gst_registry_feature_filter(gst_registry_get(), [](GstPluginFeature* feature, gpointer) -> gboolean {
         if (!GST_IS_ELEMENT_FACTORY(feature) || g_str_has_prefix(gst_plugin_feature_get_name(feature), WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX))
             return FALSE;
-        return GStreamerQuirksManager::singleton().isHardwareAccelerated(GST_ELEMENT_FACTORY_CAST(feature)).value_or(false);
+        return usesGPU(GST_ELEMENT_FACTORY_CAST(feature));
     }, FALSE, nullptr);
     for (auto* item = factories; item; item = g_list_next(item)) {
-        GST_DEBUG("Hiding %s, which uses the GPU", gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(item->data)));
+        GST_DEBUG("Hiding %s, which uses the GPU or its libraries", gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(item->data)));
         gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(item->data), GST_RANK_NONE);
     }
     gst_plugin_feature_list_free(factories);
@@ -702,11 +724,12 @@ void registerWebKitGStreamerElements()
         // Make sure the quirks are created as early as possible.
         [[maybe_unused]] auto& quirksManager = GStreamerQuirksManager::singleton();
 
-        if (auto& registrar = gpuProcessVideoDecodersRegistrar())
-            registrar();
-
         registryWasUpdated = true;
     });
+
+    // Outside of the once flag, as the registrar may wait for the main thread, which may wait for the flag.
+    if (auto& registrar = gpuProcessVideoDecodersRegistrar())
+        registrar();
 
     // The GStreamer registry might be updated after the scanner was initialized, so in this situation
     // we need to reset the internal state of the registry scanner.

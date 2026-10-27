@@ -35,7 +35,7 @@ struct GStreamerVideoDecoderDescription {
     String name;
     unsigned rank { 0 };
     String sinkCaps;
-    // False for the software decoders that tests have the GPU process run.
+    // False for the software decoders that the GPU process runs, like those of gst-libav.
     bool isHardwareAccelerated { true };
 };
 

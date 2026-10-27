@@ -80,7 +80,7 @@ private:
     void decoderFailed(RemoteGStreamerVideoDecoderIdentifier, String&& message);
 
     // Connects in the main thread.
-    RefPtr<IPC::Connection> connection();
+    void ensureConnection();
     RefPtr<IPC::Connection> currentConnection();
     GRefPtr<GstElement> decoder(RemoteGStreamerVideoDecoderIdentifier);
 
