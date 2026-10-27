@@ -501,8 +501,7 @@ public:
 #endif
 
 #if USE(COORDINATED_GRAPHICS)
-    void setUsesGPUProcessForCompositing() { m_usesGPUProcessForCompositing = true; }
-    bool usesGPUProcessForCompositing() const { return m_usesGPUProcessForCompositing; }
+    bool usesGPUProcessForCompositing() const;
 #endif
 
 #if PLATFORM(COCOA)
@@ -547,6 +546,7 @@ public:
     std::optional<AvailableInputDevices> primaryPointingDevice() const;
     void setAvailableInputDevices(OptionSet<AvailableInputDevices>);
     void initializeVulkanIfNeeded();
+    void renderInGPUProcess();
 #endif // PLATFORM(GTK) || PLATFORM(WPE)
 
     String mediaKeysStorageDirectory() const { return m_mediaKeysStorageDirectory; }
@@ -943,6 +943,7 @@ private:
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     OptionSet<RendererBufferTransportMode> m_rendererBufferTransportMode;
+    bool m_hasGPUAccess { true };
     OptionSet<AvailableInputDevices> m_availableInputDevices;
     bool m_isStoppingRunLoop { false };
 #endif
@@ -993,9 +994,6 @@ private:
 #if ENABLE(WEBGL)
     bool m_useGPUProcessForWebGL { false };
 #endif
-#endif
-#if USE(COORDINATED_GRAPHICS)
-    bool m_usesGPUProcessForCompositing { false };
 #endif
 
 #if ENABLE(MEDIA_STREAM)

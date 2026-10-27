@@ -189,8 +189,13 @@ void WebProcessPool::platformInitializeWebProcess(const WebProcessProxy& process
     }
 #endif
 
+    parameters.hasGPUAccess = process.hasGPUAccess();
+
 #if USE(GBM)
-    parameters.drmDevice = drmMainDevice();
+    // A web process without the GPU only tells the GPU process which buffers to send to this process.
+    const auto& drmDevice = drmMainDevice();
+    if (parameters.hasGPUAccess)
+        parameters.drmDevice = drmDevice;
 #endif
 
 #if PLATFORM(GTK)
@@ -198,7 +203,7 @@ void WebProcessPool::platformInitializeWebProcess(const WebProcessProxy& process
 #elif ENABLE(WPE_PLATFORM)
     if (usingWPEPlatformAPI) {
 #if USE(GBM)
-        if (!parameters.drmDevice.isNull())
+        if (!drmDevice.isNull())
             parameters.rendererBufferTransportMode.add(RendererBufferTransportMode::Hardware);
 #endif
 #if OS(ANDROID)

@@ -143,6 +143,7 @@
 #include <WebCore/PlatformKeyboardEvent.h>
 #include <WebCore/PlatformMediaEngineConfigurationFactory.h>
 #include <WebCore/PlatformMediaSession.h>
+#include <WebCore/ProcessCapabilities.h>
 #include <WebCore/ProcessIdentifier.h>
 #include <WebCore/ProcessWarming.h>
 #include <WebCore/QuirkTable.h>
@@ -2718,12 +2719,19 @@ void WebProcess::setUseGPUProcessForMedia(bool useGPUProcessForMedia)
 #endif
 }
 
+#if USE(COORDINATED_GRAPHICS)
+bool WebProcess::usesGPUProcessForCompositing() const
+{
+    return ProcessCapabilities::layersCompositedRemotely();
+}
+#endif
+
 bool WebProcess::shouldUseRemoteRenderingFor(RenderingPurpose purpose)
 {
     switch (purpose) {
     case RenderingPurpose::Canvas:
 #if USE(COORDINATED_GRAPHICS)
-        if (m_usesGPUProcessForCompositing)
+        if (usesGPUProcessForCompositing())
             return true;
 #endif
         return m_useGPUProcessForCanvasRendering;
@@ -2751,7 +2759,7 @@ bool WebProcess::shouldUseRemoteRenderingForWebGL() const
 {
 #if USE(COORDINATED_GRAPHICS)
 #if USE(GBM)
-    if (m_usesGPUProcessForCompositing)
+    if (usesGPUProcessForCompositing())
         return true;
     return m_useGPUProcessForWebGL && WebCore::GraphicsContextGLGBM::checkRequirements();
 #else

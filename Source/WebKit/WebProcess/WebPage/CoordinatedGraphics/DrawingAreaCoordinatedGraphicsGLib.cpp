@@ -39,22 +39,16 @@
 #include "WebPreferencesKeys.h"
 #include "WebProcess.h"
 #include <WebCore/GraphicsContext.h>
-#include <WebCore/ImageBackingStore.h>
 #include <WebCore/LocalFrameInlines.h>
 #include <WebCore/LocalFrameView.h>
 #include <WebCore/Page.h>
 #include <WebCore/PageOverlayController.h>
-#include <WebCore/ProcessCapabilities.h>
 #include <WebCore/Region.h>
 #include <WebCore/Settings.h>
 #include <WebCore/ShareableBitmap.h>
 #include <WebCore/WindowEventLoop.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
-
-#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO) && USE(GSTREAMER)
-#include "RemoteGStreamerVideoDecoderManagerProxy.h"
-#endif
 
 namespace WebKit {
 using namespace WebCore;
@@ -127,19 +121,8 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
     }
 #endif
 #if ENABLE(GPU_PROCESS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
-    // Without GL in the web process, canvases and WebGL are rendered in the GPU process too.
-    if (m_webPage->shouldRenderDOMInGPUProcess()) {
-        ProcessCapabilities::setCanUseAcceleratedBuffers(false);
-        ProcessCapabilities::setLayersCompositedRemotely(true);
-        WebProcess::singleton().setUsesGPUProcessForCompositing();
-#if ENABLE(VIDEO) && USE(GSTREAMER)
-        RemoteGStreamerVideoDecoderManagerProxy::installDecoderRegistrar();
-#endif
-        ImageBackingStore::setAllocatesSharedMemory(true);
-        // The tiles are sized for the GPU process, which paints them on the CPU only when asked to.
-        const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
-        ProcessCapabilities::setRemoteTilesPaintedWithGPU(!enableCPURendering || StringView::fromLatin1(enableCPURendering) == "0"_s);
-    }
+    if (m_webPage->shouldRenderDOMInGPUProcess())
+        WebProcess::singleton().renderInGPUProcess();
 #endif
     settings.setForceCompositingMode(store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey()));
     // Fixed position elements need to be composited and create stacking contexts

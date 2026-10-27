@@ -241,6 +241,12 @@ public:
     std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
     const SharedPreferencesForWebProcess& sharedPreferencesForWebProcessValue() const LIFETIME_BOUND { return m_sharedPreferencesForWebProcess; }
     std::optional<SharedPreferencesForWebProcess> updateSharedPreferences(const WebPreferencesStore&);
+    // The shared preferences of this process for pages with these preferences.
+    bool updateSharedPreferencesForWebProcess(SharedPreferencesForWebProcess&, const WebPreferencesStore&) const;
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    // Without it, its sandbox has no GPU and its pages render in the GPU process.
+    bool hasGPUAccess() const { return m_hasGPUAccess; }
+#endif
     void didSyncSharedPreferencesForWebProcessWithNetworkProcess(uint64_t syncedPreferencesVersion);
 #if ENABLE(GPU_PROCESS)
     void didSyncSharedPreferencesForWebProcessWithGPUProcess(uint64_t syncedPreferencesVersion);
@@ -1039,6 +1045,9 @@ private:
     bool m_platformSuspendDidReleaseNearSuspendedAssertion { false };
 #endif
     mutable SharedPreferencesForWebProcess m_sharedPreferencesForWebProcess;
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    bool m_hasGPUAccess { true };
+#endif
     uint64_t m_sharedPreferencesVersionInNetworkProcess { 0 };
 #if ENABLE(GPU_PROCESS)
     uint64_t m_sharedPreferencesVersionInGPUProcess { 0 };

@@ -48,7 +48,12 @@
 #include <WebCore/GStreamerCommon.h>
 #endif
 
+#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO) && USE(GSTREAMER)
+#include "RemoteGStreamerVideoDecoderManagerProxy.h"
+#endif
+
 #include <WebCore/ApplicationGLib.h>
+#include <WebCore/ImageBackingStore.h>
 #include <WebCore/MemoryCache.h>
 #include <wtf/SetForScope.h>
 
@@ -144,10 +149,19 @@ void WebProcess::platformInitializeProcess(const AuxiliaryProcessInitializationP
     addSupplementWithoutRefCountedCheck<SystemSettingsManager>();
 }
 
+static bool isSkiaCPURenderingEnabled()
+{
+    auto enableCPURendering = StringView::fromLatin1(getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING"));
+    return !enableCPURendering.isNull() && enableCPURendering != "0"_s;
+}
+
 void WebProcess::initializePlatformDisplayIfNeeded() const
 {
     if (PlatformDisplay::sharedDisplayIfExists())
         return;
+
+    // Its pages render in the GPU process, and its sandbox has no GPU.
+    RELEASE_ASSERT_WITH_MESSAGE(m_hasGPUAccess, "A web process without the GPU can't create a display");
 
 #if USE(GBM)
     if (m_rendererBufferTransportMode.contains(RendererBufferTransportMode::Hardware)) {
@@ -200,7 +214,26 @@ void WebProcess::initializeVulkanIfNeeded()
     if (!useVulkan)
         return;
 
+    RELEASE_ASSERT_WITH_MESSAGE(m_hasGPUAccess, "A web process without the GPU can't use Vulkan");
     Vulkan::initializeIfNeeded();
+#endif
+}
+
+void WebProcess::renderInGPUProcess()
+{
+#if ENABLE(GPU_PROCESS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+    if (usesGPUProcessForCompositing())
+        return;
+
+    // Without GL in the web process, canvases and WebGL are rendered in the GPU process too.
+    ProcessCapabilities::setCanUseAcceleratedBuffers(false);
+    ProcessCapabilities::setLayersCompositedRemotely(true);
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    RemoteGStreamerVideoDecoderManagerProxy::installDecoderRegistrar();
+#endif
+    ImageBackingStore::setAllocatesSharedMemory(true);
+    // The tiles are sized for the GPU process, which paints them on the CPU only when asked to.
+    ProcessCapabilities::setRemoteTilesPaintedWithGPU(!isSkiaCPURenderingEnabled());
 #endif
 }
 
@@ -212,11 +245,8 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
     if (!parameters.applicationName.isEmpty())
         WebCore::setApplicationName(parameters.applicationName);
 
-    const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
-    IGNORE_CLANG_WARNINGS_BEGIN("unsafe-buffer-usage-in-libc-call")
-    if (enableCPURendering && strcmp(enableCPURendering, "0"))
+    if (isSkiaCPURenderingEnabled())
         ProcessCapabilities::setCanUseAcceleratedBuffers(false);
-    IGNORE_CLANG_WARNINGS_END
 
 #if ENABLE(MEDIA_STREAM)
     addSupplementWithoutRefCountedCheck<UserMediaCaptureManager>();
@@ -227,6 +257,10 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 #endif
 
     m_rendererBufferTransportMode = parameters.rendererBufferTransportMode;
+    m_hasGPUAccess = parameters.hasGPUAccess;
+    // Before any page, for the canvases of workers in processes that have none.
+    if (!m_hasGPUAccess)
+        renderInGPUProcess();
 #if PLATFORM(WPE)
 #if USE(WPE_RENDERER)
     if (!parameters.isServiceWorkerProcess && m_rendererBufferTransportMode.isEmpty()) {

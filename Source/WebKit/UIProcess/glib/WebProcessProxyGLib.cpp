@@ -48,7 +48,8 @@ void WebProcessProxy::platformGetLaunchOptions(ProcessLauncher::LaunchOptions& l
     launchOptions.extraInitializationData.set("enable-sandbox"_s, m_processPool->sandboxEnabled() ? "true"_s : "false"_s);
 #if ENABLE(GPU_PROCESS)
     // The GPU process paints and composites the pages by default, so the web processes don't use the GPU.
-    if (defaultUseGPUProcessForDOMRenderingEnabled())
+    m_hasGPUAccess = !defaultUseGPUProcessForDOMRenderingEnabled();
+    if (!m_hasGPUAccess)
         launchOptions.extraInitializationData.set("gpu-access"_s, "false"_s);
 #endif
 

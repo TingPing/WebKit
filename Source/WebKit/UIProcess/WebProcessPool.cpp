@@ -1562,7 +1562,7 @@ static bool canShareProcessWithOpener(WebProcessProxy& openerProcess, const API:
         return false;
 
     auto sharedPreferences = openerProcess.sharedPreferencesForWebProcessValue();
-    return !updateSharedPreferencesForWebProcess(sharedPreferences, pageConfiguration.preferences().store(), lockdownMode == WebProcessProxy::LockdownMode::Enabled);
+    return !openerProcess.updateSharedPreferencesForWebProcess(sharedPreferences, pageConfiguration.preferences().store());
 }
 
 Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API::PageConfiguration>&& pageConfiguration)

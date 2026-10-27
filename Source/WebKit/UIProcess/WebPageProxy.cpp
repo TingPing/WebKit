@@ -16101,6 +16101,11 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
 
     // Not the same as the preference: on Cocoa, a user default, Lockdown Mode or a related page may also enable it.
     parameters.shouldRenderDOMInGPUProcess = useGPUProcessForDOMRenderingEnabled();
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    // And a web process without the GPU has no other way to render.
+    if (!process.hasGPUAccess())
+        parameters.shouldRenderDOMInGPUProcess = true;
+#endif
     parameters.shouldCaptureDisplayInUIProcess = m_configuration->processPool().configuration().shouldCaptureDisplayInUIProcess();
 #if ENABLE(APP_BOUND_DOMAINS)
     parameters.limitsNavigationsToAppBoundDomains = m_limitsNavigationsToAppBoundDomains;

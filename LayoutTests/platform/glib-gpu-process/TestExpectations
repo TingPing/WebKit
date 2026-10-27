@@ -11,6 +11,12 @@
 # The end of the arc is drawn a few pixels off.
 fast/canvas/canvas-ellipse-connecting-line.html [ ImageOnlyFailure ]
 
+# The canvases of these workers are accelerated on WPE, whose web processes have no GPU in this mode and render
+# them in the GPU process, unlike the web process, which the glib baselines expect. GTK web processes keep the GPU.
+http/tests/canvas/canvas-2d-accelerated-in-service-worker-separate-process.html [ Failure Pass ]
+http/tests/canvas/canvas-2d-accelerated-in-shared-worker-separate-process.html [ Failure Pass ]
+http/tests/canvas/canvas-2d-accelerated-in-shared-worker.html [ Failure Pass ]
+
 #////////////////////////////////////////////////////////////////////////////////////////
 # WebGL
 #////////////////////////////////////////////////////////////////////////////////////////
@@ -18,6 +24,18 @@ fast/canvas/canvas-ellipse-connecting-line.html [ ImageOnlyFailure ]
 # ANGLE in the GPU process draws with a huge index rather than failing to emulate attribute 0.
 # GTK skips it for the same reason in-process, webkit.org/b/181659.
 fast/canvas/webgl/simulated-vertexAttrib0-invalid-indicies.html [ Failure ]
+
+# WebGL in workers renders in the GPU process.
+imported/w3c/web-platform-tests/html/canvas/offscreen/manual/the-offscreen-canvas/offscreencanvas.getcontext.worker.html [ Pass ]
+imported/w3c/web-platform-tests/html/canvas/offscreen/manual/the-offscreen-canvas/offscreencanvas.transfer.to.imagebitmap.w.html [ Pass ]
+imported/w3c/web-platform-tests/html/canvas/offscreen/manual/the-offscreen-canvas/offscreencanvas.transferrable.w.html [ Pass ]
+imported/w3c/web-platform-tests/webcodecs/videoFrame-texImage.any.worker.html [ Pass ]
+webgl/1.0.x/conformance/offscreencanvas/context-creation-worker.html [ Pass ]
+webgl/1.0.x/conformance/offscreencanvas/methods-worker.html [ Pass ]
+webgl/1.0.x/conformance/offscreencanvas/offscreencanvas-timer-query.html [ Pass ]
+webgl/1.0.x/conformance/offscreencanvas/offscreencanvas-transfer-image-bitmap.html [ Pass ]
+webgl/2.0.y/conformance/offscreencanvas/context-creation-worker.html [ Pass ]
+webgl/2.0.y/conformance/offscreencanvas/methods-worker.html [ Pass ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # Media

@@ -770,7 +770,7 @@ void WebProcessProxy::initializePreferencesForGPUAndNetworkProcesses(const WebPa
     } else {
 #if ASSERT_ENABLED
         auto sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
-        ASSERT(!WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, page.preferences().store(), lockdownMode() == WebProcessProxy::LockdownMode::Enabled));
+        ASSERT(!updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, page.preferences().store()));
 #endif
     }
 
@@ -780,10 +780,24 @@ bool WebProcessProxy::hasSameGPUAndNetworkProcessPreferencesAs(const API::PageCo
 {
     if (m_sharedPreferencesForWebProcess.version) {
         auto sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
-        if (WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, pageConfiguration.preferences().store(), lockdownMode() == WebProcessProxy::LockdownMode::Enabled))
+        if (updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, pageConfiguration.preferences().store()))
             return false;
     }
     return true;
+}
+
+bool WebProcessProxy::updateSharedPreferencesForWebProcess(SharedPreferencesForWebProcess& sharedPreferences, const WebPreferencesStore& preferencesStore) const
+{
+    bool isLockdownModeEnabled = lockdownMode() == WebProcessProxy::LockdownMode::Enabled;
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    // The pages of a web process without the GPU render in the GPU process, whatever their preferences.
+    if (!m_hasGPUAccess && !preferencesStore.getBoolValueForKey(WebPreferencesKey::useGPUProcessForDOMRenderingEnabledKey())) {
+        auto store = preferencesStore;
+        store.setBoolValueForKey(WebPreferencesKey::useGPUProcessForDOMRenderingEnabledKey(), true);
+        return WebKit::updateSharedPreferencesForWebProcess(sharedPreferences, store, isLockdownModeEnabled);
+    }
+#endif
+    return WebKit::updateSharedPreferencesForWebProcess(sharedPreferences, preferencesStore, isLockdownModeEnabled);
 }
 
 void WebProcessProxy::addProvisionalPageProxy(ProvisionalPageProxy& provisionalPage)
@@ -3096,7 +3110,7 @@ void WebProcessProxy::sharedPreferencesDidChange()
 
 std::optional<SharedPreferencesForWebProcess> WebProcessProxy::updateSharedPreferences(const WebPreferencesStore& preferencesStore)
 {
-    if (WebKit::updateSharedPreferencesForWebProcess(m_sharedPreferencesForWebProcess, preferencesStore, lockdownMode() == WebProcessProxy::LockdownMode::Enabled)) {
+    if (updateSharedPreferencesForWebProcess(m_sharedPreferencesForWebProcess, preferencesStore)) {
         ++m_sharedPreferencesForWebProcess.version;
         sharedPreferencesDidChange();
 

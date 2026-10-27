@@ -249,6 +249,7 @@ struct WebProcessCreationParameters {
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     OptionSet<RendererBufferTransportMode> rendererBufferTransportMode;
+    bool hasGPUAccess { true };
     WebCore::SystemSettings::State systemSettings;
     std::optional<MemoryPressureHandler::Configuration> memoryPressureHandlerConfiguration;
     bool disableFontHintingForTesting { false };

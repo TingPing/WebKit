@@ -186,6 +186,7 @@ using WebCore::SystemSettings::State = WebCore::SystemSettingsState;
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     OptionSet<WebKit::RendererBufferTransportMode> rendererBufferTransportMode;
+    bool hasGPUAccess;
     WebCore::SystemSettings::State systemSettings;
     std::optional<MemoryPressureHandlerConfiguration> memoryPressureHandlerConfiguration;
     bool disableFontHintingForTesting;
