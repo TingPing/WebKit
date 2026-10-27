@@ -113,7 +113,7 @@ private:
 
     void connectToGPUProcess(WebPage&);
     RefPtr<IPC::Connection> gpuConnection() const;
-    void didComposite();
+    void didComposite(unsigned connectionGeneration);
     void didCompositeRenderingUpdate();
     void didUpdateFPS(float);
     void releaseVideoFrameSlot(CoordinatedVideoFrameSlotIdentifier);
@@ -143,6 +143,7 @@ private:
     unsigned m_suspendedCount { 0 };
     mutable int m_maxTextureSize { 0 };
     bool m_isInvalidated { false };
+    unsigned m_connectionGeneration { 0 };
 
     // Shared memory the video frames of the layers are copied into, reused once the GPU process releases them.
     struct VideoFrameSlot {

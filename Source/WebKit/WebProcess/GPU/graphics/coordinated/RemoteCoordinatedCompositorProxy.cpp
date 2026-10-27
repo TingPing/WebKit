@@ -401,26 +401,29 @@ void RemoteCoordinatedCompositorProxy::requestCompositionForRenderingUpdate(Func
     m_needsFullCommit = false;
 
     ++m_pendingCommits;
-    m_commitQueue->dispatch([protectedThis = Ref { *this }, pendingTransaction = WTF::move(pendingTransaction), waitForRecordings = WTF::move(waitForRecordings)] mutable {
+    // The changes are for the compositor of this connection: a new GPU process gets the full commit that follows.
+    m_commitQueue->dispatch([protectedThis = Ref { *this }, connection = gpuConnection(), connectionGeneration = m_connectionGeneration, pendingTransaction = WTF::move(pendingTransaction), waitForRecordings = WTF::move(waitForRecordings)] mutable {
         if (waitForRecordings)
             waitForRecordings();
-        RefPtr connection = protectedThis->gpuConnection();
-        if (!connection) {
-            callOnMainRunLoop([protectedThis = WTF::move(protectedThis)] {
-                protectedThis->didComposite();
+        if (!connection || !connection->isValid()) {
+            callOnMainRunLoop([protectedThis = WTF::move(protectedThis), connectionGeneration] {
+                protectedThis->didComposite(connectionGeneration);
             });
             return;
         }
 
-        connection->sendWithAsyncReply(Messages::RemoteCoordinatedCompositor::Commit(protectedThis->makeTransaction(WTF::move(pendingTransaction))), [protectedThis] {
-            protectedThis->didComposite();
+        connection->sendWithAsyncReply(Messages::RemoteCoordinatedCompositor::Commit(protectedThis->makeTransaction(WTF::move(pendingTransaction))), [protectedThis, connectionGeneration] {
+            protectedThis->didComposite(connectionGeneration);
         }, protectedThis->m_surfaceID);
     });
 }
 
-void RemoteCoordinatedCompositorProxy::didComposite()
+void RemoteCoordinatedCompositorProxy::didComposite(unsigned connectionGeneration)
 {
     ASSERT(RunLoop::isMain());
+    // The commits for a closed connection were completed when it closed.
+    if (connectionGeneration != m_connectionGeneration)
+        return;
     if (m_pendingCommits)
         --m_pendingCommits;
     didCompositeRenderingUpdate();
@@ -483,8 +486,8 @@ void RemoteCoordinatedCompositorProxy::requestComposition(CompositionReason reas
     if (pendingTransaction.layers.isEmpty())
         return;
 
-    m_commitQueue->dispatch([protectedThis = Ref { *this }, pendingTransaction = WTF::move(pendingTransaction)] mutable {
-        if (RefPtr connection = protectedThis->gpuConnection())
+    m_commitQueue->dispatch([protectedThis = Ref { *this }, connection = gpuConnection(), pendingTransaction = WTF::move(pendingTransaction)] mutable {
+        if (connection && connection->isValid())
             connection->send(Messages::RemoteCoordinatedCompositor::UpdateLayers(protectedThis->makeTransaction(WTF::move(pendingTransaction))), protectedThis->m_surfaceID);
     });
 }
@@ -527,6 +530,7 @@ void RemoteCoordinatedCompositorProxy::gpuProcessConnectionDidClose(GPUProcessCo
         m_removedVideoFrameSlots.clear();
     }
 
+    ++m_connectionGeneration;
     m_pendingCommits = 0;
     didCompositeRenderingUpdate();
 
