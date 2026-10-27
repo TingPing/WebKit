@@ -27,6 +27,7 @@
 #include "WebProcessProxy.h"
 
 #include "UserMessage.h"
+#include "WebPreferencesDefaultValues.h"
 #include "WebProcessPool.h"
 #include "WebsiteDataStore.h"
 #include <WebCore/NotImplemented.h>
@@ -45,6 +46,11 @@ using namespace WebCore;
 void WebProcessProxy::platformGetLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
 {
     launchOptions.extraInitializationData.set("enable-sandbox"_s, m_processPool->sandboxEnabled() ? "true"_s : "false"_s);
+#if ENABLE(GPU_PROCESS)
+    // The GPU process paints and composites the pages by default, so the web processes don't use the GPU.
+    if (defaultUseGPUProcessForDOMRenderingEnabled())
+        launchOptions.extraInitializationData.set("gpu-access"_s, "false"_s);
+#endif
 
 #if USE(ATSPI)
     launchOptions.extraInitializationData.set("accessibilityBusAddress"_s, m_processPool->accessibilityBusAddress());

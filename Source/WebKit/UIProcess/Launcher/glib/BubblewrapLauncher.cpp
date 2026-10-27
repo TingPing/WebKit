@@ -956,9 +956,12 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
         bindSndio(sandboxArgs);
         bindFonts(sandboxArgs);
         bindGStreamerData(sandboxArgs);
-        bindOpenGL(sandboxArgs);
+        // The web processes whose pages the GPU process paints and composites don't use the GPU.
+        if (launchOptions.extraInitializationData.get<HashTranslatorASCIILiteral>("gpu-access"_s) != "false"_s)
+            bindOpenGL(sandboxArgs);
 
-        // Although cameras can be managed via the DesktopPortal, we still need v4l2 for video decoding.
+        // Although cameras can be managed via the DesktopPortal, we still need v4l2 for capture, and for
+        // video decoding when the GPU process doesn't decode.
         bindV4l(sandboxArgs);
 
 #if USE(ATSPI)
@@ -974,9 +977,6 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
 #endif
         dbusProxy.launch(launchOptions);
     } else {
-        // Only X11 users need this for XShm which is only the Web process.
-        sandboxArgs.append("--unshare-ipc"_s);
-    }
 #if ENABLE(GPU_PROCESS)
         // The GPU process renders, composites and decodes video with the GPU, and needs neither the display,
         // nor the session bus, nor the sound server.
@@ -988,6 +988,9 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
             bindShaderCaches(sandboxArgs);
         }
 #endif
+        // Only X11 users need this for XShm which is only the Web process.
+        sandboxArgs.append("--unshare-ipc"_s);
+    }
 
 #if ENABLE(DEVELOPER_MODE)
     const char* execDirectory = g_getenv("WEBKIT_EXEC_PATH");

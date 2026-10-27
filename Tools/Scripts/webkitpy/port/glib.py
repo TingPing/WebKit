@@ -146,6 +146,10 @@ class GLibPort(Port):
 
         environment['WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS'] = '1'
 
+        # The tests render in the web process, unless they are run with --use-gpu-process or turn it on.
+        if not self.get_option('use_gpu_process'):
+            environment['WEBKIT_DISABLE_GPU_PROCESS_DOM_RENDERING'] = '1'
+
         # The hardware decoders are disabled above, so when the GPU process composites, it decodes with the
         # software ones instead.
         environment['WEBKIT_GST_GPU_PROCESS_SOFTWARE_DECODERS'] = os.environ.get('WEBKIT_GST_GPU_PROCESS_SOFTWARE_DECODERS', '*')

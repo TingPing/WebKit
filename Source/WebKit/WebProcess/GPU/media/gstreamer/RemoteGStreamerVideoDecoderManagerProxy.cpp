@@ -71,6 +71,9 @@ void RemoteGStreamerVideoDecoderManagerProxy::registerDecoders()
     if (!ProcessCapabilities::layersCompositedRemotely())
         return;
 
+    // The GPU process decodes with the GPU, and the encoders that use it are left out.
+    hideHardwareAcceleratedElementFactories();
+
     Vector<GStreamerVideoDecoderDescription> decoders;
     callOnMainRunLoopAndWait([&] {
         decoders = protect(WebProcess::singleton().ensureGPUProcessConnection())->hardwareVideoDecoders();

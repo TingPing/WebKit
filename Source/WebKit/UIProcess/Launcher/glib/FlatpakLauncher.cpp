@@ -43,6 +43,16 @@ static bool canPossiblyExposePath(const String& path)
     return !path.startsWith("/app"_s) && !path.startsWith("/usr"_s);
 }
 
+// GST_DEBUG_FILE points to an absolute file path, so we need write permissions for its parent directory.
+static void exposeGStreamerDebugFile(Vector<UTF8CString>& flatpakArgs)
+{
+    if (const char* debugFilePath = g_getenv("GST_DEBUG_FILE")) {
+        auto parentDir = FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(debugFilePath));
+        if (canPossiblyExposePath(parentDir))
+            flatpakArgs.append(makeString("--sandbox-expose-path="_s, parentDir).utf8());
+    }
+}
+
 GRefPtr<GSubprocess> flatpakSpawn(GSubprocessLauncher* launcher, const WebKit::ProcessLauncher::LaunchOptions& launchOptions, Vector<char*>& argv, int childProcessSocket, GError** error)
 {
     ASSERT(launcher);
@@ -68,12 +78,7 @@ GRefPtr<GSubprocess> flatpakSpawn(GSubprocessLauncher* launcher, const WebKit::P
             "--no-network"_s,
             "--sandbox-flag=share-gpu"_s,
         });
-
-        if (const char* debugFilePath = g_getenv("GST_DEBUG_FILE")) {
-            auto parentDir = FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(debugFilePath));
-            if (canPossiblyExposePath(parentDir))
-                flatpakArgs.append(makeString("--sandbox-expose-path="_s, parentDir).utf8());
-        }
+        exposeGStreamerDebugFile(flatpakArgs);
     }
 #endif
 
@@ -83,20 +88,17 @@ GRefPtr<GSubprocess> flatpakSpawn(GSubprocessLauncher* launcher, const WebKit::P
             // The current working directory might not be visible in the sub-sandbox.
             "--directory=/"_s,
             "--no-network"_s,
-            "--sandbox-flag=share-gpu"_s,
             "--sandbox-flag=share-display"_s,
             "--sandbox-flag=share-sound"_s,
             "--sandbox-flag=allow-a11y"_s,
             "--sandbox-flag=allow-dbus"_s, // Note that this only allows portals and $appid.Sandbox.* access
         });
 
-        // GST_DEBUG_FILE points to an absolute file path, so we need write permissions for its parent directory.
-        if (const char* debugFilePath = g_getenv("GST_DEBUG_FILE")) {
-            auto parentDir = FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(debugFilePath));
-            if (canPossiblyExposePath(parentDir)) {
-                flatpakArgs.append(makeString("--sandbox-expose-path="_s, parentDir).utf8());
-            }
-        }
+        // The web processes whose pages the GPU process paints and composites don't use the GPU.
+        if (launchOptions.extraInitializationData.get<HashTranslatorASCIILiteral>("gpu-access"_s) != "false"_s)
+            flatpakArgs.append("--sandbox-flag=share-gpu"_s);
+
+        exposeGStreamerDebugFile(flatpakArgs);
 
         // GST_DEBUG_DUMP_DOT_DIR might not exist when the application starts, so we need write
         // permissions for its parent directory.

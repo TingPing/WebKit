@@ -135,6 +135,8 @@ void setGPUProcessVideoDecodersRegistrar(Function<void()>&&);
 // The names of the elements that the registrar registers in place of the decoders of the GPU process.
 #define WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX "webkitgpu-"
 bool isGPUProcessVideoDecoder(GstElement*);
+// For a web process that doesn't use the GPU: autoplugging and encoder selection skip the elements that do.
+void hideHardwareAcceleratedElementFactories();
 void registerWebKitGStreamerElements();
 void registerWebKitGStreamerVideoEncoder();
 void deinitializeGStreamer();

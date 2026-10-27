@@ -593,6 +593,20 @@ bool isGPUProcessVideoDecoder(GstElement* element)
     return factory && g_str_has_prefix(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory)), WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX);
 }
 
+void hideHardwareAcceleratedElementFactories()
+{
+    GList* factories = gst_registry_feature_filter(gst_registry_get(), [](GstPluginFeature* feature, gpointer) -> gboolean {
+        if (!GST_IS_ELEMENT_FACTORY(feature) || g_str_has_prefix(gst_plugin_feature_get_name(feature), WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX))
+            return FALSE;
+        return GStreamerQuirksManager::singleton().isHardwareAccelerated(GST_ELEMENT_FACTORY_CAST(feature)).value_or(false);
+    }, FALSE, nullptr);
+    for (auto* item = factories; item; item = g_list_next(item)) {
+        GST_DEBUG("Hiding %s, which uses the GPU", gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(item->data)));
+        gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(item->data), GST_RANK_NONE);
+    }
+    gst_plugin_feature_list_free(factories);
+}
+
 void registerWebKitGStreamerElements()
 {
     static std::once_flag onceFlag;
