@@ -411,6 +411,14 @@ static const char* environmentVariableValue(const char* name, const char* defaul
     return value ? value : defaultValue;
 }
 
+static String gstreamerRegistryDirectory()
+{
+    if (const char* registryPath = g_getenv("GST_REGISTRY"))
+        return FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(registryPath));
+    GUniquePtr<char> directory(g_build_filename(g_get_user_cache_dir(), "gstreamer-1.0", nullptr));
+    return FileSystem::stringFromFileSystemRepresentation(directory.get());
+}
+
 static void bindGStreamerData(Vector<UTF8CString>& args)
 {
     if (!bindPathVar(args, "GST_PLUGIN_PATH_1_0"))
@@ -421,12 +429,7 @@ static void bindGStreamerData(Vector<UTF8CString>& args)
 
     // The plugin scanner needs write permissions in the directory of GST_REGISTRY in order to write the
     // registry file, which is in the GStreamer directory of the user cache by default.
-    auto registryDirectory = [] {
-        if (const char* registryPath = g_getenv("GST_REGISTRY"))
-            return FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(registryPath));
-        GUniquePtr<char> directory(g_build_filename(g_get_user_cache_dir(), "gstreamer-1.0", nullptr));
-        return FileSystem::stringFromFileSystemRepresentation(directory.get());
-    }();
+    auto registryDirectory = gstreamerRegistryDirectory();
     FileSystem::makeAllDirectories(registryDirectory);
     bindIfExists(args, registryDirectory.utf8(), BindFlags::ReadWrite);
 
@@ -463,6 +466,17 @@ static void bindGStreamerData(Vector<UTF8CString>& args)
     // allow access to the corresponding device in the sandbox. Note: We are in the UIProcess so a
     // runtime GStreamer version check is not wanted here.
     args.appendList({ "--dev-bind-try"_s, "/dev/udmabuf"_s, "/dev/udmabuf"_s });
+}
+
+// GStreamer scans the plugins that depend on GPU devices again whenever its registry was written by a
+// process that saw other devices, so the processes without them keep their own registry.
+static void setGStreamerRegistryWithoutGPU(Vector<UTF8CString>& args)
+{
+    auto registryPath = FileSystem::pathByAppendingComponent(gstreamerRegistryDirectory(), "webkit-registry-without-gpu.bin"_s);
+    args.appendList<UTF8CString>({
+        "--unsetenv"_s, "GST_REGISTRY_1_0"_s,
+        "--setenv"_s, "GST_REGISTRY"_s, registryPath.utf8(),
+    });
 }
 
 static void bindOpenGL(Vector<UTF8CString>& args)
@@ -956,13 +970,14 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
         bindSndio(sandboxArgs);
         bindFonts(sandboxArgs);
         bindGStreamerData(sandboxArgs);
-        // The web processes whose pages the GPU process paints and composites don't use the GPU.
-        if (launchOptions.extraInitializationData.get<HashTranslatorASCIILiteral>("gpu-access"_s) != "false"_s)
+        // The web processes whose pages the GPU process paints and composites don't use the GPU, nor
+        // decode video with hardware.
+        if (launchOptions.extraInitializationData.get<HashTranslatorASCIILiteral>("gpu-access"_s) != "false"_s) {
             bindOpenGL(sandboxArgs);
-
-        // Although cameras can be managed via the DesktopPortal, we still need v4l2 for capture, and for
-        // video decoding when the GPU process doesn't decode.
-        bindV4l(sandboxArgs);
+            // Although cameras are managed via the DesktopPortal, video decoding needs v4l2.
+            bindV4l(sandboxArgs);
+        } else
+            setGStreamerRegistryWithoutGPU(sandboxArgs);
 
 #if USE(ATSPI)
         auto accessibilityBusAddress = launchOptions.extraInitializationData.get("accessibilityBusAddress"_s);
