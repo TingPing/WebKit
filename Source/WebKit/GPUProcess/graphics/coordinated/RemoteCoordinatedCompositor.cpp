@@ -390,7 +390,12 @@ std::unique_ptr<CoordinatedPlatformLayerBuffer> RemoteCoordinatedCompositor::vid
     });
     if (!videoFrame)
         return nullptr;
-    return CoordinatedPlatformLayerBufferVideo::create(videoFrame.releaseNonNull(), std::nullopt, false, frame.orientation, m_threadSafeGrContext);
+#if USE(GSTREAMER_GL)
+    bool isGLMemory = videoFrame->memoryType() == VideoFrameGStreamer::MemoryType::GL;
+#else
+    bool isGLMemory = false;
+#endif
+    return CoordinatedPlatformLayerBufferVideo::create(videoFrame.releaseNonNull(), std::nullopt, isGLMemory, frame.orientation, m_threadSafeGrContext);
 }
 #endif
 

@@ -28,10 +28,10 @@
     ExceptionForEnabledBy
 ]
 messages -> RemoteGStreamerVideoDecoderManager {
-    CreateDecoder(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier, String factoryName, String caps)
+    CreateDecoder(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier, String factoryName, String caps, int32_t maximumErrors, bool isHarnessed)
     ReleaseDecoder(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier)
     SetFormat(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier, String caps)
-    Decode(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber, std::span<const uint8_t> data, MediaTime presentationTime, MediaTime decodeTime, MediaTime duration, bool isKeyFrame)
+    Decode(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber, std::span<const uint8_t> data, MediaTime presentationTime, MediaTime decodeTime, MediaTime duration, bool isKeyFrame, bool isDecodeOnly)
     Flush(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier)
     Drain(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier) -> ()
 }

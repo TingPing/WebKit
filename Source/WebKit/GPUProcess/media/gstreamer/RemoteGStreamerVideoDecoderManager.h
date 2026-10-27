@@ -65,10 +65,10 @@ private:
     // IPC::WorkQueueMessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
-    void createDecoder(RemoteGStreamerVideoDecoderIdentifier, const String& factoryName, const String& caps);
+    void createDecoder(RemoteGStreamerVideoDecoderIdentifier, const String& factoryName, const String& caps, int32_t maximumErrors, bool isHarnessed);
     void releaseDecoder(RemoteGStreamerVideoDecoderIdentifier);
     void setFormat(RemoteGStreamerVideoDecoderIdentifier, const String& caps);
-    void decode(RemoteGStreamerVideoDecoderIdentifier, uint32_t frameNumber, std::span<const uint8_t>, MediaTime presentationTime, MediaTime decodeTime, MediaTime duration, bool isKeyFrame);
+    void decode(RemoteGStreamerVideoDecoderIdentifier, uint32_t frameNumber, std::span<const uint8_t>, MediaTime presentationTime, MediaTime decodeTime, MediaTime duration, bool isKeyFrame, bool isDecodeOnly);
     void flush(RemoteGStreamerVideoDecoderIdentifier);
     void drain(RemoteGStreamerVideoDecoderIdentifier, CompletionHandler<void()>&&);
 

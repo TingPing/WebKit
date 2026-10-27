@@ -132,6 +132,9 @@ bool ensureGStreamerInitialized();
 Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders();
 // Called by registerWebKitGStreamerElements(), so that the web process can replace the decoders that the GPU process runs.
 void setGPUProcessVideoDecodersRegistrar(Function<void()>&&);
+// The names of the elements that the registrar registers in place of the decoders of the GPU process.
+#define WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX "webkitgpu-"
+bool isGPUProcessVideoDecoder(GstElement*);
 void registerWebKitGStreamerElements();
 void registerWebKitGStreamerVideoEncoder();
 void deinitializeGStreamer();

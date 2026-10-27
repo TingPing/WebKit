@@ -552,10 +552,13 @@ Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders()
                 continue;
             GRefPtr<GstCaps> sinkCaps = adoptGRef(gst_static_pad_template_get_caps(padTemplate));
             GUniquePtr<char> sinkCapsString(gst_caps_to_string(sinkCaps.get()));
+            auto name = String::fromLatin1(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory)));
+            bool isHardwareAccelerated = !softwareDecoders.contains(name);
             decoders.append({
-                .name = String::fromLatin1(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory))),
+                .name = WTF::move(name),
                 .rank = gst_plugin_feature_get_rank(GST_PLUGIN_FEATURE_CAST(factory)),
                 .sinkCaps = String::fromLatin1(sinkCapsString.get()),
+                .isHardwareAccelerated = isHardwareAccelerated,
             });
             break;
         }
@@ -583,6 +586,12 @@ static Function<void()>& gpuProcessVideoDecodersRegistrar()
 void setGPUProcessVideoDecodersRegistrar(Function<void()>&& registrar)
 {
     gpuProcessVideoDecodersRegistrar() = WTF::move(registrar);
+}
+
+bool isGPUProcessVideoDecoder(GstElement* element)
+{
+    auto* factory = gst_element_get_factory(element);
+    return factory && g_str_has_prefix(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory)), WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX);
 }
 
 void registerWebKitGStreamerElements()
@@ -1935,6 +1944,10 @@ void configureAudioDecoderForHarnessing(const GRefPtr<GstElement>& element)
 
 void configureVideoDecoderForHarnessing(const GRefPtr<GstElement>& element)
 {
+    // The decoder of the GPU process is configured there.
+    if (isGPUProcessVideoDecoder(element.get()))
+        g_object_set(element.get(), "harnessed", TRUE, nullptr);
+
     if (gstObjectHasProperty(element.get(), "max-threads"_s))
         g_object_set(element.get(), "max-threads", 1, nullptr);
 

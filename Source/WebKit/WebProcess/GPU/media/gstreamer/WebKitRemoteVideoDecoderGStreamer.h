@@ -46,6 +46,7 @@ void registerRemoteVideoDecoders(const Vector<WebCore::GStreamerVideoDecoderDesc
 
 // Called in the work queue of RemoteGStreamerVideoDecoderManagerProxy.
 void remoteVideoDecoderDidDecodeFrame(GstElement*, std::optional<uint32_t> frameNumber, Ref<WebCore::VideoFrame>&&);
+void remoteVideoDecoderDidConsumeFrame(GstElement*, uint32_t frameNumber);
 void remoteVideoDecoderDidFail(GstElement*, const String& message);
 
 } // namespace WebKit

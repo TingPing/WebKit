@@ -360,6 +360,9 @@ public:
         }
 
         auto factoryName = UTF8CStringView::unsafeFromUTF8(GST_OBJECT_NAME(GST_OBJECT(factory.get())));
+        // The decoders of the GPU process are named after the decoders they stand for.
+        if (startsWith(factoryName.span(), WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX ""_s))
+            factoryName = UTF8CStringView::unsafeFromUTF8(GST_OBJECT_NAME(GST_OBJECT(factory.get())) + strlen(WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX));
         if (equal(factoryName.span(), "vp8dec"_s) || equal(factoryName.span(), "vp8alphadecodebin"_s)) {
             GST_INFO("Our best GStreamer VP8 decoder is vp8dec, better use the one from LibWebRTC");
             return std::unique_ptr<webrtc::VideoDecoder>(new webrtc::LibvpxVp8Decoder(environment));
@@ -419,6 +422,8 @@ GStreamerVideoDecoderFactory::GStreamerVideoDecoderFactory(bool isSupportingVP9P
     , m_isSupportingVP9Profile2(isSupportingVP9Profile2)
 {
     ensureGStreamerInitialized();
+    // Which has the decoders of the GPU process replace the local ones.
+    registerWebKitGStreamerElements();
 
     static std::once_flag debugRegisteredFlag;
     std::call_once(debugRegisteredFlag, [] {

@@ -129,7 +129,7 @@ GRefPtr<GstElement> RemoteGStreamerVideoDecoderManagerProxy::decoder(RemoteGStre
     return m_decoders.get(identifier);
 }
 
-std::optional<RemoteGStreamerVideoDecoderIdentifier> RemoteGStreamerVideoDecoderManagerProxy::createDecoder(GstElement* decoder, const String& factoryName, const String& caps)
+std::optional<RemoteGStreamerVideoDecoderIdentifier> RemoteGStreamerVideoDecoderManagerProxy::createDecoder(GstElement* decoder, const String& factoryName, const String& caps, int32_t maximumErrors, bool isHarnessed)
 {
     RefPtr connection = this->connection();
     if (!connection)
@@ -140,7 +140,7 @@ std::optional<RemoteGStreamerVideoDecoderIdentifier> RemoteGStreamerVideoDecoder
         Locker locker { m_lock };
         m_decoders.add(identifier, decoder);
     }
-    connection->send(Messages::RemoteGStreamerVideoDecoderManager::CreateDecoder(identifier, factoryName, caps), 0);
+    connection->send(Messages::RemoteGStreamerVideoDecoderManager::CreateDecoder(identifier, factoryName, caps, maximumErrors, isHarnessed), 0);
     return identifier;
 }
 
@@ -162,10 +162,10 @@ void RemoteGStreamerVideoDecoderManagerProxy::setFormat(RemoteGStreamerVideoDeco
         connection->send(Messages::RemoteGStreamerVideoDecoderManager::SetFormat(identifier, caps), 0);
 }
 
-void RemoteGStreamerVideoDecoderManagerProxy::decode(RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber, std::span<const uint8_t> data, const MediaTime& presentationTime, const MediaTime& decodeTime, const MediaTime& duration, bool isKeyFrame)
+void RemoteGStreamerVideoDecoderManagerProxy::decode(RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber, std::span<const uint8_t> data, const MediaTime& presentationTime, const MediaTime& decodeTime, const MediaTime& duration, bool isKeyFrame, bool isDecodeOnly)
 {
     if (RefPtr connection = this->connection())
-        connection->send(Messages::RemoteGStreamerVideoDecoderManager::Decode(identifier, frameNumber, data, presentationTime, decodeTime, duration, isKeyFrame), 0);
+        connection->send(Messages::RemoteGStreamerVideoDecoderManager::Decode(identifier, frameNumber, data, presentationTime, decodeTime, duration, isKeyFrame, isDecodeOnly), 0);
 }
 
 void RemoteGStreamerVideoDecoderManagerProxy::flush(RemoteGStreamerVideoDecoderIdentifier identifier)
@@ -206,6 +206,12 @@ void RemoteGStreamerVideoDecoderManagerProxy::frameDecoded(RemoteGStreamerVideoD
     Ref<VideoFrame> frame = RemoteVideoFrameProxy::create(*connection, *videoFrameObjectHeapProxy, WTF::move(properties));
     if (auto decoder = this->decoder(identifier))
         remoteVideoDecoderDidDecodeFrame(decoder.get(), frameNumber, WTF::move(frame));
+}
+
+void RemoteGStreamerVideoDecoderManagerProxy::frameConsumed(RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber)
+{
+    if (auto decoder = this->decoder(identifier))
+        remoteVideoDecoderDidConsumeFrame(decoder.get(), frameNumber);
 }
 
 void RemoteGStreamerVideoDecoderManagerProxy::decoderFailed(RemoteGStreamerVideoDecoderIdentifier identifier, String&& message)

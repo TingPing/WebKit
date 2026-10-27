@@ -48,6 +48,7 @@ struct WebCore::GStreamerVideoDecoderDescription {
     String name;
     unsigned rank;
     String sinkCaps;
+    bool isHardwareAccelerated;
 };
 #endif
 

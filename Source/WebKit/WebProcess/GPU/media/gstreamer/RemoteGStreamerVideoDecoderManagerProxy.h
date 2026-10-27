@@ -56,10 +56,10 @@ public:
     uint32_t weakRefCount() const final { return IPC::WorkQueueMessageReceiver<WTF::DestructionThread::Any>::weakRefCount(); }
 
     // Called in the streaming threads of the decoders.
-    std::optional<RemoteGStreamerVideoDecoderIdentifier> createDecoder(GstElement*, const String& factoryName, const String& caps);
+    std::optional<RemoteGStreamerVideoDecoderIdentifier> createDecoder(GstElement*, const String& factoryName, const String& caps, int32_t maximumErrors, bool isHarnessed);
     void releaseDecoder(RemoteGStreamerVideoDecoderIdentifier);
     void setFormat(RemoteGStreamerVideoDecoderIdentifier, const String& caps);
-    void decode(RemoteGStreamerVideoDecoderIdentifier, uint32_t frameNumber, std::span<const uint8_t>, const MediaTime& presentationTime, const MediaTime& decodeTime, const MediaTime& duration, bool isKeyFrame);
+    void decode(RemoteGStreamerVideoDecoderIdentifier, uint32_t frameNumber, std::span<const uint8_t>, const MediaTime& presentationTime, const MediaTime& decodeTime, const MediaTime& duration, bool isKeyFrame, bool isDecodeOnly);
     void flush(RemoteGStreamerVideoDecoderIdentifier);
     // Returns once the frames decoded so far were given to the decoder, in its output queue.
     void drain(RemoteGStreamerVideoDecoderIdentifier, WorkQueue& outputQueue);
@@ -76,6 +76,7 @@ private:
     void gpuProcessConnectionDidClose(GPUProcessConnection&) final;
 
     void frameDecoded(RemoteGStreamerVideoDecoderIdentifier, std::optional<uint32_t> frameNumber, RemoteVideoFrameProxy::Properties&&);
+    void frameConsumed(RemoteGStreamerVideoDecoderIdentifier, uint32_t frameNumber);
     void decoderFailed(RemoteGStreamerVideoDecoderIdentifier, String&& message);
 
     RefPtr<IPC::Connection> connection();

@@ -35,6 +35,8 @@ struct GStreamerVideoDecoderDescription {
     String name;
     unsigned rank { 0 };
     String sinkCaps;
+    // False for the software decoders that tests have the GPU process run.
+    bool isHardwareAccelerated { true };
 };
 
 } // namespace WebCore

@@ -57,6 +57,13 @@ public:
 
         const RefPtr<GStreamerElementHarness> downstreamHarness() const { return m_downstreamHarness; }
 
+        // Called in the thread that outputs each sample, for elements that output from their own threads.
+        void setSampleQueuedCallback(Function<void()>&& callback)
+        {
+            Locker locker { m_sampleQueueLock };
+            m_sampleQueuedCallback = WTF::move(callback);
+        }
+
     private:
         Stream(GRefPtr<GstPad>&&, RefPtr<GStreamerElementHarness>&&, GRefPtr<GstCaps>&&);
 
@@ -71,6 +78,7 @@ public:
 
         Lock m_sampleQueueLock;
         Deque<GRefPtr<GstSample>> m_sampleQueue WTF_GUARDED_BY_LOCK(m_sampleQueueLock);
+        Function<void()> m_sampleQueuedCallback WTF_GUARDED_BY_LOCK(m_sampleQueueLock);
 
         Lock m_sinkEventQueueLock;
         Deque<GRefPtr<GstEvent>> m_sinkEventQueue WTF_GUARDED_BY_LOCK(m_sinkEventQueueLock);

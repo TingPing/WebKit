@@ -26,7 +26,9 @@
 #include "GStreamerCommon.h"
 #include "GStreamerElementHarness.h"
 #include "GStreamerRegistryScanner.h"
+#include "GStreamerWrappedVideoFrame.h"
 #include "PlatformDisplay.h"
+#include "ProcessCapabilities.h"
 #include "SharedBuffer.h"
 #include "VideoFrameGStreamer.h"
 #include <wtf/TZoneMallocInlines.h>
@@ -72,8 +74,11 @@ public:
     }
 
     Ref<VideoDecoder::DecodePromise> decode(VideoEncodedData&&);
-    void flush();
+    // False when the decoder failed, which a decoder of the GPU process reports asynchronously.
+    bool flush();
     void close() { m_isClosed = true; }
+    // Called in the decoder work queue.
+    void reportFailure();
 
     bool isConfigured() const { return !!m_inputCaps; }
 
@@ -89,6 +94,8 @@ private:
     int64_t m_timestamp;
     std::optional<uint64_t> m_duration;
     bool m_isClosed { false };
+    std::atomic<bool> m_hasFailed { false };
+    bool m_hasReportedFailure { false };
     GRefPtr<GstCaps> m_inputCaps;
     std::optional<VideoFrameGStreamer::Info> m_videoInfo;
 
@@ -108,6 +115,9 @@ void GStreamerVideoDecoder::create(const String& codecName, const Config& config
     std::call_once(debugRegisteredFlag, [] {
         GST_DEBUG_CATEGORY_INIT(webkit_video_decoder_debug, "webkitvideodecoder", 0, "WebKit WebCodecs Video Decoder");
     });
+
+    // Which has the decoders of the GPU process replace the local ones.
+    registerWebKitGStreamerElements();
 
     bool usingHardware = config.decoding == VideoDecoder::HardwareAcceleration::Yes;
     auto& scanner = GStreamerRegistryScanner::singleton();
@@ -165,7 +175,8 @@ Ref<VideoDecoder::DecodePromise> GStreamerVideoDecoder::decode(VideoEncodedData&
 Ref<GenericPromise> GStreamerVideoDecoder::flush()
 {
     return invokeAsync(gstDecoderWorkQueue(), [decoder = m_internalDecoder] {
-        decoder->flush();
+        if (!decoder->flush())
+            return GenericPromise::createAndReject();
         return GenericPromise::createAndResolve();
     });
 }
@@ -185,6 +196,7 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
 {
     GST_DEBUG_OBJECT(element.get(), "Configuring decoder for codec %s", codecName.ascii().data());
     configureVideoDecoderForHarnessing(element);
+    bool isRemoteDecoder = isGPUProcessVideoDecoder(element.get());
 
 #if USE(GSTREAMER_GL)
     bool hasGLContext = setGstElementGLContext(element.get(), GST_GL_DISPLAY_CONTEXT_TYPE) && setGstElementGLContext(element.get(), "gst.gl.app_context"_s);
@@ -248,6 +260,9 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
         harnessedElement = WTF::move(element);
 
     GRefPtr allowedSinkCaps = adoptGRef(gst_caps_new_empty());
+    // The frames of the decoders of the GPU process stay there when it composites the layers.
+    if (ProcessCapabilities::layersCompositedRemotely())
+        gst_caps_append(allowedSinkCaps.get(), gst_caps_from_string("video/x-raw(" WEBKIT_GST_CAPS_FEATURE_MEMORY_VIDEO_FRAME ")"));
 #if USE(GSTREAMER_GL)
     if (hasGLContext) {
 #if USE(GBM)
@@ -288,6 +303,11 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
             m_videoInfo = VideoFrameGStreamer::infoFromCaps(GRefPtr(gst_sample_get_caps(outputSample.get())));
 
         GST_TRACE_OBJECT(m_harness->element(), "Handling decoded frame with PTS: %" GST_TIME_FORMAT " and duration: %" GST_TIME_FORMAT, GST_TIME_ARGS(timestamp), GST_TIME_ARGS(duration));
+        if (RefPtr wrappedFrame = videoFrameWrappedInSample(outputSample.get())) {
+            m_outputCallback(VideoDecoder::DecodedFrame { wrappedFrame->updateTimestamp(fromGstClockTime(timestamp), VideoFrame::ShouldClone::Yes), timestamp, duration });
+            return;
+        }
+
         VideoFrameGStreamer::CreateOptions options(IntSize(m_presentationSize), { *m_videoInfo });
         options.presentationTime = fromGstClockTime(timestamp);
         options.contentHint = VideoFrameContentHint::WebCodecs;
@@ -308,6 +328,34 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
         }
         return gst_pad_query_default(pad, parent, query);
     }));
+
+    if (!isRemoteDecoder)
+        return;
+
+    // A decoder of the GPU process outputs its frames from another thread, and reports its errors on its bus.
+    stream->setSampleQueuedCallback([weakThis = ThreadSafeWeakPtr { *this }] {
+        gstDecoderWorkQueue().dispatch([weakThis] {
+            RefPtr protectedThis = weakThis;
+            if (protectedThis && !protectedThis->m_isClosed)
+                protectedThis->m_harness->processOutputSamples();
+        });
+    });
+    GRefPtr<GstBus> bus = adoptGRef(gst_bus_new());
+    gst_bus_set_sync_handler(bus.get(), [](GstBus*, GstMessage* message, gpointer userData) -> GstBusSyncReply {
+        if (GST_MESSAGE_TYPE(message) != GST_MESSAGE_ERROR)
+            return GST_BUS_DROP;
+        auto& weakThis = *static_cast<ThreadSafeWeakPtr<GStreamerInternalVideoDecoder>*>(userData);
+        if (RefPtr protectedThis = weakThis)
+            protectedThis->m_hasFailed = true;
+        gstDecoderWorkQueue().dispatch([weakThis] {
+            if (RefPtr protectedThis = weakThis)
+                protectedThis->reportFailure();
+        });
+        return GST_BUS_DROP;
+    }, new ThreadSafeWeakPtr<GStreamerInternalVideoDecoder>(*this), [](gpointer data) {
+        delete static_cast<ThreadSafeWeakPtr<GStreamerInternalVideoDecoder>*>(data);
+    });
+    gst_element_set_bus(m_harness->element(), bus.get());
 }
 
 Ref<VideoDecoder::DecodePromise> GStreamerInternalVideoDecoder::decode(VideoEncodedData&& frame)
@@ -338,14 +386,25 @@ Ref<VideoDecoder::DecodePromise> GStreamerInternalVideoDecoder::decode(VideoEnco
     return VideoDecoder::DecodePromise::createAndResolve();
 }
 
-void GStreamerInternalVideoDecoder::flush()
+bool GStreamerInternalVideoDecoder::flush()
 {
     if (m_isClosed) {
         GST_DEBUG_OBJECT(m_harness->element(), "Decoder closed, nothing to flush");
-        return;
+        return true;
     }
 
     m_harness->reset();
+    // The error is reported before the flush fails.
+    reportFailure();
+    return !m_hasFailed;
+}
+
+void GStreamerInternalVideoDecoder::reportFailure()
+{
+    if (!m_hasFailed || m_hasReportedFailure || m_isClosed)
+        return;
+    m_hasReportedFailure = true;
+    m_outputCallback(makeUnexpected("Decoding failed in the GPU process"_s));
 }
 
 #undef GST_CAT_DEFAULT

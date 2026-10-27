@@ -31,6 +31,8 @@
 #include <WebCore/GRefPtrGStreamer.h>
 #include <span>
 #include <wtf/CompletionHandler.h>
+#include <wtf/Deque.h>
+#include <wtf/Lock.h>
 #include <wtf/MediaTime.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/WorkQueue.h>
@@ -48,12 +50,13 @@ class RemoteVideoFrameObjectHeap;
 // outputs into the RemoteVideoFrameObjectHeap.
 class RemoteGStreamerVideoDecoder final : public ThreadSafeRefCounted<RemoteGStreamerVideoDecoder> {
 public:
-    static RefPtr<RemoteGStreamerVideoDecoder> create(RemoteGStreamerVideoDecoderIdentifier, const String& factoryName, const String& caps, IPC::Connection&, RemoteVideoFrameObjectHeap&, WorkQueue&);
+    // The maximum of consecutive errors is the one of the proxy element, which WebCodecs sets to 0.
+    static RefPtr<RemoteGStreamerVideoDecoder> create(RemoteGStreamerVideoDecoderIdentifier, const String& factoryName, const String& caps, int32_t maximumErrors, bool isHarnessed, IPC::Connection&, RemoteVideoFrameObjectHeap&, WorkQueue&);
     ~RemoteGStreamerVideoDecoder();
 
     // Called in the work queue.
     void setFormat(const String& caps);
-    void decode(uint32_t frameNumber, std::span<const uint8_t>, const MediaTime& presentationTime, const MediaTime& decodeTime, const MediaTime& duration, bool isKeyFrame);
+    void decode(uint32_t frameNumber, std::span<const uint8_t>, const MediaTime& presentationTime, const MediaTime& decodeTime, const MediaTime& duration, bool isKeyFrame, bool isDecodeOnly);
     void flush();
     void drain(CompletionHandler<void()>&&);
     void close();
@@ -61,10 +64,11 @@ public:
 private:
     RemoteGStreamerVideoDecoder(RemoteGStreamerVideoDecoderIdentifier, IPC::Connection&, RemoteVideoFrameObjectHeap&, WorkQueue&);
 
-    bool initialize(const String& factoryName, const String& caps);
+    bool initialize(const String& factoryName, const String& caps, int32_t maximumErrors, bool isHarnessed);
     void restart();
 
     // Called in the streaming threads.
+    void didConsumeFrames();
     void sampleAvailable(GRefPtr<GstSample>&&);
     void didReachEndOfStream();
     void didFail(GstMessage*);
@@ -75,6 +79,11 @@ private:
     const Ref<WorkQueue> m_queue;
     GRefPtr<GstElement> m_pipeline;
     GRefPtr<GstElement> m_source;
+    // The frames in the source, which are reported once the decoder took them.
+    Lock m_queuedFrameNumbersLock;
+    Deque<uint32_t> m_queuedFrameNumbers WTF_GUARDED_BY_LOCK(m_queuedFrameNumbersLock);
+    // Accessed in the streaming thread of the sink.
+    GRefPtr<GstCaps> m_outputCaps;
     CompletionHandler<void()> m_drainCompletionHandler;
     bool m_isDraining { false };
     bool m_hasFailed { false };

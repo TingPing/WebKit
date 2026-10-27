@@ -28,6 +28,7 @@
 ]
 messages -> RemoteGStreamerVideoDecoderManagerProxy {
     FrameDecoded(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier, std::optional<uint32_t> frameNumber, struct WebKit::RemoteVideoFrameProxyProperties frame)
+    FrameConsumed(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber)
     DecoderFailed(WebKit::RemoteGStreamerVideoDecoderIdentifier identifier, String message)
 }
 

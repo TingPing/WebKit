@@ -406,6 +406,8 @@ GstFlowReturn GStreamerElementHarness::Stream::chainSample(GRefPtr<GstSample>&& 
 {
     Locker locker { m_sampleQueueLock };
     m_sampleQueue.prepend(WTF::move(sample));
+    if (m_sampleQueuedCallback)
+        m_sampleQueuedCallback();
     return GST_FLOW_OK;
 }
 

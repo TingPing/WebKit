@@ -74,14 +74,14 @@ void RemoteGStreamerVideoDecoderManager::close()
     });
 }
 
-void RemoteGStreamerVideoDecoderManager::createDecoder(RemoteGStreamerVideoDecoderIdentifier identifier, const String& factoryName, const String& caps)
+void RemoteGStreamerVideoDecoderManager::createDecoder(RemoteGStreamerVideoDecoderIdentifier identifier, const String& factoryName, const String& caps, int32_t maximumErrors, bool isHarnessed)
 {
     assertIsCurrent(workQueue());
     MESSAGE_CHECK(!m_decoders.contains(identifier));
     // The web process only creates the decoders that this process reported.
     MESSAGE_CHECK(m_factoryNames.contains(factoryName));
 
-    RefPtr decoder = RemoteGStreamerVideoDecoder::create(identifier, factoryName, caps, m_connection, m_videoFrameObjectHeap, m_queue);
+    RefPtr decoder = RemoteGStreamerVideoDecoder::create(identifier, factoryName, caps, maximumErrors, isHarnessed, m_connection, m_videoFrameObjectHeap, m_queue);
     if (!decoder) {
         m_connection->send(Messages::RemoteGStreamerVideoDecoderManagerProxy::DecoderFailed(identifier, makeString("Could not create "_s, factoryName)), 0);
         return;
@@ -103,11 +103,11 @@ void RemoteGStreamerVideoDecoderManager::setFormat(RemoteGStreamerVideoDecoderId
         decoder->setFormat(caps);
 }
 
-void RemoteGStreamerVideoDecoderManager::decode(RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber, std::span<const uint8_t> data, MediaTime presentationTime, MediaTime decodeTime, MediaTime duration, bool isKeyFrame)
+void RemoteGStreamerVideoDecoderManager::decode(RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber, std::span<const uint8_t> data, MediaTime presentationTime, MediaTime decodeTime, MediaTime duration, bool isKeyFrame, bool isDecodeOnly)
 {
     assertIsCurrent(workQueue());
     if (RefPtr decoder = m_decoders.get(identifier))
-        decoder->decode(frameNumber, data, presentationTime, decodeTime, duration, isKeyFrame);
+        decoder->decode(frameNumber, data, presentationTime, decodeTime, duration, isKeyFrame, isDecodeOnly);
 }
 
 void RemoteGStreamerVideoDecoderManager::flush(RemoteGStreamerVideoDecoderIdentifier identifier)

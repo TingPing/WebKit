@@ -309,6 +309,9 @@ static Vector<GRefPtr<GstElementFactory>> findCompatibleFactories(GList* list, c
 
             if (disallowedList && !disallowedList->isEmpty()) {
                 auto name = StringView::fromLatin1(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory)));
+                // The decoders of the GPU process are named after the decoders they stand for.
+                if (name.startsWith(WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX ""_s))
+                    name = name.substring(strlen(WEBKIT_GPU_PROCESS_VIDEO_DECODER_PREFIX));
                 if (disallowedList->contains(name))
                     continue;
             }
