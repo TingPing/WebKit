@@ -331,7 +331,7 @@ bool defaultUseGPUProcessForDOMRenderingEnabled()
     return true;
 #endif
 
-#if PLATFORM(WPE) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
+#if (PLATFORM(GTK) || PLATFORM(WPE)) && USE(COORDINATED_GRAPHICS) && USE(SKIA) && !USE(TEXTURE_MAPPER)
     // Then the web processes don't use the GPU, and their sandbox doesn't give access to it.
     static const bool isDisabled = StringView::fromLatin1(getenv("WEBKIT_DISABLE_GPU_PROCESS_DOM_RENDERING")) == "1"_s;
     return !isDisabled;
