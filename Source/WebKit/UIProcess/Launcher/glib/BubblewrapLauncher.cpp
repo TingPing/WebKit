@@ -489,6 +489,20 @@ static void bindOpenGL(Vector<UTF8CString>& args)
     });
 }
 
+#if ENABLE(GPU_PROCESS)
+// Where GPU drivers keep the shaders they compiled, which they can't create in the sandbox.
+static void bindShaderCaches(Vector<UTF8CString>& args)
+{
+    if (const char* mesaShaderCacheDirectory = g_getenv("MESA_SHADER_CACHE_DIR"))
+        bindIfExists(args, mesaShaderCacheDirectory, BindFlags::ReadWrite);
+
+    for (const char* directory : { "mesa_shader_cache", "mesa_shader_cache_db", "nvidia" }) {
+        GUniquePtr<char> path(g_build_filename(g_get_user_cache_dir(), directory, nullptr));
+        bindIfExists(args, path.get(), BindFlags::ReadWrite);
+    }
+}
+#endif
+
 static void bindV4l(Vector<UTF8CString>& args)
 {
     args.appendList({
@@ -963,6 +977,17 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
         // Only X11 users need this for XShm which is only the Web process.
         sandboxArgs.append("--unshare-ipc"_s);
     }
+#if ENABLE(GPU_PROCESS)
+        // The GPU process renders, composites and decodes video with the GPU, and needs neither the display,
+        // nor the session bus, nor the sound server.
+        if (launchOptions.processType == ProcessLauncher::ProcessType::GPU) {
+            bindFonts(sandboxArgs);
+            bindGStreamerData(sandboxArgs);
+            bindOpenGL(sandboxArgs);
+            bindV4l(sandboxArgs);
+            bindShaderCaches(sandboxArgs);
+        }
+#endif
 
 #if ENABLE(DEVELOPER_MODE)
     const char* execDirectory = g_getenv("WEBKIT_EXEC_PATH");

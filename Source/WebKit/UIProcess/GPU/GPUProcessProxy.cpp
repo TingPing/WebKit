@@ -529,6 +529,13 @@ void GPUProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
 {
     launchOptions.processType = ProcessLauncher::ProcessType::GPU;
     AuxiliaryProcessProxy::getLaunchOptions(launchOptions);
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    // The web processes of every process pool share it, so it is sandboxed when any of them are.
+    bool sandboxEnabled = std::ranges::any_of(WebProcessPool::allProcessPools(), [](auto& processPool) {
+        return processPool->sandboxEnabled();
+    });
+    launchOptions.extraInitializationData.set("enable-sandbox"_s, sandboxEnabled ? "true"_s : "false"_s);
+#endif
 }
 
 void GPUProcessProxy::connectionWillOpen(IPC::Connection&)

@@ -58,6 +58,25 @@ GRefPtr<GSubprocess> flatpakSpawn(GSubprocessLauncher* launcher, const WebKit::P
         "--watch-bus"_s
     };
 
+#if ENABLE(GPU_PROCESS)
+    // The GPU process renders, composites and decodes video with the GPU, and needs neither the display, nor
+    // the session bus, nor the sound server.
+    if (launchOptions.processType == ProcessLauncher::ProcessType::GPU) {
+        flatpakArgs.appendList({
+            "--sandbox"_s,
+            "--directory=/"_s,
+            "--no-network"_s,
+            "--sandbox-flag=share-gpu"_s,
+        });
+
+        if (const char* debugFilePath = g_getenv("GST_DEBUG_FILE")) {
+            auto parentDir = FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(debugFilePath));
+            if (canPossiblyExposePath(parentDir))
+                flatpakArgs.append(makeString("--sandbox-expose-path="_s, parentDir).utf8());
+        }
+    }
+#endif
+
     if (launchOptions.processType == ProcessLauncher::ProcessType::Web) {
         flatpakArgs.appendList({
             "--sandbox"_s,
