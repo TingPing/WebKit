@@ -185,6 +185,14 @@ void GPUProcessConnection::invalidate()
 {
     m_connection->invalidate();
     m_hasInitialized = true;
+
+    // The clients connect to another GPU process, as when this one closes the connection, which it no longer does.
+    callOnMainRunLoop([protectedThis = Ref { *this }] {
+        if (WebProcess::singleton().existingGPUProcessConnection() != protectedThis.ptr())
+            return;
+        Ref connection = protectedThis->connection();
+        protectedThis->didClose(connection);
+    });
 }
 
 void GPUProcessConnection::didClose(IPC::Connection&)
