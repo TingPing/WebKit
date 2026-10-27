@@ -3947,7 +3947,8 @@ RefPtr<CoordinatedPlatformLayerBufferProxy> MediaPlayerPrivateGStreamer::platfor
 void MediaPlayerPrivateGStreamer::pushTextureToCompositor(IsDuplicateSample isDuplicateSample, IsInitialBuffer isInitialBuffer)
 {
     Locker sampleLocker { m_sampleMutex };
-    if (!GST_IS_SAMPLE(m_sample.get()))
+    // A flushed sample keeps no buffer when it couldn't be copied.
+    if (!GST_IS_SAMPLE(m_sample.get()) || !gst_sample_get_buffer(m_sample.get()))
         return;
 
     // The GL video appsink reports the sample following a preroll with the same buffer, so don't
