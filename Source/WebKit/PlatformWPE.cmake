@@ -389,6 +389,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${FORWARDING_HEADERS_WPE_EXTENSION_DIR}"
     "${WEBCORE_DIR}/Modules/mediastream"
     "${WEBKIT_DIR}/GPUProcess/graphics/coordinated"
+    "${WEBKIT_DIR}/GPUProcess/media/gstreamer"
     "${WEBKIT_DIR}/NetworkProcess/glib"
     "${WEBKIT_DIR}/NetworkProcess/soup"
     "${WEBKIT_DIR}/NetworkProcess/webrtc/rice"
@@ -425,6 +426,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/UIProcess/wpe"
     "${WEBKIT_DIR}/WPEPlatform/wpe"
     "${WEBKIT_DIR}/WebProcess/GPU/graphics/coordinated"
+    "${WEBKIT_DIR}/WebProcess/GPU/media/gstreamer"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/glib"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/wpe"
     "${WEBKIT_DIR}/WebProcess/Network/webrtc/rice"
@@ -497,7 +499,11 @@ endif ()
 list(APPEND WebKit_MESSAGES_IN_FILES
     GPUProcess/graphics/coordinated/RemoteCoordinatedCompositor
 
+    GPUProcess/media/gstreamer/RemoteGStreamerVideoDecoderManager
+
     WebProcess/GPU/graphics/coordinated/RemoteCoordinatedCompositorProxy
+
+    WebProcess/GPU/media/gstreamer/RemoteGStreamerVideoDecoderManagerProxy
 
     WebProcess/glib/SystemSettingsManager
 )

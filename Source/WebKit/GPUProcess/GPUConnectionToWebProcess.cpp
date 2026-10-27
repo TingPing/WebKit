@@ -168,6 +168,10 @@
 #include <WebCore/GStreamerCommon.h>
 #endif
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+#include "RemoteGStreamerVideoDecoderManager.h"
+#endif
+
 #if USE(GRAPHICS_LAYER_WC)
 #include "RemoteWCLayerTreeHost.h"
 #include "WCContentBufferManager.h"
@@ -433,6 +437,10 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
         .maxAcceleratedImageBufferSize = maxAcceleratedImageBufferSize(),
 #endif
     };
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    // The web process creates decoders once it knows them from DidInitialize.
+    m_gstreamerVideoDecoderManager = RemoteGStreamerVideoDecoderManager::create(*this, capabilities.hardwareVideoDecoders);
+#endif
     m_connection->send(Messages::GPUProcessConnection::DidInitialize(info), 0);
     ++gObjectCountForTesting;
 }
@@ -484,6 +492,10 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
 #if ENABLE(VIDEO)
     protect(videoFrameObjectHeap())->close();
     protect(remoteMediaPlayerManagerProxy())->connectionToWebProcessClosed();
+#endif
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    if (RefPtr manager = std::exchange(m_gstreamerVideoDecoderManager, nullptr))
+        manager->close();
 #endif
     // RemoteGPU objects maintains ref to RemoteRenderingBackend objects so drop them first.
     m_remoteGPUMap.clear();

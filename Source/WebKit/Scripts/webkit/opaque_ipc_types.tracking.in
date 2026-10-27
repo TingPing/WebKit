@@ -585,3 +585,4 @@
 [NeedsReview] MessageParam NetworkTransportSession.ExportKeyingMaterial label std::span<const uint8_t>
 [NeedsReview] MessageParam NetworkTransportSession.ExportKeyingMaterial context std::span<const uint8_t>
 [NeedsReview] MessageParamReply NetworkTransportSession.ExportKeyingMaterial keyingMaterial std::optional<Vector<uint8_t>>
+[NeedsReview] MessageParam RemoteGStreamerVideoDecoderManager.Decode data std::span<const uint8_t>

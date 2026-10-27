@@ -32,6 +32,8 @@ GPUProcess/graphics/coordinated/RemoteCoordinatedTileRecorder.cpp
 
 GPUProcess/media/RemoteAudioDestinationManager.cpp
 
+GPUProcess/media/gstreamer/RemoteGStreamerVideoDecoder.cpp
+GPUProcess/media/gstreamer/RemoteGStreamerVideoDecoderManager.cpp
 GPUProcess/media/gstreamer/RemoteMediaPlayerProxyGStreamer.cpp
 
 NetworkProcess/Classifier/WebResourceLoadStatisticsStore.cpp @cost:7
@@ -341,7 +343,9 @@ WebProcess/GPU/graphics/coordinated/RemoteCoordinatedCompositorProxy.cpp
 
 WebProcess/GPU/graphics/gbm/RemoteGraphicsContextGLProxyGBM.cpp
 
+WebProcess/GPU/media/gstreamer/RemoteGStreamerVideoDecoderManagerProxy.cpp
 WebProcess/GPU/media/gstreamer/VideoLayerRemoteGStreamer.cpp
+WebProcess/GPU/media/gstreamer/WebKitRemoteVideoDecoderGStreamer.cpp
 
 WebProcess/GPU/webrtc/SharedVideoFrameGStreamer.cpp
 

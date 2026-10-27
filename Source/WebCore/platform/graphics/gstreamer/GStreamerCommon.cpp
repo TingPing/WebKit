@@ -42,6 +42,7 @@
 #include <mutex>
 #include <wtf/FileSystem.h>
 #include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
 #include <wtf/MallocSpan.h>
 #include <wtf/MediaTime.h>
 #include <wtf/NeverDestroyed.h>
@@ -526,12 +527,21 @@ Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders()
     if (!ensureGStreamerInitialized())
         return { };
 
-    GList* factories = gst_registry_feature_filter(gst_registry_get(), [](GstPluginFeature* feature, gpointer) -> gboolean {
+    // Tests list software decoders here, to run them as the GPU process runs hardware decoders.
+    HashSet<String> softwareDecoders;
+    for (auto name : StringView::fromLatin1(g_getenv("WEBKIT_GST_GPU_PROCESS_SOFTWARE_DECODERS")).split(','))
+        softwareDecoders.add(name.toString());
+
+    GList* factories = gst_registry_feature_filter(gst_registry_get(), [](GstPluginFeature* feature, gpointer userData) -> gboolean {
         if (!GST_IS_ELEMENT_FACTORY(feature))
             return FALSE;
-        auto klass = StringView::fromLatin1(gst_element_factory_get_metadata(GST_ELEMENT_FACTORY_CAST(feature), GST_ELEMENT_METADATA_KLASS));
-        return klass.contains("Decoder"_s) && klass.contains("Video"_s) && klass.contains("Hardware"_s);
-    }, FALSE, nullptr);
+        auto* factory = GST_ELEMENT_FACTORY_CAST(feature);
+        if (!gst_element_factory_list_is_type(factory, GST_ELEMENT_FACTORY_TYPE_DECODER | GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO))
+            return FALSE;
+        if (static_cast<HashSet<String>*>(userData)->contains(String::fromLatin1(gst_plugin_feature_get_name(feature))))
+            return TRUE;
+        return GStreamerQuirksManager::singleton().isHardwareAccelerated(factory).value_or(false);
+    }, FALSE, &softwareDecoders);
 
     Vector<GStreamerVideoDecoderDescription> decoders;
     for (auto* item = factories; item; item = g_list_next(item)) {
@@ -562,6 +572,17 @@ static bool registerInternalVideoEncoder()
     return gst_element_register(nullptr, "webkitvideoencoder", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_VIDEO_ENCODER);
 #endif
     return false;
+}
+
+static Function<void()>& gpuProcessVideoDecodersRegistrar()
+{
+    static NeverDestroyed<Function<void()>> registrar;
+    return registrar.get();
+}
+
+void setGPUProcessVideoDecodersRegistrar(Function<void()>&& registrar)
+{
+    gpuProcessVideoDecodersRegistrar() = WTF::move(registrar);
 }
 
 void registerWebKitGStreamerElements()
@@ -658,6 +679,9 @@ void registerWebKitGStreamerElements()
 
         // Make sure the quirks are created as early as possible.
         [[maybe_unused]] auto& quirksManager = GStreamerQuirksManager::singleton();
+
+        if (auto& registrar = gpuProcessVideoDecodersRegistrar())
+            registrar();
 
         registryWasUpdated = true;
     });

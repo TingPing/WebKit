@@ -52,6 +52,10 @@
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
 
+#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO) && USE(GSTREAMER)
+#include "RemoteGStreamerVideoDecoderManagerProxy.h"
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -128,6 +132,9 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
         ProcessCapabilities::setCanUseAcceleratedBuffers(false);
         ProcessCapabilities::setLayersCompositedRemotely(true);
         WebProcess::singleton().setUsesGPUProcessForCompositing();
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+        RemoteGStreamerVideoDecoderManagerProxy::installDecoderRegistrar();
+#endif
         ImageBackingStore::setAllocatesSharedMemory(true);
         // The tiles are sized for the GPU process, which paints them on the CPU only when asked to.
         const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");

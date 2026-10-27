@@ -30,7 +30,6 @@
 
 #include "GStreamerCommon.h"
 #include "VideoFrame.h"
-#include <gst/video/video-info.h>
 #include <mutex>
 
 namespace WebCore {
@@ -86,27 +85,39 @@ static const GstMetaInfo* webkitVideoFrameMetaGetInfo()
     return info;
 }
 
+GRefPtr<GstCaps> capsWithVideoFrameFeature(const GstVideoInfo& info)
+{
+    // Complete caps, which converters in the pipeline fixate to themselves and pass through.
+    GRefPtr<GstCaps> caps = adoptGRef(gst_video_info_to_caps(&info));
+    if (!caps)
+        return nullptr;
+    gst_caps_set_features(caps.get(), 0, gst_caps_features_new(WEBKIT_GST_CAPS_FEATURE_MEMORY_VIDEO_FRAME, nullptr));
+    return caps;
+}
+
+GRefPtr<GstBuffer> bufferWrappingVideoFrame(VideoFrame& frame)
+{
+    GRefPtr<GstBuffer> buffer = adoptGRef(gst_buffer_new());
+    addVideoFrameMeta(buffer.get(), frame);
+    if (frame.presentationTime().isValid())
+        GST_BUFFER_PTS(buffer.get()) = GST_BUFFER_DTS(buffer.get()) = toGstClockTime(frame.presentationTime());
+    return buffer;
+}
+
 GRefPtr<GstSample> sampleWrappingVideoFrame(VideoFrame& frame)
 {
     auto format = static_cast<GstVideoFormat>(frame.pixelFormat());
     if (format == GST_VIDEO_FORMAT_UNKNOWN || format == GST_VIDEO_FORMAT_ENCODED)
         return nullptr;
 
-    // Complete caps, which converters in the pipeline fixate to themselves and pass through.
     GstVideoInfo info;
     auto size = frame.presentationSize();
     if (!gst_video_info_set_format(&info, format, size.width(), size.height()))
         return nullptr;
-    GRefPtr<GstCaps> caps = adoptGRef(gst_video_info_to_caps(&info));
+    GRefPtr<GstCaps> caps = capsWithVideoFrameFeature(info);
     if (!caps)
         return nullptr;
-    gst_caps_set_features(caps.get(), 0, gst_caps_features_new(WEBKIT_GST_CAPS_FEATURE_MEMORY_VIDEO_FRAME, nullptr));
-
-    GRefPtr<GstBuffer> buffer = adoptGRef(gst_buffer_new());
-    addVideoFrameMeta(buffer.get(), frame);
-    if (frame.presentationTime().isValid())
-        GST_BUFFER_PTS(buffer.get()) = GST_BUFFER_DTS(buffer.get()) = toGstClockTime(frame.presentationTime());
-    return adoptGRef(gst_sample_new(buffer.get(), caps.get(), nullptr, nullptr));
+    return adoptGRef(gst_sample_new(bufferWrappingVideoFrame(frame).get(), caps.get(), nullptr, nullptr));
 }
 
 RefPtr<VideoFrame> videoFrameWrappedInSample(GstSample* sample)

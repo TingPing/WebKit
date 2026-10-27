@@ -28,6 +28,7 @@
 #if ENABLE(VIDEO) && USE(GSTREAMER)
 
 #include "GRefPtrGStreamer.h"
+#include <gst/video/video-info.h>
 #include <wtf/RefPtr.h>
 
 // Caps of buffers that hold no memory, only a frame that lives in another process.
@@ -40,6 +41,8 @@ class VideoFrame;
 // A sample that pipelines can carry to the video sink, for a frame whose pixels stay in the process
 // that composites it.
 GRefPtr<GstSample> sampleWrappingVideoFrame(VideoFrame&);
+GRefPtr<GstBuffer> bufferWrappingVideoFrame(VideoFrame&);
+GRefPtr<GstCaps> capsWithVideoFrameFeature(const GstVideoInfo&);
 RefPtr<VideoFrame> videoFrameWrappedInSample(GstSample*);
 
 } // namespace WebCore

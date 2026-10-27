@@ -28,6 +28,7 @@
 #include <gst/gst.h>
 #include <gst/video/video-format.h>
 #include <gst/video/video-info.h>
+#include <wtf/Function.h>
 #include <wtf/Lock.h>
 #include <wtf/Logger.h>
 #include <wtf/StdLibExtras.h>
@@ -129,6 +130,8 @@ void setGStreamerOptionsFromUIProcess(Vector<String>&&);
 bool ensureGStreamerInitializedNonWebProcess();
 bool ensureGStreamerInitialized();
 Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders();
+// Called by registerWebKitGStreamerElements(), so that the web process can replace the decoders that the GPU process runs.
+void setGPUProcessVideoDecodersRegistrar(Function<void()>&&);
 void registerWebKitGStreamerElements();
 void registerWebKitGStreamerVideoEncoder();
 void deinitializeGStreamer();

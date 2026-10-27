@@ -55,11 +55,15 @@ list(APPEND WebKit_LIBRARIES
 list(APPEND WebKit_MESSAGES_IN_FILES
     GPUProcess/graphics/coordinated/RemoteCoordinatedCompositor
 
+    GPUProcess/media/gstreamer/RemoteGStreamerVideoDecoderManager
+
     UIProcess/ViewGestureController
 
     UIProcess/glib/AcceleratedBackingStore
 
     WebProcess/GPU/graphics/coordinated/RemoteCoordinatedCompositorProxy
+
+    WebProcess/GPU/media/gstreamer/RemoteGStreamerVideoDecoderManagerProxy
 
     WebProcess/WebPage/ViewGestureGeometryCollector
 
@@ -311,6 +315,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
 list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/Modules/mediastream"
     "${WEBKIT_DIR}/GPUProcess/graphics/coordinated"
+    "${WEBKIT_DIR}/GPUProcess/media/gstreamer"
     "${WEBKIT_DIR}/NetworkProcess/glib"
     "${WEBKIT_DIR}/NetworkProcess/soup"
     "${WEBKIT_DIR}/NetworkProcess/webrtc/rice"
@@ -343,6 +348,7 @@ list(APPEND WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/UIProcess/linux"
     "${WEBKIT_DIR}/UIProcess/soup"
     "${WEBKIT_DIR}/WebProcess/GPU/graphics/coordinated"
+    "${WEBKIT_DIR}/WebProcess/GPU/media/gstreamer"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/glib"
     "${WEBKIT_DIR}/WebProcess/InjectedBundle/API/gtk"
     "${WEBKIT_DIR}/WebProcess/Inspector/gtk"

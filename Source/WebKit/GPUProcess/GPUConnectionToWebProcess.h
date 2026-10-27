@@ -105,6 +105,7 @@ class RemoteAudioMediaStreamTrackRendererInternalUnitManager;
 class RemoteAudioSessionProxy;
 class RemoteAudioSessionProxyManager;
 class RemoteCDMFactoryProxy;
+class RemoteGStreamerVideoDecoderManager;
 class RemoteImageDecoderAVFProxy;
 class RemoteLegacyCDMFactoryProxy;
 class RemoteMediaEngineConfigurationFactoryProxy;
@@ -433,6 +434,9 @@ private:
 #endif
 #if ENABLE(VIDEO)
     IPC::ScopedActiveMessageReceiveQueue<RemoteVideoFrameObjectHeap> m_videoFrameObjectHeap;
+#endif
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    RefPtr<RemoteGStreamerVideoDecoderManager> m_gstreamerVideoDecoderManager;
 #endif
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
     IPC::ScopedActiveMessageReceiveQueue<LibWebRTCCodecsProxy> m_libWebRTCCodecsProxy;
