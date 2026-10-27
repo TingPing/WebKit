@@ -419,12 +419,16 @@ static void bindGStreamerData(Vector<UTF8CString>& args)
     if (!bindPathVar(args, "GST_PLUGIN_SYSTEM_PATH_1_0"))
         bindPathVar(args, "GST_PLUGIN_SYSTEM_PATH");
 
-    // The plugin scanner needs write permissions in the parent directory of GST_REGISTRY in order to
-    // write the registry file.
-    GUniquePtr<char> defaultRegistryPath(g_build_filename(g_get_user_cache_dir(), "gstreamer-1.0", nullptr));
-    const char* registryPath = environmentVariableValue("GST_REGISTRY", defaultRegistryPath.get());
-    auto registryDir = FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(registryPath));
-    bindIfExists(args, registryDir.utf8(), BindFlags::ReadWrite);
+    // The plugin scanner needs write permissions in the directory of GST_REGISTRY in order to write the
+    // registry file, which is in the GStreamer directory of the user cache by default.
+    auto registryDirectory = [] {
+        if (const char* registryPath = g_getenv("GST_REGISTRY"))
+            return FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(registryPath));
+        GUniquePtr<char> directory(g_build_filename(g_get_user_cache_dir(), "gstreamer-1.0", nullptr));
+        return FileSystem::stringFromFileSystemRepresentation(directory.get());
+    }();
+    FileSystem::makeAllDirectories(registryDirectory);
+    bindIfExists(args, registryDirectory.utf8(), BindFlags::ReadWrite);
 
     bindPathVar(args, "GST_PRESET_PATH");
 
