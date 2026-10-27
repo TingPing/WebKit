@@ -307,7 +307,11 @@ void RemoteGStreamerVideoDecoder::flush()
     assertIsCurrent(m_queue.get());
     GST_DEBUG_OBJECT(m_pipeline.get(), "Flushing");
     restart();
-    m_isDraining = false;
+    completeDrain();
+}
+
+void RemoteGStreamerVideoDecoder::completeDrain()
+{
     if (auto completionHandler = std::exchange(m_drainCompletionHandler, nullptr))
         completionHandler();
 }
@@ -315,7 +319,7 @@ void RemoteGStreamerVideoDecoder::flush()
 void RemoteGStreamerVideoDecoder::drain(CompletionHandler<void()>&& completionHandler)
 {
     assertIsCurrent(m_queue.get());
-    if (m_hasFailed || m_isDraining) {
+    if (m_hasFailed || m_drainCompletionHandler) {
         completionHandler();
         return;
     }
@@ -323,7 +327,6 @@ void RemoteGStreamerVideoDecoder::drain(CompletionHandler<void()>&& completionHa
     // The frames reach the web process before the reply, which is sent when the end of the stream
     // went through the decoder.
     GST_DEBUG_OBJECT(m_pipeline.get(), "Draining");
-    m_isDraining = true;
     m_drainCompletionHandler = WTF::move(completionHandler);
     gst_app_src_end_of_stream(GST_APP_SRC(m_source.get()));
 }
@@ -337,8 +340,7 @@ void RemoteGStreamerVideoDecoder::close()
         gst_bus_set_sync_handler(bus.get(), nullptr, nullptr, nullptr);
     }
     m_source = nullptr;
-    if (auto completionHandler = std::exchange(m_drainCompletionHandler, nullptr))
-        completionHandler();
+    completeDrain();
 }
 
 void RemoteGStreamerVideoDecoder::sampleAvailable(GRefPtr<GstSample>&& sample)
@@ -360,20 +362,20 @@ void RemoteGStreamerVideoDecoder::sampleAvailable(GRefPtr<GstSample>&& sample)
     VideoFrameGStreamer::CreateOptions options;
     options.presentationTime = fromGstClockTime(GST_BUFFER_PTS(buffer));
     Ref frame = VideoFrameGStreamer::createWrappedSample(sample, options);
-    m_connection->send(Messages::RemoteGStreamerVideoDecoderManagerProxy::FrameDecoded(m_identifier, frameNumber, m_videoFrameObjectHeap->add(WTF::move(frame))), 0);
+    // The presentation size has the pixel aspect ratio applied, which the caps of the proxy element keep apart.
+    IntSize decodedSize { GST_VIDEO_INFO_WIDTH(&frame->info()), GST_VIDEO_INFO_HEIGHT(&frame->info()) };
+    m_connection->send(Messages::RemoteGStreamerVideoDecoderManagerProxy::FrameDecoded(m_identifier, frameNumber, m_videoFrameObjectHeap->add(WTF::move(frame)), decodedSize), 0);
 }
 
 void RemoteGStreamerVideoDecoder::didReachEndOfStream()
 {
     m_queue->dispatch([protectedThis = Ref { *this }] {
         assertIsCurrent(protectedThis->m_queue.get());
-        if (!protectedThis->m_isDraining)
+        if (!protectedThis->m_drainCompletionHandler)
             return;
-        protectedThis->m_isDraining = false;
         // A drained decoder takes more frames after it restarts.
         protectedThis->restart();
-        if (auto completionHandler = std::exchange(protectedThis->m_drainCompletionHandler, nullptr))
-            completionHandler();
+        protectedThis->completeDrain();
     });
 }
 
@@ -388,9 +390,7 @@ void RemoteGStreamerVideoDecoder::didFail(GstMessage* message)
     m_queue->dispatch([protectedThis = Ref { *this }] {
         assertIsCurrent(protectedThis->m_queue.get());
         protectedThis->m_hasFailed = true;
-        protectedThis->m_isDraining = false;
-        if (auto completionHandler = std::exchange(protectedThis->m_drainCompletionHandler, nullptr))
-            completionHandler();
+        protectedThis->completeDrain();
     });
 }
 

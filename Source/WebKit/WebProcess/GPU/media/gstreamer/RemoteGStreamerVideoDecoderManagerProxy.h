@@ -75,11 +75,13 @@ private:
     // GPUProcessConnection::Client
     void gpuProcessConnectionDidClose(GPUProcessConnection&) final;
 
-    void frameDecoded(RemoteGStreamerVideoDecoderIdentifier, std::optional<uint32_t> frameNumber, RemoteVideoFrameProxy::Properties&&);
+    void frameDecoded(RemoteGStreamerVideoDecoderIdentifier, std::optional<uint32_t> frameNumber, RemoteVideoFrameProxy::Properties&&, WebCore::IntSize decodedSize);
     void frameConsumed(RemoteGStreamerVideoDecoderIdentifier, uint32_t frameNumber);
     void decoderFailed(RemoteGStreamerVideoDecoderIdentifier, String&& message);
 
+    // Connects in the main thread.
     RefPtr<IPC::Connection> connection();
+    RefPtr<IPC::Connection> currentConnection();
     GRefPtr<GstElement> decoder(RemoteGStreamerVideoDecoderIdentifier);
 
     const Ref<WorkQueue> m_queue;

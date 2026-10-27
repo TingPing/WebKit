@@ -1,0 +1,14 @@
+A VideoDecoder decoding in the GPU process closes with an EncodingError when the GPU process exits while it decodes, and decoders decode in the next GPU process, also one that was flushed before.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+PASS outputs is 10
+PASS error.name is "EncodingError"
+PASS decoder.state is "closed"
+PASS outputs is 10
+PASS outputs is 10
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

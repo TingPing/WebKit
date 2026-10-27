@@ -121,6 +121,8 @@ ImageDecoderGStreamer::ImageDecoderGStreamer(FragmentedSharedBuffer& data, const
     : m_mimeType(mimeType)
 {
     ensureDebugCategoryIsInitialized();
+    // Which has the decoders of the GPU process replace the local ones.
+    registerWebKitGStreamerElements();
     static Atomic<uint32_t> decoderId;
     GRefPtr<GstElement> parsebin = gst_element_factory_make("parsebin", makeString("image-decoder-parser-"_s, decoderId.exchangeAdd(1)).utf8().legacyCStringPointer());
     m_parserHarness = GStreamerElementHarness::create(WTF::move(parsebin), [](auto&, auto&&) { }, [this](auto& pad) -> RefPtr<GStreamerElementHarness> {

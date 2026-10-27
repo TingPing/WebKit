@@ -146,6 +146,10 @@ class GLibPort(Port):
 
         environment['WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS'] = '1'
 
+        # The hardware decoders are disabled above, so when the GPU process composites, it decodes with the
+        # software ones instead.
+        environment['WEBKIT_GST_GPU_PROCESS_SOFTWARE_DECODERS'] = os.environ.get('WEBKIT_GST_GPU_PROCESS_SOFTWARE_DECODERS', '*')
+
         # Fake a sound card with 2 output channels. Apparently we cannot assume test bots have an
         # actual sound card.
         environment['WEBKIT_GST_MAX_NUMBER_OF_AUDIO_OUTPUT_CHANNELS'] = '2'

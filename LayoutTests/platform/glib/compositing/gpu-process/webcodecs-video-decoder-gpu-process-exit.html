@@ -1,0 +1,99 @@
+<!DOCTYPE html><!-- webkit-test-runner [ UseGPUProcessForDOMRenderingEnabled=true ] -->
+<script src="../../../../resources/js-test.js"></script>
+<script>
+description("A VideoDecoder decoding in the GPU process closes with an EncodingError when the GPU process exits while it decodes, and decoders decode in the next GPU process, also one that was flushed before.");
+jsTestIsAsync = true;
+
+const width = 64;
+const height = 48;
+
+async function encodeChunks(count)
+{
+    const chunks = [];
+    let decoderConfig;
+    const encoder = new VideoEncoder({
+        output: (chunk, metadata) => {
+            chunks.push(chunk);
+            if (metadata?.decoderConfig)
+                decoderConfig = metadata.decoderConfig;
+        },
+        error: error => testFailed(`Encoder error: ${error}`),
+    });
+    encoder.configure({ codec: "vp8", width, height, bitrate: 200000, framerate: 30 });
+    const canvas = new OffscreenCanvas(width, height);
+    const context = canvas.getContext("2d");
+    for (let i = 0; i < count; ++i) {
+        context.fillStyle = `rgb(${i * 20 % 256}, 128, 0)`;
+        context.fillRect(0, 0, width, height);
+        const frame = new VideoFrame(canvas, { timestamp: i * 33333 });
+        encoder.encode(frame, { keyFrame: !i });
+        frame.close();
+    }
+    await encoder.flush();
+    encoder.close();
+    return { chunks, decoderConfig };
+}
+
+var decoder;
+var flushedDecoder;
+var outputs;
+var error;
+
+function decodeAll(decoder, chunks)
+{
+    for (const chunk of chunks)
+        decoder.decode(chunk);
+    return decoder.flush();
+}
+
+async function runTest()
+{
+    const { chunks, decoderConfig } = await encodeChunks(10);
+
+    // A flushed decoder has nothing in the GPU process.
+    outputs = 0;
+    flushedDecoder = new VideoDecoder({
+        output: frame => { ++outputs; frame.close(); },
+        error: e => testFailed(`Error of the flushed decoder: ${e}`),
+    });
+    flushedDecoder.configure(decoderConfig);
+    await decodeAll(flushedDecoder, chunks);
+    shouldBe("outputs", "10");
+
+    let gotError;
+    const errorPromise = new Promise(resolve => gotError = resolve);
+    let gotOutput;
+    const outputPromise = new Promise(resolve => gotOutput = resolve);
+    decoder = new VideoDecoder({
+        output: frame => { frame.close(); gotOutput(); },
+        error: e => gotError(e),
+    });
+    decoder.configure(decoderConfig);
+    decoder.decode(chunks[0]);
+    await outputPromise;
+    if (window.testRunner)
+        testRunner.terminateGPUProcess();
+    error = await errorPromise;
+    shouldBeEqualToString("error.name", "EncodingError");
+    shouldBeEqualToString("decoder.state", "closed");
+
+    outputs = 0;
+    await decodeAll(flushedDecoder, chunks);
+    shouldBe("outputs", "10");
+
+    outputs = 0;
+    const newDecoder = new VideoDecoder({
+        output: frame => { ++outputs; frame.close(); },
+        error: e => testFailed(`Error of a new decoder: ${e}`),
+    });
+    newDecoder.configure(decoderConfig);
+    await decodeAll(newDecoder, chunks);
+    shouldBe("outputs", "10");
+    finishJSTest();
+}
+
+runTest().catch(e => {
+    testFailed(`${e}`);
+    finishJSTest();
+});
+</script>

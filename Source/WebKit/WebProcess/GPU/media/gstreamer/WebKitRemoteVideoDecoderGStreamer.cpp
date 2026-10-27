@@ -76,6 +76,7 @@ struct _WebKitRemoteVideoDecoderPrivate {
     GstVideoCodecState* inputState { nullptr };
     std::optional<std::tuple<GstVideoFormat, int, int>> outputFormat;
     bool outputsWrappedFrames { false };
+    bool needsSyncPoint { false };
 
     Lock lock;
     Condition condition;
@@ -83,6 +84,7 @@ struct _WebKitRemoteVideoDecoderPrivate {
     std::optional<uint32_t> consumedFrameNumber WTF_GUARDED_BY_LOCK(lock);
     bool isFlushing WTF_GUARDED_BY_LOCK(lock) { false };
     bool hasFailed WTF_GUARDED_BY_LOCK(lock) { false };
+    bool gpuProcessDidExit WTF_GUARDED_BY_LOCK(lock) { false };
 };
 
 enum {
@@ -122,6 +124,16 @@ static gboolean webkitRemoteVideoDecoderStop(GstVideoDecoder* decoder)
     return TRUE;
 }
 
+static void createGPUProcessDecoder(WebKitRemoteVideoDecoder* self)
+{
+    auto* priv = self->priv;
+    auto* decoder = GST_VIDEO_DECODER(self);
+    GUniquePtr<char> caps(gst_caps_to_string(priv->inputState->caps));
+    GST_DEBUG_OBJECT(decoder, "Decoding %s in the GPU process", caps.get());
+    priv->identifier = RemoteGStreamerVideoDecoderManagerProxy::singleton().createDecoder(GST_ELEMENT_CAST(decoder), String::fromLatin1(WEBKIT_REMOTE_VIDEO_DECODER_GET_CLASS(self)->factoryName),
+        String::fromUTF8(caps.get()), gst_video_decoder_get_max_errors(decoder), priv->isHarnessed);
+}
+
 static gboolean webkitRemoteVideoDecoderSetFormat(GstVideoDecoder* decoder, GstVideoCodecState* state)
 {
     auto* self = WEBKIT_REMOTE_VIDEO_DECODER(decoder);
@@ -130,16 +142,53 @@ static gboolean webkitRemoteVideoDecoderSetFormat(GstVideoDecoder* decoder, GstV
         gst_video_codec_state_unref(priv->inputState);
     priv->inputState = gst_video_codec_state_ref(state);
 
-    GUniquePtr<char> caps(gst_caps_to_string(state->caps));
-    auto& manager = RemoteGStreamerVideoDecoderManagerProxy::singleton();
     if (priv->identifier) {
-        manager.setFormat(*priv->identifier, String::fromUTF8(caps.get()));
+        GUniquePtr<char> caps(gst_caps_to_string(state->caps));
+        RemoteGStreamerVideoDecoderManagerProxy::singleton().setFormat(*priv->identifier, String::fromUTF8(caps.get()));
         return TRUE;
     }
 
-    GST_DEBUG_OBJECT(decoder, "Decoding %s in the GPU process", caps.get());
-    priv->identifier = manager.createDecoder(GST_ELEMENT_CAST(decoder), String::fromLatin1(WEBKIT_REMOTE_VIDEO_DECODER_GET_CLASS(self)->factoryName), String::fromUTF8(caps.get()), gst_video_decoder_get_max_errors(decoder), priv->isHarnessed);
-    return !!priv->identifier;
+    // Right after the GPU process exited, the next one isn't connected yet, and the next frame tries again.
+    createGPUProcessDecoder(self);
+    if (!priv->identifier) {
+        Locker locker { priv->lock };
+        priv->gpuProcessDidExit = true;
+    }
+    return TRUE;
+}
+
+// The frames sent to a GPU process that exited are lost, and the decoder of the new one starts at a keyframe.
+// Returns false while there is no new GPU process to decode in.
+static bool restartIfGPUProcessExited(WebKitRemoteVideoDecoder* self, GstVideoCodecFrame* currentFrame)
+{
+    auto* priv = self->priv;
+    {
+        Locker locker { priv->lock };
+        if (!std::exchange(priv->gpuProcessDidExit, false))
+            return true;
+    }
+
+    auto* decoder = GST_VIDEO_DECODER(self);
+    if (priv->identifier) {
+        GST_INFO_OBJECT(decoder, "The GPU process exited, decoding in a new one from the next keyframe");
+        priv->identifier = std::nullopt;
+        GList* frames = gst_video_decoder_get_frames(decoder);
+        for (auto* item = frames; item; item = g_list_next(item)) {
+            auto* frame = static_cast<GstVideoCodecFrame*>(item->data);
+            if (frame != currentFrame)
+                gst_video_decoder_release_frame(decoder, gst_video_codec_frame_ref(frame));
+        }
+        g_list_free_full(frames, reinterpret_cast<GDestroyNotify>(gst_video_codec_frame_unref));
+    }
+
+    priv->needsSyncPoint = true;
+    createGPUProcessDecoder(self);
+    if (priv->identifier)
+        return true;
+
+    Locker locker { priv->lock };
+    priv->gpuProcessDidExit = true;
+    return false;
 }
 
 static GstFlowReturn webkitRemoteVideoDecoderHandleFrame(GstVideoDecoder* decoder, GstVideoCodecFrame* frame)
@@ -150,15 +199,27 @@ static GstFlowReturn webkitRemoteVideoDecoderHandleFrame(GstVideoDecoder* decode
         gst_video_codec_frame_unref(frame);
     });
 
-    if (!priv->identifier)
-        return GST_FLOW_NOT_NEGOTIATED;
-
     {
         Locker locker { priv->lock };
         if (priv->hasFailed)
             return GST_FLOW_ERROR;
         if (priv->isFlushing)
             return GST_FLOW_FLUSHING;
+    }
+
+    if (!restartIfGPUProcessExited(self, frame)) {
+        gst_video_decoder_drop_frame(decoder, gst_video_codec_frame_ref(frame));
+        return GST_FLOW_OK;
+    }
+    if (!priv->identifier)
+        return GST_FLOW_NOT_NEGOTIATED;
+    if (priv->needsSyncPoint) {
+        if (!GST_VIDEO_CODEC_FRAME_IS_SYNC_POINT(frame)) {
+            gst_video_decoder_request_sync_point(decoder, frame, GST_VIDEO_DECODER_REQUEST_SYNC_POINT_DISCARD_INPUT);
+            gst_video_decoder_drop_frame(decoder, gst_video_codec_frame_ref(frame));
+            return GST_FLOW_OK;
+        }
+        priv->needsSyncPoint = false;
     }
 
     GstMappedBuffer mappedBuffer(frame->input_buffer, GST_MAP_READ);
@@ -186,7 +247,7 @@ static GstFlowReturn webkitRemoteVideoDecoderHandleFrame(GstVideoDecoder* decode
             return priv->consumedFrameNumber && *priv->consumedFrameNumber >= frameNumber;
         };
         bool isWaiting = false;
-        while (!isConsumed() && !priv->isFlushing && !priv->hasFailed) {
+        while (!isConsumed() && !priv->isFlushing && !priv->hasFailed && !priv->gpuProcessDidExit) {
             if (!isWaiting) {
                 GST_VIDEO_DECODER_STREAM_UNLOCK(decoder);
                 isWaiting = true;
@@ -355,13 +416,13 @@ static void releaseDroppedFrames(GstVideoDecoder* decoder, GstVideoCodecFrame* o
 }
 
 // Downstream gets the frames of the GPU process when it takes the memory:WebKitVideoFrame feature,
-// like the video sink when the GPU process composites the layers, and their pixels otherwise.
-static bool ensureOutputState(WebKitRemoteVideoDecoder* self, VideoFrame& frame)
+// like the video sink when the GPU process composites the layers, and their pixels otherwise. Taking
+// any caps, as the image decoder does, isn't taking the feature.
+static bool ensureOutputState(WebKitRemoteVideoDecoder* self, VideoFrame& frame, IntSize size)
 {
     auto* priv = self->priv;
     auto* decoder = GST_VIDEO_DECODER(self);
     auto format = static_cast<GstVideoFormat>(frame.pixelFormat());
-    auto size = frame.presentationSize();
     auto outputFormat = std::tuple { format, size.width(), size.height() };
     if (priv->outputFormat == outputFormat)
         return true;
@@ -369,11 +430,13 @@ static bool ensureOutputState(WebKitRemoteVideoDecoder* self, VideoFrame& frame)
     if (format == GST_VIDEO_FORMAT_UNKNOWN || format == GST_VIDEO_FORMAT_ENCODED)
         return false;
 
+    // The pixel aspect ratio comes from the input.
     auto* state = gst_video_decoder_set_output_state(decoder, format, size.width(), size.height(), priv->inputState);
     if (!state)
         return false;
     GRefPtr<GstCaps> wrappedCaps = capsWithVideoFrameFeature(state->info);
-    priv->outputsWrappedFrames = wrappedCaps && gst_pad_peer_query_accept_caps(GST_VIDEO_DECODER_SRC_PAD(decoder), wrappedCaps.get());
+    GRefPtr<GstCaps> peerCaps = adoptGRef(gst_pad_peer_query_caps(GST_VIDEO_DECODER_SRC_PAD(decoder), nullptr));
+    priv->outputsWrappedFrames = wrappedCaps && peerCaps && !gst_caps_is_any(peerCaps.get()) && gst_pad_peer_query_accept_caps(GST_VIDEO_DECODER_SRC_PAD(decoder), wrappedCaps.get());
     if (priv->outputsWrappedFrames)
         state->caps = wrappedCaps.leakRef();
     gst_video_codec_state_unref(state);
@@ -383,7 +446,7 @@ static bool ensureOutputState(WebKitRemoteVideoDecoder* self, VideoFrame& frame)
     return gst_video_decoder_negotiate(decoder);
 }
 
-static void finishFrame(WebKitRemoteVideoDecoder* self, std::optional<uint32_t> frameNumber, Ref<VideoFrame>&& videoFrame)
+static void finishFrame(WebKitRemoteVideoDecoder* self, std::optional<uint32_t> frameNumber, Ref<VideoFrame>&& videoFrame, IntSize decodedSize)
 {
     auto* decoder = GST_VIDEO_DECODER(self);
     GST_VIDEO_DECODER_STREAM_LOCK(decoder);
@@ -397,7 +460,7 @@ static void finishFrame(WebKitRemoteVideoDecoder* self, std::optional<uint32_t> 
 
     releaseDroppedFrames(decoder, frame);
 
-    if (!ensureOutputState(self, videoFrame)) {
+    if (!ensureOutputState(self, videoFrame, decodedSize)) {
         GST_WARNING_OBJECT(decoder, "Could not negotiate the output for frame %u", frame->system_frame_number);
         gst_video_decoder_drop_frame(decoder, frame);
         return;
@@ -419,7 +482,7 @@ static void finishFrame(WebKitRemoteVideoDecoder* self, std::optional<uint32_t> 
 
 namespace WebKit {
 
-void remoteVideoDecoderDidDecodeFrame(GstElement* element, std::optional<uint32_t> frameNumber, Ref<VideoFrame>&& videoFrame)
+void remoteVideoDecoderDidDecodeFrame(GstElement* element, std::optional<uint32_t> frameNumber, Ref<VideoFrame>&& videoFrame, IntSize decodedSize)
 {
     auto* self = WEBKIT_REMOTE_VIDEO_DECODER(element);
     RefPtr<WorkQueue> outputQueue;
@@ -431,8 +494,8 @@ void remoteVideoDecoderDidDecodeFrame(GstElement* element, std::optional<uint32_
         return;
 
     // Output in a queue of each decoder, since pushing downstream can block until the frame is presented.
-    outputQueue->dispatch([element = GRefPtr<GstElement> { element }, frameNumber, videoFrame = WTF::move(videoFrame)] mutable {
-        finishFrame(WEBKIT_REMOTE_VIDEO_DECODER(element.get()), frameNumber, WTF::move(videoFrame));
+    outputQueue->dispatch([element = GRefPtr<GstElement> { element }, frameNumber, videoFrame = WTF::move(videoFrame), decodedSize] mutable {
+        finishFrame(WEBKIT_REMOTE_VIDEO_DECODER(element.get()), frameNumber, WTF::move(videoFrame), decodedSize);
     });
 }
 
@@ -454,6 +517,24 @@ void remoteVideoDecoderDidConsumeFrame(GstElement* element, uint32_t frameNumber
         priv->consumedFrameNumber = frameNumber;
         priv->condition.notifyAll();
     });
+}
+
+void remoteVideoDecoderGPUProcessDidExit(GstElement* element)
+{
+    auto* priv = WEBKIT_REMOTE_VIDEO_DECODER(element)->priv;
+    // WebCodecs decoders close with an error, as they do when decoding fails.
+    if (priv->isHarnessed) {
+        remoteVideoDecoderDidFail(element, "The GPU process exited"_s);
+        return;
+    }
+
+    {
+        Locker locker { priv->lock };
+        priv->gpuProcessDidExit = true;
+        priv->condition.notifyAll();
+    }
+    // Players restart decoding at the keyframe before the current position, instead of waiting for the next one.
+    gst_element_post_message(element, gst_message_new_element(GST_OBJECT_CAST(element), gst_structure_new_empty("webkit-video-decoder-needs-keyframe")));
 }
 
 void remoteVideoDecoderDidFail(GstElement* element, const String& message)

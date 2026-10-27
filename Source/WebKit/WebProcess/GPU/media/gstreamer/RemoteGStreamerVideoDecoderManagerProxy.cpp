@@ -106,9 +106,14 @@ RefPtr<IPC::Connection> RemoteGStreamerVideoDecoderManagerProxy::connection()
     return m_connection;
 }
 
+RefPtr<IPC::Connection> RemoteGStreamerVideoDecoderManagerProxy::currentConnection()
+{
+    Locker locker { m_lock };
+    return m_connection;
+}
+
 void RemoteGStreamerVideoDecoderManagerProxy::gpuProcessConnectionDidClose(GPUProcessConnection&)
 {
-    // FIXME: The decoders should restart in the new GPU process instead.
     HashMap<RemoteGStreamerVideoDecoderIdentifier, GRefPtr<GstElement>> decoders;
     {
         Locker locker { m_lock };
@@ -117,9 +122,15 @@ void RemoteGStreamerVideoDecoderManagerProxy::gpuProcessConnectionDidClose(GPUPr
         m_videoFrameObjectHeapProxy = nullptr;
         decoders = std::exchange(m_decoders, { });
     }
+
+    // The decoders restart in the next GPU process, which the compositor also connects to right away. The
+    // streaming threads can't wait for the main thread to connect, which can be waiting for them.
+    callOnMainRunLoop([] {
+        singleton().connection();
+    });
     m_queue->dispatch([decoders = WTF::move(decoders)] {
         for (auto& decoder : decoders.values())
-            remoteVideoDecoderDidFail(decoder.get(), "The GPU process exited"_s);
+            remoteVideoDecoderGPUProcessDidExit(decoder.get());
     });
 }
 
@@ -131,7 +142,7 @@ GRefPtr<GstElement> RemoteGStreamerVideoDecoderManagerProxy::decoder(RemoteGStre
 
 std::optional<RemoteGStreamerVideoDecoderIdentifier> RemoteGStreamerVideoDecoderManagerProxy::createDecoder(GstElement* decoder, const String& factoryName, const String& caps, int32_t maximumErrors, bool isHarnessed)
 {
-    RefPtr connection = this->connection();
+    RefPtr connection = currentConnection();
     if (!connection)
         return std::nullopt;
 
@@ -158,25 +169,25 @@ void RemoteGStreamerVideoDecoderManagerProxy::releaseDecoder(RemoteGStreamerVide
 
 void RemoteGStreamerVideoDecoderManagerProxy::setFormat(RemoteGStreamerVideoDecoderIdentifier identifier, const String& caps)
 {
-    if (RefPtr connection = this->connection())
+    if (RefPtr connection = currentConnection())
         connection->send(Messages::RemoteGStreamerVideoDecoderManager::SetFormat(identifier, caps), 0);
 }
 
 void RemoteGStreamerVideoDecoderManagerProxy::decode(RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber, std::span<const uint8_t> data, const MediaTime& presentationTime, const MediaTime& decodeTime, const MediaTime& duration, bool isKeyFrame, bool isDecodeOnly)
 {
-    if (RefPtr connection = this->connection())
+    if (RefPtr connection = currentConnection())
         connection->send(Messages::RemoteGStreamerVideoDecoderManager::Decode(identifier, frameNumber, data, presentationTime, decodeTime, duration, isKeyFrame, isDecodeOnly), 0);
 }
 
 void RemoteGStreamerVideoDecoderManagerProxy::flush(RemoteGStreamerVideoDecoderIdentifier identifier)
 {
-    if (RefPtr connection = this->connection())
+    if (RefPtr connection = currentConnection())
         connection->send(Messages::RemoteGStreamerVideoDecoderManager::Flush(identifier), 0);
 }
 
 void RemoteGStreamerVideoDecoderManagerProxy::drain(RemoteGStreamerVideoDecoderIdentifier identifier, WorkQueue& outputQueue)
 {
-    RefPtr connection = this->connection();
+    RefPtr connection = currentConnection();
     if (!connection)
         return;
 
@@ -190,7 +201,7 @@ void RemoteGStreamerVideoDecoderManagerProxy::drain(RemoteGStreamerVideoDecoderI
     semaphore.wait();
 }
 
-void RemoteGStreamerVideoDecoderManagerProxy::frameDecoded(RemoteGStreamerVideoDecoderIdentifier identifier, std::optional<uint32_t> frameNumber, RemoteVideoFrameProxy::Properties&& properties)
+void RemoteGStreamerVideoDecoderManagerProxy::frameDecoded(RemoteGStreamerVideoDecoderIdentifier identifier, std::optional<uint32_t> frameNumber, RemoteVideoFrameProxy::Properties&& properties, WebCore::IntSize decodedSize)
 {
     RefPtr<IPC::Connection> connection;
     RefPtr<RemoteVideoFrameObjectHeapProxy> videoFrameObjectHeapProxy;
@@ -205,7 +216,7 @@ void RemoteGStreamerVideoDecoderManagerProxy::frameDecoded(RemoteGStreamerVideoD
     // The proxy releases the frame of the GPU process, also when no decoder outputs it anymore.
     Ref<VideoFrame> frame = RemoteVideoFrameProxy::create(*connection, *videoFrameObjectHeapProxy, WTF::move(properties));
     if (auto decoder = this->decoder(identifier))
-        remoteVideoDecoderDidDecodeFrame(decoder.get(), frameNumber, WTF::move(frame));
+        remoteVideoDecoderDidDecodeFrame(decoder.get(), frameNumber, WTF::move(frame), decodedSize);
 }
 
 void RemoteGStreamerVideoDecoderManagerProxy::frameConsumed(RemoteGStreamerVideoDecoderIdentifier identifier, uint32_t frameNumber)

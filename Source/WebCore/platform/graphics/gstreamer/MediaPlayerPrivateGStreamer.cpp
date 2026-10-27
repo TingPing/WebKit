@@ -2486,6 +2486,13 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         } else if (gst_structure_has_name(structure, "webkit-web-src-has-eos")) {
             GST_DEBUG_OBJECT(pipeline(), "WebKitWebSrc has EOS");
             m_hasWebKitWebSrcSentEOS = true;
+        } else if (gst_structure_has_name(structure, "webkit-video-decoder-needs-keyframe")) {
+            // A decoder of the GPU process lost its frames when the GPU process exited. Live streams can't seek, and
+            // wait for their next keyframe, which WebRTC senders send when the decoder asks.
+            if (!isMediaStreamPlayer() && !m_isLiveStream.value_or(false) && !m_isSeeking) {
+                GST_INFO_OBJECT(pipeline(), "Restarting decoding at the current position");
+                doSeek(SeekTarget { playbackPosition() }, m_playbackRate);
+            }
         } else if (!m_isLegacyPlaybin && gst_is_missing_plugin_message(message)) {
             GST_DEBUG_OBJECT(pipeline(), "Handling missing-plugin message");
             error = MediaPlayer::NetworkState::FormatError;

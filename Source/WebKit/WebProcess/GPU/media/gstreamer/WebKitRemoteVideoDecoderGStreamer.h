@@ -34,6 +34,7 @@
 #include <wtf/Vector.h>
 
 namespace WebCore {
+class IntSize;
 class VideoFrame;
 }
 
@@ -45,8 +46,9 @@ namespace WebKit {
 void registerRemoteVideoDecoders(const Vector<WebCore::GStreamerVideoDecoderDescription>&);
 
 // Called in the work queue of RemoteGStreamerVideoDecoderManagerProxy.
-void remoteVideoDecoderDidDecodeFrame(GstElement*, std::optional<uint32_t> frameNumber, Ref<WebCore::VideoFrame>&&);
+void remoteVideoDecoderDidDecodeFrame(GstElement*, std::optional<uint32_t> frameNumber, Ref<WebCore::VideoFrame>&&, WebCore::IntSize decodedSize);
 void remoteVideoDecoderDidConsumeFrame(GstElement*, uint32_t frameNumber);
+void remoteVideoDecoderGPUProcessDidExit(GstElement*);
 void remoteVideoDecoderDidFail(GstElement*, const String& message);
 
 } // namespace WebKit

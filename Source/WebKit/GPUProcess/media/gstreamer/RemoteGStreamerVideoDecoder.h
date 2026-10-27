@@ -66,6 +66,7 @@ private:
 
     bool initialize(const String& factoryName, const String& caps, int32_t maximumErrors, bool isHarnessed);
     void restart();
+    void completeDrain();
 
     // Called in the streaming threads.
     void didConsumeFrames();
@@ -85,7 +86,6 @@ private:
     // Accessed in the streaming thread of the sink.
     GRefPtr<GstCaps> m_outputCaps;
     CompletionHandler<void()> m_drainCompletionHandler;
-    bool m_isDraining { false };
     bool m_hasFailed { false };
 };
 

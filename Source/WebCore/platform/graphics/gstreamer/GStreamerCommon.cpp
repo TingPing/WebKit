@@ -527,7 +527,7 @@ Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders()
     if (!ensureGStreamerInitialized())
         return { };
 
-    // Tests list software decoders here, to run them as the GPU process runs hardware decoders.
+    // Tests list software decoders here, or * for all of them, to run them as the GPU process runs hardware decoders.
     HashSet<String> softwareDecoders;
     for (auto name : StringView::fromLatin1(g_getenv("WEBKIT_GST_GPU_PROCESS_SOFTWARE_DECODERS")).split(','))
         softwareDecoders.add(name.toString());
@@ -538,7 +538,8 @@ Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders()
         auto* factory = GST_ELEMENT_FACTORY_CAST(feature);
         if (!gst_element_factory_list_is_type(factory, GST_ELEMENT_FACTORY_TYPE_DECODER | GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO))
             return FALSE;
-        if (static_cast<HashSet<String>*>(userData)->contains(String::fromLatin1(gst_plugin_feature_get_name(feature))))
+        auto& softwareDecoders = *static_cast<HashSet<String>*>(userData);
+        if (softwareDecoders.contains("*"_s) || softwareDecoders.contains(String::fromLatin1(gst_plugin_feature_get_name(feature))))
             return TRUE;
         return GStreamerQuirksManager::singleton().isHardwareAccelerated(factory).value_or(false);
     }, FALSE, &softwareDecoders);
@@ -552,13 +553,11 @@ Vector<GStreamerVideoDecoderDescription> hardwareVideoDecoders()
                 continue;
             GRefPtr<GstCaps> sinkCaps = adoptGRef(gst_static_pad_template_get_caps(padTemplate));
             GUniquePtr<char> sinkCapsString(gst_caps_to_string(sinkCaps.get()));
-            auto name = String::fromLatin1(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory)));
-            bool isHardwareAccelerated = !softwareDecoders.contains(name);
             decoders.append({
-                .name = WTF::move(name),
+                .name = String::fromLatin1(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE_CAST(factory))),
                 .rank = gst_plugin_feature_get_rank(GST_PLUGIN_FEATURE_CAST(factory)),
                 .sinkCaps = String::fromLatin1(sinkCapsString.get()),
-                .isHardwareAccelerated = isHardwareAccelerated,
+                .isHardwareAccelerated = GStreamerQuirksManager::singleton().isHardwareAccelerated(factory).value_or(false),
             });
             break;
         }
