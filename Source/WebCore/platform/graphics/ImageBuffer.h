@@ -158,6 +158,11 @@ public:
     bool hasBackend() const { return !!backend(); }
 
     WEBCORE_EXPORT void transferToNewContext(const ImageBufferCreationContext&);
+#if USE(SKIA)
+    // An accelerated backend belongs to the GL context of its thread. That thread calls this before another one
+    // takes the buffer with transferToNewContext(), which gives it a backend of its own context.
+    WEBCORE_EXPORT void prepareForOtherThread(Function<void(Function<void()>&&)>&& dispatchToThisThread);
+#endif
 
     RenderingResourceIdentifier renderingResourceIdentifier() const { return m_renderingResourceIdentifier; }
 
@@ -255,6 +260,9 @@ protected:
     RenderingResourceIdentifier m_renderingResourceIdentifier;
     unsigned m_backendGeneration { 0 };
     bool m_hasForcedPurgeForTesting { false };
+#if USE(SKIA)
+    Function<void(Function<void()>&&)> m_dispatchToBackendThread;
+#endif
 };
 
 class SerializedImageBuffer {

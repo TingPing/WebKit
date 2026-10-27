@@ -141,6 +141,8 @@ public:
 
 #if USE(SKIA)
     virtual SkSurface* surface() const { return nullptr; }
+    virtual void prepareForOtherThread() { }
+    virtual std::unique_ptr<ImageBufferBackend> createBackendForCurrentThread(const ImageBufferParameters&) { return nullptr; }
 #endif
 
     virtual bool isInUse() const { return false; }

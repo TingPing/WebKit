@@ -656,7 +656,29 @@ void ImageBuffer::transferToNewContext(const ImageBufferCreationContext& context
 {
     if (auto* backend = m_backend.get())
         backend->transferToNewContext(context);
+
+#if USE(SKIA)
+    auto dispatchToBackendThread = std::exchange(m_dispatchToBackendThread, nullptr);
+    if (!dispatchToBackendThread || !m_backend)
+        return;
+
+    if (auto backend = m_backend->createBackendForCurrentThread(m_parameters)) {
+        // The old backend is destroyed on the thread of its GL context.
+        dispatchToBackendThread([backend = std::exchange(m_backend, WTF::move(backend))] { });
+        ++m_backendGeneration;
+    }
+#endif
 }
+
+#if USE(SKIA)
+void ImageBuffer::prepareForOtherThread(Function<void(Function<void()>&&)>&& dispatchToThisThread)
+{
+    if (auto* backend = m_backend.get()) {
+        backend->prepareForOtherThread();
+        m_dispatchToBackendThread = WTF::move(dispatchToThisThread);
+    }
+}
+#endif
 
 String ImageBuffer::debugDescription() const
 {

@@ -42,6 +42,7 @@
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkPixmap.h>
 #include <skia/gpu/ganesh/GrBackendSurface.h>
+#include <skia/gpu/ganesh/SkImageGanesh.h>
 #include <skia/gpu/ganesh/SkSurfaceGanesh.h>
 #include <skia/utils/SkNWayCanvas.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
@@ -155,6 +156,8 @@ ImageBufferSkiaAcceleratedBackend::ImageBufferSkiaAcceleratedBackend(const Image
 ImageBufferSkiaAcceleratedBackend::~ImageBufferSkiaAcceleratedBackend()
 {
     PlatformDisplay::makeSkiaGLContextCurrentIfExists();
+    if (m_fenceForOtherThread)
+        m_fenceForOtherThread->serverWait();
 
     // Unwind the surface context's save/restore stack before destruction
     if (m_canvasRecordingContext)
@@ -249,6 +252,56 @@ void ImageBufferSkiaAcceleratedBackend::flushContext()
 
     ASSERT(grContext == PlatformDisplay::sharedDisplay().skiaGrContext());
     grContext->flushAndSubmit(m_surface.get(), GrSyncCpu::kNo);
+}
+
+void ImageBufferSkiaAcceleratedBackend::prepareForOtherThread()
+{
+    replayCanvasRecordingContextIfNeeded();
+
+    auto* grContext = this->grContext();
+    if (!grContext || !PlatformDisplay::sharedDisplay().skiaGLContext()->makeContextCurrent())
+        return;
+
+    ASSERT(grContext == PlatformDisplay::sharedDisplay().skiaGrContext());
+    m_textureForOtherThread = SkSurfaces::GetBackendTexture(m_surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
+    m_fenceForOtherThread = SkiaUtilities::flushAndSubmitSurfaceWithFence(grContext, m_surface.get());
+}
+
+std::unique_ptr<ImageBufferBackend> ImageBufferSkiaAcceleratedBackend::createBackendForCurrentThread(const ImageBufferParameters& parameters)
+{
+    if (!m_textureForOtherThread.isValid())
+        return nullptr;
+
+    auto* glContext = PlatformDisplay::sharedDisplay().skiaGLContext();
+    if (!glContext || !glContext->makeContextCurrent())
+        return nullptr;
+
+    auto* grContext = PlatformDisplay::sharedDisplay().skiaGrContext();
+    if (grContext == this->grContext())
+        return nullptr;
+
+    if (auto fence = std::exchange(m_fenceForOtherThread, nullptr))
+        fence->serverWait();
+
+    auto imageInfo = m_surface->imageInfo();
+    auto image = SkImages::BorrowTextureFrom(grContext, m_textureForOtherThread, kTopLeft_GrSurfaceOrigin, imageInfo.colorType(), imageInfo.alphaType(), imageInfo.refColorSpace());
+    if (!image)
+        return nullptr;
+
+    auto backend = create(parameters, { });
+    if (!backend)
+        return nullptr;
+
+    auto* canvas = backend->m_surface->getCanvas();
+    canvas->save();
+    canvas->resetMatrix();
+    SkPaint paint;
+    paint.setBlendMode(SkBlendMode::kSrc);
+    canvas->drawImage(image, 0, 0, { }, &paint);
+    canvas->restore();
+    // The thread of the texture waits for this one to have read it before releasing it.
+    m_fenceForOtherThread = SkiaUtilities::flushAndSubmitSurfaceWithFence(grContext, backend->m_surface.get());
+    return backend;
 }
 
 void ImageBufferSkiaAcceleratedBackend::prepareForDisplay()

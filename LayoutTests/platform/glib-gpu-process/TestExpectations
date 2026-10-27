@@ -36,6 +36,7 @@ webgl/1.0.x/conformance/offscreencanvas/offscreencanvas-timer-query.html [ Pass 
 webgl/1.0.x/conformance/offscreencanvas/offscreencanvas-transfer-image-bitmap.html [ Pass ]
 webgl/2.0.y/conformance/offscreencanvas/context-creation-worker.html [ Pass ]
 webgl/2.0.y/conformance/offscreencanvas/methods-worker.html [ Pass ]
+webgl/2.0.y/conformance/offscreencanvas/offscreencanvas-transfer-image-bitmap.html [ Pass ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # Media

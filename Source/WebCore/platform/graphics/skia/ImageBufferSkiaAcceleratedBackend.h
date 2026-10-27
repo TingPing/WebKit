@@ -31,6 +31,7 @@
 
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkPictureRecorder.h>
+#include <skia/gpu/ganesh/GrBackendSurface.h>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 #include <wtf/TZoneMalloc.h>
@@ -39,6 +40,7 @@ class GrDirectContext;
 
 namespace WebCore {
 
+class GLFence;
 class GraphicsContextSkia;
 class SkiaSwitchableCanvas;
 
@@ -65,6 +67,9 @@ private:
     void getPixelBuffer(const IntRect&, PixelBuffer&) final;
     void putPixelBuffer(const PixelBufferSourceView&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat) final;
 
+    void prepareForOtherThread() final;
+    std::unique_ptr<ImageBufferBackend> createBackendForCurrentThread(const ImageBufferParameters&) final;
+
     GrDirectContext* grContext() const;
     void replayCanvasRecordingContextIfNeeded();
     void ensureCanvasRecordingContext();
@@ -79,6 +84,9 @@ private:
     SkPictureRecorder m_pictureRecorder;
     const std::unique_ptr<SkiaSwitchableCanvas> m_switchableCanvas;
     const std::unique_ptr<GraphicsContextSkia> m_canvasRecordingContext;
+
+    GrBackendTexture m_textureForOtherThread;
+    std::unique_ptr<GLFence> m_fenceForOtherThread;
 };
 
 } // namespace WebCore

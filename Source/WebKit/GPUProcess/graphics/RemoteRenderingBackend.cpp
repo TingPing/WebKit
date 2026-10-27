@@ -214,6 +214,12 @@ void RemoteRenderingBackend::moveToSerializedBuffer(RenderingResourceIdentifier 
     MESSAGE_CHECK(imageBuffer->hasOneRef(), "ImageBuffer in use");
     // Avoid leaking cross-RemoteRenderingBackend state through context by releasing the context.
     imageBuffer->releaseGraphicsContext();
+#if USE(SKIA)
+    // The backend that takes it may draw on another thread, with another GL context.
+    imageBuffer->prepareForOtherThread([workQueue = m_workQueue](Function<void()>&& task) {
+        workQueue->dispatch(WTF::move(task));
+    });
+#endif
     bool success = m_sharedResourceCache->addSerializedImageBuffer(serializedIdentifier, WTF::move(imageBuffer));
     MESSAGE_CHECK(success, "Duplicate SerializedImageBuffer");
 }
